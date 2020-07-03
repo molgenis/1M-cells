@@ -5,6 +5,7 @@
 library(metap)
 library(MetaVolcanoR)
 library(stringr)
+library(data.table)
 
 ####################
 # Functions        #
@@ -136,7 +137,7 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
       # this allows us to remove the filename extention
       file_no_ext <- substr(file, 1, regexpr(last_dot_pos,file)-1)
       # create output location
-      sig_output <- paste(sig_output_loc, file_no_ext, '.txt', sep = '\t')
+      sig_output <- paste(sig_output_loc, file_no_ext, '.txt', sep = '')
       # write the genes
       write.table(genes, sig_output, sep = '\t', quote = F, row.names = F, col.names = F)
     })
@@ -161,7 +162,8 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
         # create column name
         newcolname <- paste(cell_type, 'UT', stim, sep = '')
         # get the log2 of the significance value
-        pathways[[newcolname]] <- log10(pathways[[sig_val_to_use]])
+        #pathways[[newcolname]] <- log2(pathways[[sig_val_to_use]])
+        pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
         pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
         # reduce to the only two columns we care about
         pathways <- pathways[, c('id_name', newcolname)]
@@ -194,6 +196,22 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
 }
   
 
+get_top_pathways <- function(pathway_table, nr_of_top_genes){
+  # init pathways list
+  pathways <- c()
+  # go through the columns
+  for(col in colnames(pathway_table)){
+    # order by that column
+    ordered <- pathway_table[order(pathway_table[[col]], decreasing = T), ]
+    # get those top ones
+    top_col <- rownames(ordered)[1:nr_of_top_genes]
+    pathways <- c(pathways, top_col)
+  }
+  # limit to those top pathways now
+  pathway_table_smaller <- pathway_table[rownames(pathway_table) %in% pathways, ]
+  return(pathway_table_smaller)
+}
+
 
 # cell counts loc
 #cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
@@ -215,6 +233,10 @@ gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.
 sig_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_sigs_20200624/rna/'
 # write the significant genes
 get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+# set the location for the significant genes that were upregulated
+sig_up_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_sigs_up_20200624/rna/'
+# write the significantly upregulated genes
+get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 # get the location of the pathways
 pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20200624/'
@@ -222,3 +244,21 @@ pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20
 # write the combined pathway file
 pathway_df <- get_pathway_table(pathway_output_loc)
 write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20200624/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+
+# get the locaiton of the pathways of only upregulated genes
+pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_up_20200624/'
+# write the combined pathway file
+pathway_up_df <- get_pathway_table(pathway_up_output_loc)
+write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_unconfined_up_20200624/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+
+# get the df limited by top pathways
+pathway_df_top_3 <- get_top_pathways(pathway_df, 3)
+pathway_df_top_5 <- get_top_pathways(pathway_df, 5)
+pathway_df_top_10 <- get_top_pathways(pathway_df, 10)
+
+# get the df limited by top pathways of upregulated genes
+pathway_up_df_top_3 <- get_top_pathways(pathway_up_df, 3)
+pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5)
+pathway_up_df_top_10 <- get_top_pathways(pathway_up_df, 10)
+
+
