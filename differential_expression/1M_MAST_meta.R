@@ -93,7 +93,7 @@ write_meta_mast <- function(condition_info, mast_output_loc_prepend, mast_output
 }
 
 
-get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='metap_bonferroni', sig_pval=0.05, max=NULL, max_by_pval=T, only_positive=F, lfc_column='metafc', to_ens=F, symbols.to.ensg.mapping='genes.tsv'){
+get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='metap_bonferroni', sig_pval=0.05, max=NULL, max_by_pval=T, only_positive=F, only_negative=F, lfc_column='metafc', to_ens=F, symbols.to.ensg.mapping='genes.tsv'){
   # get the files
   files <- list.files(mast_output_loc)
   # try to read each file
@@ -106,6 +106,10 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
       # filter for only the positive lfc if required
       if(only_positive){
         mast <- mast[mast[[lfc_column]] < 0, ]
+      }
+      # filter for only the positive lfc if required
+      if(only_negative){
+        mast <- mast[mast[[lfc_column]] > 0, ]
       }
       # confine in some way if reporting a max number of genes
       if(!is.null(max)){
@@ -219,24 +223,29 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes){
 #cell_counts <- read.table(cell_counts_loc, sep = '\t', header = T)
 
 # get the locations of the DE output
-mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/v'
-mast_output_append <- '_paired_lores_unconfined_20200624/rna/'
+mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/v'
+mast_output_append <- '_paired_lores_lfc025minpct01_20200713/rna/'
 # write the location of the combined output
-mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/'
+mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/'
 
 # write meta output
-write_meta_mast(cell_counts, mast_output_prepend, mast_output_append, mast_meta_output_loc)
+write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
 
 # we can go from gene symbols to ensemble IDs with this file
 gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
 # set the location to write the significant genes
-sig_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_sigs_20200624/rna/'
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc025minpct01_20200713/rna/'
 # write the significant genes
-get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_up_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_sigs_up_20200624/rna/'
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc025minpct01_20200713/rna/'
 # write the significantly upregulated genes
-get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+# set the location for the significant genes that were upregulated
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc025minpct01_20200713/rna/'
+# write the significantly upregulated genes
+get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+
 
 # get the location of the pathways
 pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20200624/'
