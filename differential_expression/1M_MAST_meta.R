@@ -105,7 +105,7 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
       mast <- mast[mast[[pval_column]] <= 0.05, ]
       # filter for only the positive lfc if required
       if(only_positive){
-        mast <- mast[mast[[lfc_column]] > 0, ]
+        mast <- mast[mast[[lfc_column]] < 0, ]
       }
       # confine in some way if reporting a max number of genes
       if(!is.null(max)){

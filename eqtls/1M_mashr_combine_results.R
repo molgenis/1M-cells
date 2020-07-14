@@ -153,7 +153,8 @@ get_conditions_cell_types_mash <- function(eqtl_output_loc, result_output_loc, c
     if(!is.null(data.x3h)){
       # run MASH
       m.1by1.x3h = mash_1by1(data.x3h)
-      U.pca.x3h = cov_pca(data.x3h,ncol(data.x3h$Bhat)) # 6PCS due to number of conditions
+      strong <- get_significant_results(m.1by1.x3h, 0.05)
+      U.pca.x3h = cov_pca(data.x3h,ncol(data.x3h$Bhat), subset = strong) # 6PCS due to number of conditions
       U.ed.x3h = cov_ed(data.x3h, U.pca.x3h)
       U.c.x3h = cov_canonical(data.x3h)
       m.x3h = mash(data.x3h, c(U.c.x3h,U.ed.x3h))
@@ -174,7 +175,8 @@ get_conditions_cell_types_mash <- function(eqtl_output_loc, result_output_loc, c
     if(!is.null(data.x24h)){
       # run MASH
       m.1by1.x24h = mash_1by1(data.x24h)
-      U.pca.x24h = cov_pca(data.x24h,ncol(data.x24h$Bhat)) # 6PCS due to number of conditions
+      strong <- get_significant_results(m.1by1.x24h, 0.05)
+      U.pca.x24h = cov_pca(data.x24h,ncol(data.x24h$Bhat), subset = strong) # 6PCS due to number of conditions
       U.ed.x24h = cov_ed(data.x24h, U.pca.x24h)
       U.c.x24h = cov_canonical(data.x24h)
       m.x24h = mash(data.x24h, c(U.c.x24h,U.ed.x24h))
@@ -199,7 +201,8 @@ get_conditions_cell_types_mash_combined <- function(eqtl_output_loc, result_outp
     if(!is.null(data)){
       # run MASH
       m.1by1 = mash_1by1(data)
-      U.pca = cov_pca(data,ncol(data$Bhat)) # 6PCS due to number of conditions
+      strong <- get_significant_results(m.1by1, 0.05)
+      U.pca = cov_pca(data,ncol(data$Bhat),subset = strong) # 6PCS due to number of conditions
       U.ed = cov_ed(data, U.pca)
       U.c = cov_canonical(data)
       m = mash(data, c(U.c,U.ed))
@@ -260,7 +263,9 @@ eqtl_result_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/e
 result_output_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/mashr/sct_mqc_lores_confine_1m_ut_all_cell_types/data_and_canonical/'
 get_conditions_cell_types_mash(eqtl_result_loc, result_output_loc, cell_types)
 result_output_loc_meta_z <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/mashr/sct_mqc_lores_confine_1m_ut_all_cell_types/data_and_canonical_meta_z/'
-get_conditions_cell_types_mash(eqtl_result_loc, result_output_loc_meta_z, cell_types, use_z = T)
+get_conditions_cell_types_mash(eqtl_result_loc, result_output_loc, cell_types)
+get_conditions_cell_types_mash_combined(eqtl_result_loc, result_output_loc_meta_z, cell_types)
+get_conditions_cell_types_mash(eqtl_result_loc, result_output_loc, cell_types, use_z = T)
 get_conditions_cell_types_mash_combined(eqtl_result_loc, result_output_loc_meta_z, cell_types, use_z = T)
 
 
