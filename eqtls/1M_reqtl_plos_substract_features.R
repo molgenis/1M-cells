@@ -38,11 +38,11 @@ if(log_transform){
   features_b_common_log <- log2(features_b_common_nozero)
   #features_a_common_log <- log(features_a_common)
   #features_b_common_log <- log(features_b_common)
-  features_a_vs_b <- features_a_common_log-features_b_common_log
+  features_a_vs_b <- features_b_common_log-features_a_common_log
   # compensate for double 0 that gets log transformed to 1
   features_a_vs_b[features_a_common == 0 & features_b_common == 0] <- 0
 } else{
-  features_a_vs_b <- features_a_common - features_b_common
+  features_a_vs_b <- features_b_common - features_a_common
 }
 
 
