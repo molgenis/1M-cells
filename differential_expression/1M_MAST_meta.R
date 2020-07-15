@@ -223,10 +223,10 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes){
 #cell_counts <- read.table(cell_counts_loc, sep = '\t', header = T)
 
 # get the locations of the DE output
-mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/v'
-mast_output_append <- '_paired_lores_lfc025minpct01_20200713/rna/'
+mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v'
+mast_output_append <- '_paired_lores_lfc01minpct01_20200713/rna/'
 # write the location of the combined output
-mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/'
+mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/'
 
 # write meta output
 write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
@@ -234,15 +234,15 @@ write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_
 # we can go from gene symbols to ensemble IDs with this file
 gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
 # set the location to write the significant genes
-sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc025minpct01_20200713/rna/'
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713/rna/'
 # write the significant genes
 get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc025minpct01_20200713/rna/'
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc025minpct01_20200713/rna/'
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 

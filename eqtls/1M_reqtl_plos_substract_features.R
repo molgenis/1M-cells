@@ -24,23 +24,23 @@ features_a_common <- features_a_common[,which(colnames(features_a_common) %in% c
 features_b_common <- features_b[which(rownames(features_b) %in% common_genes),]
 features_b_common <- features_b_common[,which(colnames(features_b_common) %in% common_participants)]
 # order the rows and columns so it is easy to substract the matrices
-features_a_common <- features_a_common[order(row.names(features_a_common)),]
-features_a_common <- features_a_common[,order(colnames(features_a_common))]
 features_b_common <- features_b_common[order(row.names(features_b_common)),]
 features_b_common <- features_b_common[,order(colnames(features_b_common))]
+features_a_common <- features_a_common[order(row.names(features_a_common)),]
+features_a_common <- features_a_common[,order(colnames(features_a_common))]
 # substract b from a or divide them depending on log
 if(log_transform){
   # replace the 0 values with a very low one
-  features_a_common_nozero <- features_a_common
-  features_a_common_nozero[features_a_common == 0] <- 0.00001
-  features_b_common_nozero <- features_b_common
-  features_b_common_nozero[features_b_common == 0] <- 0.00001
+  features_a_common_nozero <- features_a_common + 1
+  features_b_common_nozero <- features_b_common + 1
   # do log
-  features_a_common_log <- log(features_a_common_nozero)
-  features_b_common_log <- log(features_b_common_nozero)
+  features_a_common_log <- log2(features_a_common_nozero)
+  features_b_common_log <- log2(features_b_common_nozero)
   #features_a_common_log <- log(features_a_common)
   #features_b_common_log <- log(features_b_common)
-  features_a_vs_b <- features_a_common_log/features_b_common_log
+  features_a_vs_b <- features_a_common_log-features_b_common_log
+  # compensate for double 0 that gets log transformed to 1
+  features_a_vs_b[features_a_common == 0 & features_b_common == 0] <- 0
 } else{
   features_a_vs_b <- features_a_common - features_b_common
 }
@@ -49,5 +49,5 @@ if(log_transform){
 # remove the ugly 'X' prepend that R put in front of the column names
 colnames(features_a_vs_b) <- substring(colnames(features_a_vs_b), 2)
 
-# write our table 
+# write our table
 write.table(features_a_vs_b, file = features_a_vs_b_loc, quote = F, sep = "\t", col.names = NA)

@@ -1,3 +1,6 @@
+####################
+# Functions        #
+####################
 
 get_nr_of_eQTLs <- function(output_loc, condition, cell_type){
   # get posix compliant name
@@ -39,8 +42,11 @@ get_reQTLs <-function(output_loc, condition1, condition2, cell_type){
   return(reQTLs)
 }
 
-get_condition_info <- function(metadata){
-  chem <- as.character(unique(metadata$chem))
+get_condition_info <- function(metadata, is_meta=F){
+  chem <- 'meta'
+  if(!is_meta){
+    chem <- as.character(unique(metadata$chem))
+  }
   # create matrix with condition info
   matrix <- NULL
   # check each condition
@@ -49,6 +55,7 @@ get_condition_info <- function(metadata){
     metadata_condition <- metadata[metadata$timepoint == condition, ]
     # check each cell type
     for(celltype in unique(metadata_condition$cell_type_lowerres)){
+      print(celltype)
       # subset for cell type
       metadata_celltype <- metadata_condition[metadata_condition$cell_type_lowerres == celltype, ]
       # get the nr of eQTLs
@@ -66,6 +73,7 @@ get_condition_info <- function(metadata){
         colnames(matrix) <- c('condition', 'chem', 'cell type', 'nr of cells', 'nr of eQTLs')
       }
       else{
+        print(paste(celltype, chem, condition))
         matrix <- rbind(matrix, c(condition, chem, celltype, nrow(metadata_celltype), nr_of_eQTLs))
       }
     }
@@ -94,10 +102,10 @@ get_de_overlap <- function(condition_info, mast_output_loc, eQTL_output_loc, inc
         sig_mast <- mast[mast$p_val_adj < 0.05, ]
         nr_sigs <- nrow(sig_mast)
         # get downregulated sigs
-        upsig_mast <- sig_mast[sig_mast$avg_logFC > 0, ]
+        upsig_mast <- sig_mast[sig_mast$avg_logFC < 0, ]
         nr_upsigs <- nrow(upsig_mast)
         # get upregulated sigs
-        downsig_mast <- sig_mast[sig_mast$avg_logFC < 0, ]
+        downsig_mast <- sig_mast[sig_mast$avg_logFC > 0, ]
         nr_downsigs <- nrow(downsig_mast)
         # get the UT eQTLs
         ut_eQTLs <- get_eQTLs(eQTL_output_loc, 'UT', cell_type)
@@ -166,6 +174,7 @@ get_de_overlap <- function(condition_info, mast_output_loc, eQTL_output_loc, inc
           colnames(matrix) <- columns
         }
         else{
+          print(paste(cell_type, chem, condition))
           matrix <- rbind(matrix, c(chem, cell_type, 'UT', condition, nr_of_ut_cells, nr_of_condition_cells, nr_sigs, nr_upsigs, nr_downsigs, nr_ut_eQTLs, nr_condition_eQTLs, nr_reQTLs, nr_ut_de_eQTLs_overlap, nr_condition_de_eQTLs_overlap, nr_de_reQTLs_overlap, nr_ut_de_eQTLs_overlap_up, nr_condition_de_eQTLs_overlap_up, nr_de_reQTLs_overlap_up, nr_ut_de_eQTLs_overlap_down, nr_condition_de_eQTLs_overlap_down, nr_de_reQTLs_overlap_down))
         }
       })
@@ -264,20 +273,30 @@ write_de_overlapping_probes <- function(condition_info, mast_output_loc, eQTL_ou
   }
 }
 
-
-eQTL_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200526_confine_1m_ut_all_cell_types_eqtlgen/results/'
+# location of eQTL output
+eQTL_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/'
+# read the v3 Seurat object
+v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
+# grab the metadata
 metadata_v3 <- v3@meta.data
+# clear memory, we dont need the rest of the object
+rm(v3)
+# get a summary of the condition info
 v3_condition_info <- get_condition_info(metadata_v3)
-mast_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison_20200521/v3_paired_lores/rna/'
+# location of the MAST output
+mast_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/v3_paired_lores_lfc01minpct01_20200713/rna/'
+# grab the overlap of DE genes and eQTL
 v3_de_overlap <- get_de_overlap(data.frame(v3_condition_info), mast_output_loc, eQTL_output_loc, T)
 
 v3_de_overlap_probes_output <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/differential_expression/DE_comparison/eQTL_DE_overlap/v3_lores/rna/'
 write_de_overlapping_probes(data.frame(v3_condition_info), mast_output_loc_v3, eQTL_output_loc, v3_de_overlap_probes_output)
 
 
+v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
 metadata_v2 <- v2@meta.data
+metadata_v2 <- metadata_v2[!is.na(metadata_v2$timepoint), ]
 v2_condition_info <- get_condition_info(metadata_v2)
-mast_output_loc_v2 <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison_20200521/v2_paired_lores/rna/'
+mast_output_loc_v2 <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/v3_paired_lores_lfc01minpct01_20200713/rna/'
 v2_de_overlap <- get_de_overlap(data.frame(v2_condition_info), mast_output_loc_v2, eQTL_output_loc, T)
 
 v2_de_overlap_probes_output <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/differential_expression/DE_comparison/eQTL_DE_overlap/v2_lores/rna/'
