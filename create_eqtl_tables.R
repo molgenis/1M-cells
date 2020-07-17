@@ -44,7 +44,7 @@ add_to_table <- function(eqtl_table, eqtl_path, name, fdr_as_1=F, add_z_dir=F) {
   
 }
 
-add_MAST_to_table <- function(eqtl_table, MAST_path, name){
+add_MAST_to_table <- function(eqtl_table, MAST_path, name, is_meta=F){
   # there might not be a MAST output file, so 
   tryCatch({
     # read the MAST file
@@ -55,7 +55,12 @@ add_MAST_to_table <- function(eqtl_table, MAST_path, name){
     pvals <- mast_output$p_val_adj[match(probes, rownames(mast_output))]
     # grab the logfolds
     logfolds <- mast_output$avg_logFC[match(probes, rownames(mast_output))]
-    
+    if(is_meta){
+      # grab the adjusted p-val by probename
+      pvals <- mast_output$metap_bonferroni[match(probes, rownames(mast_output))]
+      # grab the logfolds
+      logfolds <- mast_output$metafc[match(probes, rownames(mast_output))]
+    }
     eqtl_table[paste0("pvals_", name)] <- pvals
     eqtl_table[paste0("logfolds_", name)] <- logfolds
     return(eqtl_table)
@@ -99,14 +104,14 @@ for (condition in conditions) {
     if(T){
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v2_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_V2', sep = ''))
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v3_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_V3', sep = ''))
-      eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_meta', sep = ''))
+      eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_meta', sep = ''), is_meta = T)
     }
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "24h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_24h", condition))
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "UT_vs_24h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_UT_vs_24h", condition))
     if(T){
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v2_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_V2', sep = ''))
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v3_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_V3', sep = ''))
-      eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_meta', sep = ''))
+      eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_meta', sep = ''), is_meta = T)
     }
     eqtls_z_scores_all_conditions[,paste0(condition, "_3h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_3h", condition)]
     eqtls_z_scores_all_conditions[,paste0(condition, "_24h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_24h", condition)]
