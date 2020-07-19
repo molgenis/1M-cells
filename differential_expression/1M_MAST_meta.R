@@ -25,69 +25,69 @@ write_meta_mast <- function(condition_info, mast_output_loc_prepend, mast_output
       mast_loc_v2 <- paste(mast_output_loc_prepend, '2', mast_output_loc_append, cell_type, 'UT', condition, '.tsv', sep = '')
       mast_loc_v3 <- paste(mast_output_loc_prepend, '3', mast_output_loc_append, cell_type, 'UT', condition, '.tsv', sep = '')
       try({
-          # read the mast output
-          mast_v2 <- read.table(mast_loc_v2, header=T)
-          mast_v3 <- read.table(mast_loc_v3, header=T)
-          # get the genes that are in both
-          genes_both <- intersect(rownames(mast_v2), rownames(mast_v3))
-          # select only those genes
-          mast_v2 <- mast_v2[rownames(mast_v2) %in% genes_both,]
-          mast_v3 <- mast_v3[rownames(mast_v3) %in% genes_both,]
-          # morph P val to minimum
-          if(nrow(mast_v2[mast_v2$p_val == 0, ]) > 0){
-            mast_v2[mast_v2$p_val == 0, ]$p_val <- .Machine$double.xmin
-          }
-          if(nrow(mast_v3[mast_v3$p_val == 0, ]) > 0){
-            mast_v3[mast_v3$p_val == 0, ]$p_val <- .Machine$double.xmin
-          }
-          # add the gene name also in a column
-          mast_v2$gene <- rownames(mast_v2)
-          mast_v3$gene <- rownames(mast_v3)
-          # add the mast results
-          masts <- list()
-          masts$v2 <- mast_v2
-          masts$v3 <- mast_v3
-          # perform the metavolcanor approach
-          meta_degs_comb <- combining_mv(diffexp=masts, pcriteria='p_val', foldchangecol='avg.logFC', genenamecol = 'gene', collaps = T)
-          # grab the result we care about
-          volcanometa <- meta_degs_comb@metaresult
-          volcanometa$metap_bonferroni <- volcanometa$metap*length(genes_both)
-          # add the genes as rownames
-          rownames(volcanometa) <- volcanometa$gene
-          # add a colname append
-          colnames(mast_v2) <- paste(colnames(mast_v2), 'v2', sep = '_')
-          colnames(mast_v3) <- paste(colnames(mast_v3), 'v3', sep = '_')
-          # merge the frames
-          mast <- merge(mast_v2, mast_v3, by=0, all=TRUE)
-          rownames(mast) <- mast$Row.names
-          mast$Row.names <- NULL
-          # get the meta p values using stouffers method
-          #stouffers <- rep(NA, times = nrow(mast))
-          #for(i in 1:nrow(mast)){
-          #  # get the p-values
-          #  p_vals <- c(mast[i, 'p_val_v2'], mast[i, 'p_val_v3'])
-          #  # the weights are based on the number of cells
-          #  weights <- c(sqrt(cond1_v2_cells + cond2_v2_cells), sqrt(cond1_v3_cells + cond2_v3_cells))
-          #  # get the result from the Stouffer's method
-          #  stouffers_res <- sumz(p = p_vals, weights = weights)
-          #  if(!is.na(stouffers_res)){
-          #    stouffers[i] <- stouffers_res$p[1,1]*length(genes_both) #bonferroni correct by multiplying by number of tests
-          #  }
-          #}
-          # add the value
-          #mast$stouffers_p <- stouffers
-          #mast[mast$stouffers_p > 1 & !is.na(mast$stouffers_p), ]$stouffers_p <- 1
-          # also add the volcanometa stuff
-          mast <- merge(mast, volcanometa, by=0, all=TRUE)
-          rownames(mast) <- mast$Row.names
-          mast$Row.names <- NULL
-          if(nrow(mast[mast$metap_bonferroni > 1, ]) > 0){
-            mast[mast$metap_bonferroni > 1, ]$metap_bonferroni <- 1
-          }
-          # write the result
-          output_loc <- paste(mast_meta_output_loc_prepend, cell_type, 'UT', condition, '.tsv', sep = '')
-          write.table(mast, output_loc, sep = '\t')
-        })
+        # read the mast output
+        mast_v2 <- read.table(mast_loc_v2, header=T)
+        mast_v3 <- read.table(mast_loc_v3, header=T)
+        # get the genes that are in both
+        genes_both <- intersect(rownames(mast_v2), rownames(mast_v3))
+        # select only those genes
+        mast_v2 <- mast_v2[rownames(mast_v2) %in% genes_both,]
+        mast_v3 <- mast_v3[rownames(mast_v3) %in% genes_both,]
+        # morph P val to minimum
+        if(nrow(mast_v2[mast_v2$p_val == 0, ]) > 0){
+          mast_v2[mast_v2$p_val == 0, ]$p_val <- .Machine$double.xmin
+        }
+        if(nrow(mast_v3[mast_v3$p_val == 0, ]) > 0){
+          mast_v3[mast_v3$p_val == 0, ]$p_val <- .Machine$double.xmin
+        }
+        # add the gene name also in a column
+        mast_v2$gene <- rownames(mast_v2)
+        mast_v3$gene <- rownames(mast_v3)
+        # add the mast results
+        masts <- list()
+        masts$v2 <- mast_v2
+        masts$v3 <- mast_v3
+        # perform the metavolcanor approach
+        meta_degs_comb <- combining_mv(diffexp=masts, pcriteria='p_val', foldchangecol='avg.logFC', genenamecol = 'gene', collaps = T)
+        # grab the result we care about
+        volcanometa <- meta_degs_comb@metaresult
+        volcanometa$metap_bonferroni <- volcanometa$metap*length(genes_both)
+        # add the genes as rownames
+        rownames(volcanometa) <- volcanometa$gene
+        # add a colname append
+        colnames(mast_v2) <- paste(colnames(mast_v2), 'v2', sep = '_')
+        colnames(mast_v3) <- paste(colnames(mast_v3), 'v3', sep = '_')
+        # merge the frames
+        mast <- merge(mast_v2, mast_v3, by=0, all=TRUE)
+        rownames(mast) <- mast$Row.names
+        mast$Row.names <- NULL
+        # get the meta p values using stouffers method
+        #stouffers <- rep(NA, times = nrow(mast))
+        #for(i in 1:nrow(mast)){
+        #  # get the p-values
+        #  p_vals <- c(mast[i, 'p_val_v2'], mast[i, 'p_val_v3'])
+        #  # the weights are based on the number of cells
+        #  weights <- c(sqrt(cond1_v2_cells + cond2_v2_cells), sqrt(cond1_v3_cells + cond2_v3_cells))
+        #  # get the result from the Stouffer's method
+        #  stouffers_res <- sumz(p = p_vals, weights = weights)
+        #  if(!is.na(stouffers_res)){
+        #    stouffers[i] <- stouffers_res$p[1,1]*length(genes_both) #bonferroni correct by multiplying by number of tests
+        #  }
+        #}
+        # add the value
+        #mast$stouffers_p <- stouffers
+        #mast[mast$stouffers_p > 1 & !is.na(mast$stouffers_p), ]$stouffers_p <- 1
+        # also add the volcanometa stuff
+        mast <- merge(mast, volcanometa, by=0, all=TRUE)
+        rownames(mast) <- mast$Row.names
+        mast$Row.names <- NULL
+        if(nrow(mast[mast$metap_bonferroni > 1, ]) > 0){
+          mast[mast$metap_bonferroni > 1, ]$metap_bonferroni <- 1
+        }
+        # write the result
+        output_loc <- paste(mast_meta_output_loc_prepend, cell_type, 'UT', condition, '.tsv', sep = '')
+        write.table(mast, output_loc, sep = '\t')
+      })
     }
   }
 }
@@ -147,8 +147,8 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
     })
   }
 }
-  
-get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonferroni', cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
+
+get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonferroni', cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
   # put all results in a list
   pathways_analysis <- list()
   # put all results in a shared DF
@@ -160,14 +160,20 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
       try({
         print(paste(cell_type, stim, sep = ' '))
         # paste the filepath together
-        filepath <- paste(pathway_output_loc, cell_type, 'UT',stim,'_sig_pathways.txt', sep = '')
+        #filepath <- paste(pathway_output_loc, cell_type, 'UT',stim,'_sig_pathways.txt', sep = '')
+        filepath <- paste(pathway_output_loc, cell_type, 'UT',stim,'_sig_up_pathways.txt', sep = '')
         # read the file
         pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
         # create column name
         newcolname <- paste(cell_type, 'UT', stim, sep = '')
         # get the log2 of the significance value
         #pathways[[newcolname]] <- log2(pathways[[sig_val_to_use]])
-        pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+        if(use_ranking){
+          pathways[[newcolname]] <- as.numeric(rownames(pathways))
+        }
+        else{
+          pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+        }
         pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
         # reduce to the only two columns we care about
         pathways <- pathways[, c('id_name', newcolname)]
@@ -198,15 +204,18 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
   pathway_df <- pathway_df[apply(pathway_df[,-1], 1, function(x) !all(x==0)),]
   return(pathway_df)
 }
-  
 
-get_top_pathways <- function(pathway_table, nr_of_top_genes){
+
+get_top_pathways <- function(pathway_table, nr_of_top_genes, is_ranked=F){
   # init pathways list
   pathways <- c()
   # go through the columns
   for(col in colnames(pathway_table)){
     # order by that column
     ordered <- pathway_table[order(pathway_table[[col]], decreasing = T), ]
+    if(is_ranked){
+      ordered <- pathway_table[order(pathway_table[[col]], decreasing = F), ]
+    }
     # get those top ones
     top_col <- rownames(ordered)[1:nr_of_top_genes]
     pathways <- c(pathways, top_col)
@@ -248,26 +257,179 @@ get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative =
 
 
 # get the location of the pathways
-pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20200624/'
+pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs/'
 #pathway_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/mast/meta_paired_lores_unconfined_20200624/'
 # write the combined pathway file
-pathway_df <- get_pathway_table(pathway_output_loc)
-write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_unconfined_20200624/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
+pathway_df[pathway_df==0] <- 600
+write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the locaiton of the pathways of only upregulated genes
-pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_unconfined_up_20200624/'
+pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
 # write the combined pathway file
-pathway_up_df <- get_pathway_table(pathway_up_output_loc)
-write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_unconfined_up_20200624/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
+pathway_up_df[pathway_up_df==0] <- 600
+write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the df limited by top pathways
-pathway_df_top_3 <- get_top_pathways(pathway_df, 3)
-pathway_df_top_5 <- get_top_pathways(pathway_df, 5)
-pathway_df_top_10 <- get_top_pathways(pathway_df, 10)
+pathway_df_top_3 <- get_top_pathways(pathway_df, 3, T)
+pathway_df_top_5 <- get_top_pathways(pathway_df, 5, T)
+pathway_df_top_10 <- get_top_pathways(pathway_df, 10, T)
 
 # get the df limited by top pathways of upregulated genes
-pathway_up_df_top_3 <- get_top_pathways(pathway_up_df, 3)
-pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5)
-pathway_up_df_top_10 <- get_top_pathways(pathway_up_df, 10)
+pathway_up_df_top_3 <- get_top_pathways(pathway_up_df, 3, T)
+pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5, T)
 
+# show clustering based on DE genes
+deg_path <- "/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/"
+
+pathogens <- c("CA", "MTB", "PA")
+timepoints <- c("3h", "24h")
+cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
+
+b_3h_ca_degs <- read.table(paste0(deg_path, "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
+b_3h_ca_degs <- b_3h_ca_degs['metafc']
+colnames(b_3h_ca_degs) <- c('BUTX3hCA')
+deg_meta_fc_all_conditions <- data.frame(row.names = rownames(b_3h_ca_degs))
+rows <- rownames(deg_meta_fc_all_conditions)
+deg_meta_fc_all_conditions <- data.table(deg_meta_fc_all_conditions)
+deg_meta_fc_all_conditions$genes <- rows
+
+
+for(pathogen in pathogens) {
+  for (timepoint in timepoints) {
+    for (cell_type in cell_types_to_use) {
+      deg_table <- read.table(paste0(deg_path, cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
+      deg_table <- deg_table['metafc']
+      colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
+      deg_table$genes <- rownames(deg_table)
+      deg_table <- data.table(deg_table)
+      print(head(deg_table))
+      deg_meta_fc_all_conditions <- merge(deg_meta_fc_all_conditions, deg_table, by.x='genes', by.y='genes', all=TRUE)
+      #deg_meta_fc_all_conditions[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
+    }
+  }
+}
+
+deg_meta_fc_all_conditions <- data.frame(deg_meta_fc_all_conditions)
+rownames(deg_meta_fc_all_conditions) <- deg_meta_fc_all_conditions$genes
+deg_meta_fc_all_conditions$genes <- NULL
+deg_meta_fc_all_conditions[is.na(deg_meta_fc_all_conditions)] <- 0
+
+sds <- apply(deg_meta_fc_all_conditions, 1, sd, na.rm=T)
+sum(sds > 0.4)
+
+colors <- c("#153057", "#009ddb", "#e64b50", "#edba1b", "#71bc4b", "#965ec8")
+colors_celltype <- c(rep(colors, times=6))
+colors_timepoints <- c(rep(c("lightgrey","darkgrey"), times = 3, each = 6)) 
+colors_pathogen <- c(rep("tan1", 12), rep("tan3", 12), rep("brown", 12))
+colors_matrix <- cbind(colors_celltype, colors_timepoints, colors_pathogen)
+colnames(colors_matrix) <- c("Cell type", "Timepoint", "Pathogen")
+
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions)), labCol = NA,
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions[sds > .5,])),
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
+
+# show pathways
+heatmap.3(t(as.matrix(pathway_up_df_top_3)), labCol = NA,
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(10,10))
+
+
+# try old DE genes
+b_3h_ca_degs <- read.table(paste0('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
+b_3h_ca_degs <- b_3h_ca_degs['metafc']
+colnames(b_3h_ca_degs) <- c('BUTX3hCA')
+deg_meta_fc_all_conditions <- data.frame(row.names = rownames(b_3h_ca_degs))
+rows <- rownames(deg_meta_fc_all_conditions)
+deg_meta_fc_all_conditions <- data.table(deg_meta_fc_all_conditions)
+deg_meta_fc_all_conditions$genes <- rows
+
+
+for(pathogen in pathogens) {
+  for (timepoint in timepoints) {
+    for (cell_type in cell_types_to_use) {
+      deg_table <- read.table(paste0('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
+      deg_table <- deg_table['metafc']
+      colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
+      deg_table$genes <- rownames(deg_table)
+      deg_table <- data.table(deg_table)
+      print(head(deg_table))
+      deg_meta_fc_all_conditions <- merge(deg_meta_fc_all_conditions, deg_table, by.x='genes', by.y='genes', all=TRUE)
+      #deg_meta_fc_all_conditions[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
+    }
+  }
+}
+
+deg_meta_fc_all_conditions <- data.frame(deg_meta_fc_all_conditions)
+rownames(deg_meta_fc_all_conditions) <- deg_meta_fc_all_conditions$genes
+deg_meta_fc_all_conditions$genes <- NULL
+deg_meta_fc_all_conditions[is.na(deg_meta_fc_all_conditions)] <- 0
+
+get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
+  top_vary_de <- c()
+  cols_to_loop <- NULL
+  # grab the appriate grep
+  if(use_tp & use_pathogen){
+    # we want a combo of pathogen and timepoints, so 3hCA for example
+    cols_to_loop <- paste(rep(timepoints, each = length(pathogens)), pathogens, sep = "")
+  }
+  else if(use_pathogen & use_ct){
+    # cell type and pathogen, so monocyte3hCA and monocyte24hCA for example
+    cols_to_loop <- paste(rep(cell_types, each = length(pathogens)), pathogens, sep = ".*")
+  }
+  else if(use_tp & use_ct){
+    # cell type at a timepoint, so monocyte3hCA and monocyte3hPA and monocyte3hMTB for example
+    cols_to_loop <- paste(rep(cell_types, each = length(timepoints)), timepoints, sep = ".*")
+  }
+  else if(use_pathogen){
+    cols_to_loop <- pathogens
+  }
+  else if(use_tp){
+    cols_to_loop <- timepoints
+  }
+  else if(use_ct){
+    cols_to_loop <- cell_types
+  }
+  # go through our group of columns
+  for(col_grep in cols_to_loop){
+    # grab the column names that have this in their name
+    appropriate_columns <- colnames(de_table)[(grep(col_grep, colnames(de_table)))]
+    print('getting most varying out of: ')
+    print(appropriate_columns)
+    # now subset the frame to only have these columns
+    sub_de_table <- de_table[, appropriate_columns]
+    # now calculate the sd over this set of columns
+    sds <- apply(sub_de_table, 1, sd, na.rm=T)
+    # then grab the genes that are 'this' varied
+    varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
+    # and add them to the list
+    top_vary_de <- c(top_vary_de, varying_genes)
+  }
+  # constrain to the unique genes
+  top_vary_de <- unique(top_vary_de)
+  top_vary_de <- sort(top_vary_de)
+  return(top_vary_de)
+}
+
+# genes most varying within cell type and timepoint
+genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F)
+# genes most varying within cell type and pathogen
+genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T)
+# genes most varying within timepoint and pathogen
+genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T)
+# genes most varying within cell type
+genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F)
+# genes most varying within pathogen
+genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T)
+# genes most varying within timepoint
+genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F)
+
+# subset dataframe
+deg_meta_fc_all_conditions_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_ct), ]
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_ct_vary)), labCol = NA,
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
+deg_meta_fc_all_conditions_timepoint_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_timepoint_ct), ]
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_timepoint_ct_vary)), labCol = NA,
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
 
