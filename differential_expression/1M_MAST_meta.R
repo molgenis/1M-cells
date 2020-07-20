@@ -263,7 +263,7 @@ get_combined_meta_de_table <- function(meta_output_loc){
   return(deg_meta_combined)
 }
 
-get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
+get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, use_dynamic_sd=F, top_so_many=10, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
   top_vary_de <- c()
   cols_to_loop <- NULL
   # grab the appriate grep
@@ -296,10 +296,19 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
     print(appropriate_columns)
     # now subset the frame to only have these columns
     sub_de_table <- de_table[, appropriate_columns]
-    # now calculate the sd over this set of columns
-    sds <- apply(sub_de_table, 1, sd, na.rm=T)
-    # then grab the genes that are 'this' varied
-    varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
+    # we will return the rownames
+    varying_genes <- NULL
+    # either use a set SD or grab so many genes
+    if(use_dynamic_sd){
+      varying_genes <- get_most_varying_from_df(sub_de_table)
+    }
+    else{
+      # now calculate the sd over this set of columns
+      sds <- apply(sub_de_table, 1, sd, na.rm=T)
+      # then grab the genes that are 'this' varied
+      varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
+    }
+    
     # and add them to the list
     top_vary_de <- c(top_vary_de, varying_genes)
   }
@@ -309,6 +318,25 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
   return(top_vary_de)
 }
 
+get_most_varying_from_df <- function(dataframe, top_so_many=10){
+  # now calculate the sd over this set of columns
+  sds <- apply(dataframe, 1, sd, na.rm=T)
+  # add the sds as a column
+  dataframe$sds <- sds
+  # order by the sd
+  dataframe <- dataframe[order(dataframe$sds, decreasing = T), ]
+  # we will return the rownames
+  most_varied <- NULL
+  # we need to make sure we can return as many rownames as requested
+  if(nrow(dataframe) < top_so_many){
+    print(paste('requested ', top_so_many, ', but dataframe only has ', nrow(most_varied), ' rows', sep = ''))
+    most_varied <- rownames(dataframe)
+  }
+  else{
+    most_varied <- rownames(dataframe)[1:top_so_many]
+  }
+  return(most_varied)
+}
 
 # cell counts loc
 #cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
@@ -408,17 +436,17 @@ heatmap.3(t(as.matrix(pathway_up_df_top_3)),
 deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/')
 
 # genes most varying within cell type and timepoint
-genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F)
+genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
 # genes most varying within cell type and pathogen
-genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T)
+genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
 # genes most varying within timepoint and pathogen
-genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T)
+genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
 # genes most varying within cell type
-genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F)
+genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
 # genes most varying within pathogen
-genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T)
+genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
 # genes most varying within timepoint
-genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F)
+genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
 
 # subset dataframe
 deg_meta_fc_all_conditions_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_ct), ]
