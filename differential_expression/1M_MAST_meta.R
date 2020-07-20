@@ -6,6 +6,8 @@ library(metap)
 library(MetaVolcanoR)
 library(stringr)
 library(data.table)
+require("heatmap.plus")
+require("RColorBrewer")
 
 ####################
 # Functions        #
@@ -225,6 +227,88 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes, is_ranked=F){
   return(pathway_table_smaller)
 }
 
+get_combined_meta_de_table <- function(meta_output_loc){
+  pathogens <- c("CA", "MTB", "PA")
+  timepoints <- c("3h", "24h")
+  cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
+  
+  b_3h_ca_degs <- read.table(paste0(meta_output_loc, "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
+  b_3h_ca_degs <- b_3h_ca_degs['metafc']
+  colnames(b_3h_ca_degs) <- c('BUTX3hCA')
+  deg_meta_combined <- data.frame(row.names = rownames(b_3h_ca_degs))
+  rows <- rownames(deg_meta_combined)
+  deg_meta_combined <- data.table(deg_meta_combined)
+  deg_meta_combined$genes <- rows
+  
+  
+  for(pathogen in pathogens) {
+    for (timepoint in timepoints) {
+      for (cell_type in cell_types_to_use) {
+        deg_table <- read.table(paste0(meta_output_loc, cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
+        deg_table <- deg_table['metafc']
+        colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
+        deg_table$genes <- rownames(deg_table)
+        deg_table <- data.table(deg_table)
+        print(head(deg_table))
+        deg_meta_combined <- merge(deg_meta_combined, deg_table, by.x='genes', by.y='genes', all=TRUE)
+        #deg_meta_combined[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
+      }
+    }
+  }
+  
+  deg_meta_combined <- data.frame(deg_meta_combined)
+  rownames(deg_meta_combined) <- deg_meta_combined$genes
+  deg_meta_combined$genes <- NULL
+  deg_meta_combined[is.na(deg_meta_combined)] <- 0
+  return(deg_meta_combined)
+}
+
+get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
+  top_vary_de <- c()
+  cols_to_loop <- NULL
+  # grab the appriate grep
+  if(use_tp & use_pathogen){
+    # we want a combo of pathogen and timepoints, so 3hCA for example
+    cols_to_loop <- paste(rep(timepoints, each = length(pathogens)), pathogens, sep = "")
+  }
+  else if(use_pathogen & use_ct){
+    # cell type and pathogen, so monocyte3hCA and monocyte24hCA for example
+    cols_to_loop <- paste(rep(cell_types, each = length(pathogens)), pathogens, sep = ".*")
+  }
+  else if(use_tp & use_ct){
+    # cell type at a timepoint, so monocyte3hCA and monocyte3hPA and monocyte3hMTB for example
+    cols_to_loop <- paste(rep(cell_types, each = length(timepoints)), timepoints, sep = ".*")
+  }
+  else if(use_pathogen){
+    cols_to_loop <- pathogens
+  }
+  else if(use_tp){
+    cols_to_loop <- timepoints
+  }
+  else if(use_ct){
+    cols_to_loop <- cell_types
+  }
+  # go through our group of columns
+  for(col_grep in cols_to_loop){
+    # grab the column names that have this in their name
+    appropriate_columns <- colnames(de_table)[(grep(col_grep, colnames(de_table)))]
+    print('getting most varying out of: ')
+    print(appropriate_columns)
+    # now subset the frame to only have these columns
+    sub_de_table <- de_table[, appropriate_columns]
+    # now calculate the sd over this set of columns
+    sds <- apply(sub_de_table, 1, sd, na.rm=T)
+    # then grab the genes that are 'this' varied
+    varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
+    # and add them to the list
+    top_vary_de <- c(top_vary_de, varying_genes)
+  }
+  # constrain to the unique genes
+  top_vary_de <- unique(top_vary_de)
+  top_vary_de <- sort(top_vary_de)
+  return(top_vary_de)
+}
+
 
 # cell counts loc
 #cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
@@ -283,38 +367,17 @@ pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5, T)
 # show clustering based on DE genes
 deg_path <- "/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/"
 
+
+
+##################################
+# Harm                           #
+##################################
 pathogens <- c("CA", "MTB", "PA")
 timepoints <- c("3h", "24h")
 cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
 
-b_3h_ca_degs <- read.table(paste0(deg_path, "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
-b_3h_ca_degs <- b_3h_ca_degs['metafc']
-colnames(b_3h_ca_degs) <- c('BUTX3hCA')
-deg_meta_fc_all_conditions <- data.frame(row.names = rownames(b_3h_ca_degs))
-rows <- rownames(deg_meta_fc_all_conditions)
-deg_meta_fc_all_conditions <- data.table(deg_meta_fc_all_conditions)
-deg_meta_fc_all_conditions$genes <- rows
 
-
-for(pathogen in pathogens) {
-  for (timepoint in timepoints) {
-    for (cell_type in cell_types_to_use) {
-      deg_table <- read.table(paste0(deg_path, cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
-      deg_table <- deg_table['metafc']
-      colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
-      deg_table$genes <- rownames(deg_table)
-      deg_table <- data.table(deg_table)
-      print(head(deg_table))
-      deg_meta_fc_all_conditions <- merge(deg_meta_fc_all_conditions, deg_table, by.x='genes', by.y='genes', all=TRUE)
-      #deg_meta_fc_all_conditions[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
-    }
-  }
-}
-
-deg_meta_fc_all_conditions <- data.frame(deg_meta_fc_all_conditions)
-rownames(deg_meta_fc_all_conditions) <- deg_meta_fc_all_conditions$genes
-deg_meta_fc_all_conditions$genes <- NULL
-deg_meta_fc_all_conditions[is.na(deg_meta_fc_all_conditions)] <- 0
+deg_meta_fc_all_conditions <- get_combined_meta_de_table(deg_path)
 
 sds <- apply(deg_meta_fc_all_conditions, 1, sd, na.rm=T)
 sum(sds > 0.4)
@@ -331,86 +394,18 @@ heatmap.3(t(as.matrix(deg_meta_fc_all_conditions)), labCol = NA,
 heatmap.3(t(as.matrix(deg_meta_fc_all_conditions[sds > .5,])),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
 
+##################################
+# /Harm                           #
+##################################
+
 # show pathways
-heatmap.3(t(as.matrix(pathway_up_df_top_3)), labCol = NA,
+heatmap.3(t(as.matrix(pathway_up_df_top_3)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(10,10))
 
 
-# try old DE genes
-b_3h_ca_degs <- read.table(paste0('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
-b_3h_ca_degs <- b_3h_ca_degs['metafc']
-colnames(b_3h_ca_degs) <- c('BUTX3hCA')
-deg_meta_fc_all_conditions <- data.frame(row.names = rownames(b_3h_ca_degs))
-rows <- rownames(deg_meta_fc_all_conditions)
-deg_meta_fc_all_conditions <- data.table(deg_meta_fc_all_conditions)
-deg_meta_fc_all_conditions$genes <- rows
 
-
-for(pathogen in pathogens) {
-  for (timepoint in timepoints) {
-    for (cell_type in cell_types_to_use) {
-      deg_table <- read.table(paste0('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
-      deg_table <- deg_table['metafc']
-      colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
-      deg_table$genes <- rownames(deg_table)
-      deg_table <- data.table(deg_table)
-      print(head(deg_table))
-      deg_meta_fc_all_conditions <- merge(deg_meta_fc_all_conditions, deg_table, by.x='genes', by.y='genes', all=TRUE)
-      #deg_meta_fc_all_conditions[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
-    }
-  }
-}
-
-deg_meta_fc_all_conditions <- data.frame(deg_meta_fc_all_conditions)
-rownames(deg_meta_fc_all_conditions) <- deg_meta_fc_all_conditions$genes
-deg_meta_fc_all_conditions$genes <- NULL
-deg_meta_fc_all_conditions[is.na(deg_meta_fc_all_conditions)] <- 0
-
-get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
-  top_vary_de <- c()
-  cols_to_loop <- NULL
-  # grab the appriate grep
-  if(use_tp & use_pathogen){
-    # we want a combo of pathogen and timepoints, so 3hCA for example
-    cols_to_loop <- paste(rep(timepoints, each = length(pathogens)), pathogens, sep = "")
-  }
-  else if(use_pathogen & use_ct){
-    # cell type and pathogen, so monocyte3hCA and monocyte24hCA for example
-    cols_to_loop <- paste(rep(cell_types, each = length(pathogens)), pathogens, sep = ".*")
-  }
-  else if(use_tp & use_ct){
-    # cell type at a timepoint, so monocyte3hCA and monocyte3hPA and monocyte3hMTB for example
-    cols_to_loop <- paste(rep(cell_types, each = length(timepoints)), timepoints, sep = ".*")
-  }
-  else if(use_pathogen){
-    cols_to_loop <- pathogens
-  }
-  else if(use_tp){
-    cols_to_loop <- timepoints
-  }
-  else if(use_ct){
-    cols_to_loop <- cell_types
-  }
-  # go through our group of columns
-  for(col_grep in cols_to_loop){
-    # grab the column names that have this in their name
-    appropriate_columns <- colnames(de_table)[(grep(col_grep, colnames(de_table)))]
-    print('getting most varying out of: ')
-    print(appropriate_columns)
-    # now subset the frame to only have these columns
-    sub_de_table <- de_table[, appropriate_columns]
-    # now calculate the sd over this set of columns
-    sds <- apply(sub_de_table, 1, sd, na.rm=T)
-    # then grab the genes that are 'this' varied
-    varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
-    # and add them to the list
-    top_vary_de <- c(top_vary_de, varying_genes)
-  }
-  # constrain to the unique genes
-  top_vary_de <- unique(top_vary_de)
-  top_vary_de <- sort(top_vary_de)
-  return(top_vary_de)
-}
+# get table of logfc of all ct and tp
+deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/')
 
 # genes most varying within cell type and timepoint
 genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F)
@@ -427,9 +422,9 @@ genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = 
 
 # subset dataframe
 deg_meta_fc_all_conditions_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_ct), ]
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_ct_vary)), labCol = NA,
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_ct_vary)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
 deg_meta_fc_all_conditions_timepoint_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_timepoint_ct), ]
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_timepoint_ct_vary)), labCol = NA,
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_timepoint_ct_vary)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
 
