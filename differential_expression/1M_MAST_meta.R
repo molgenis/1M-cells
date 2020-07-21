@@ -227,7 +227,7 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes, is_ranked=F){
   return(pathway_table_smaller)
 }
 
-get_combined_meta_de_table <- function(meta_output_loc){
+get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F){
   pathogens <- c("CA", "MTB", "PA")
   timepoints <- c("3h", "24h")
   cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
@@ -260,10 +260,14 @@ get_combined_meta_de_table <- function(meta_output_loc){
   rownames(deg_meta_combined) <- deg_meta_combined$genes
   deg_meta_combined$genes <- NULL
   deg_meta_combined[is.na(deg_meta_combined)] <- 0
+  # limit to those that were upregulated at least once if requested
+  if(must_be_positive_once){
+    deg_meta_combined <- deg_meta_combined[apply(deg_meta_combined,1,min) < 0,]
+  }
   return(deg_meta_combined)
 }
 
-get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, use_dynamic_sd=F, top_so_many=10, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
+get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, use_dynamic_sd=F, top_so_many=10, must_be_positive_once=F, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
   top_vary_de <- c()
   cols_to_loop <- NULL
   # grab the appriate grep
@@ -296,11 +300,15 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
     print(appropriate_columns)
     # now subset the frame to only have these columns
     sub_de_table <- de_table[, appropriate_columns]
+    # subset to only the genes that were upregulated at least once, if requested
+    if(must_be_positive_once){
+      sub_de_table <- sub_de_table[apply(sub_de_table,1,min) < 0,]
+    }
     # we will return the rownames
     varying_genes <- NULL
     # either use a set SD or grab so many genes
     if(use_dynamic_sd){
-      varying_genes <- get_most_varying_from_df(sub_de_table)
+      varying_genes <- get_most_varying_from_df(sub_de_table, top_so_many)
     }
     else{
       # now calculate the sd over this set of columns
@@ -433,20 +441,20 @@ heatmap.3(t(as.matrix(pathway_up_df_top_3)),
 
 
 # get table of logfc of all ct and tp
-deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/')
+deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
 
 # genes most varying within cell type and timepoint
-genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
+genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 # genes most varying within cell type and pathogen
-genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
+genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 # genes most varying within timepoint and pathogen
-genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
+genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 # genes most varying within cell type
-genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
+genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 # genes most varying within pathogen
-genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20)
+genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 # genes most varying within timepoint
-genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20)
+genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
 
 # subset dataframe
 deg_meta_fc_all_conditions_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_ct), ]
@@ -456,3 +464,26 @@ deg_meta_fc_all_conditions_timepoint_ct_vary <- deg_meta_fc_all_conditions[(rown
 heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_timepoint_ct_vary)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
 
+# check only monocyte and DC
+deg_meta_fc_all_conditions_mono_DC <- deg_meta_fc_all_conditions[, c(grep('monocyte', colnames(deg_meta_fc_all_conditions)),grep('DC', colnames(deg_meta_fc_all_conditions)))]
+# genes most varying within cell type
+genes_vary_ct_mono_DC <- get_top_vary_genes(deg_meta_fc_all_conditions_mono_DC, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T, cell_types = c('DC', 'monocyte'))
+# genes most varying within cell type and timepoint
+genes_vary_timepoint_ct_mono_DC <- get_top_vary_genes(deg_meta_fc_all_conditions_mono_DC, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T, cell_types = c('DC', 'monocyte'))
+# subset dataframe
+deg_meta_fc_all_conditions_mono_DC_timepoint_ct_vary <- deg_meta_fc_all_conditions_mono_DC[(rownames(deg_meta_fc_all_conditions_mono_DC) %in% genes_vary_timepoint_ct_mono_DC), ]
+# subset dataframe
+deg_meta_fc_all_conditions_mono_DC_ct_vary <- deg_meta_fc_all_conditions_mono_DC[(rownames(deg_meta_fc_all_conditions_mono_DC) %in% genes_vary_ct_mono_DC), ]
+
+
+# create new rowside colors for just mono+dc
+colorsmonodc <- c("#153057", "#009ddb")
+colors_celltypemonodc <- c(rep(colorsmonodc, times=6))
+colors_timepointsmonodc <- c(rep(c("lightgrey","darkgrey"), times = 3, each = 2)) 
+colors_pathogenmonodc <- c(rep("tan1", 4), rep("tan3", 4), rep("brown", 4))
+colors_matrixmonodc <- cbind(colors_celltypemonodc, colors_timepointsmonodc, colors_pathogenmonodc)
+colnames(colors_matrixmonodc) <- c("Cell type", "Timepoint", "Pathogen")
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_ct_vary)),
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
+heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_timepoint_ct_vary)),
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
