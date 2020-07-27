@@ -7,7 +7,8 @@ library(MetaVolcanoR)
 library(stringr)
 library(data.table)
 require("heatmap.plus")
-require("RColorBrewer")
+library(RColorBrewer)
+library(VennDiagram)
 
 ####################
 # Functions        #
@@ -227,6 +228,62 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes, is_ranked=F){
   return(pathway_table_smaller)
 }
 
+get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2, venn_output_loc='./', only_significant=T, pval_column = 'metap_bonferroni', group1name='group 1', group2name='group 2'){
+  # list the files in directory 1
+  files <- list.files(mast_meta_output_1)
+  # check the files
+  for(file in files){
+    # set the full path
+    mast1_loc <- paste(mast_meta_output_1, '/', file, sep='')
+    mast2_loc <- paste(mast_meta_output_2, '/', file, sep='')
+    try({
+      # try to read both tables
+      mast1 <- read.table(mast1_loc, header=T, row.names = 1, sep = '\t')
+      mast2 <- read.table(mast2_loc, header=T, row.names = 1, sep = '\t')
+      # remove insignificant results if requested
+      if(only_significant){
+        mast1 <- mast1[mast1[[pval_column]] <= 0.05, ]
+        mast2 <- mast2[mast2[[pval_column]] <= 0.05, ]
+      }
+      # report something about the P-values
+      quantile_mast1 <- quantile(mast1[[pval_column]])
+      quantile_mast2 <- quantile(mast2[[pval_column]])
+      print(paste(substr(file, 1, regexpr("\\.[^\\.]*$", file)-1), group1name, 'quantiles:'))
+      print(quantile_mast1)
+      print(paste(substr(file, 1, regexpr("\\.[^\\.]*$", file)-1), group2name, 'quantiles:'))
+      print(quantile_mast2)
+      # grab the genes
+      mast1_genes <- rownames(mast1)
+      mast2_genes <- rownames(mast2)
+      # grab the name of the file without the extention
+      myCol <- brewer.pal(3, "Pastel2")[1:2]
+        output_file <- substr(file, 1, regexpr("\\.[^\\.]*$", file)-1)
+        venn.diagram(x = list(mast1_genes, mast2_genes),
+                     main = substr(file, 1, regexpr("\\.[^\\.]*$", file)-1),
+                     category.names = c(group1name, group2name),
+                     filename = paste(venn_output_loc, output_file, '.png', sep = ''),
+                     imagetype="png" ,
+                     height = 600 , 
+                     width = 600 , 
+                     resolution = 300,
+                     compression = "lzw",
+                     lwd = 2,
+                     lty = 'blank',
+                     fill = myCol,
+                     cex = .6,
+                     fontface = "bold",
+                     fontfamily = "sans",
+                     cat.cex = 0.6,
+                     cat.fontface = "bold",
+                     cat.default.pos = "outer",
+                     cat.pos = c(-27, 27),
+                     cat.dist = c(0.055, 0.055),
+                     cat.fontfamily = "sans")
+    })
+  }
+}
+
+
 get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F){
   pathogens <- c("CA", "MTB", "PA")
   timepoints <- c("3h", "24h")
@@ -385,7 +442,7 @@ pathway_df[pathway_df==0] <- 600
 write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the locaiton of the pathways of only upregulated genes
-pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
+pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc025minpct01_20200713/rna/sigs_pos/'
 # write the combined pathway file
 pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
 pathway_up_df[pathway_up_df==0] <- 600
@@ -436,12 +493,13 @@ heatmap.3(t(as.matrix(deg_meta_fc_all_conditions[sds > .5,])),
 
 # show pathways
 heatmap.3(t(as.matrix(pathway_up_df_top_3)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(10,10))
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(15,10))
 
 
 
 # get table of logfc of all ct and tp
-deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
+#deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
+deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/', T)
 
 # genes most varying within cell type and timepoint
 genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
@@ -487,3 +545,30 @@ heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_ct_vary)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
 heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_timepoint_ct_vary)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
+
+
+
+
+# check how much difference it makes when using different lfcs
+lfc01 <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/'
+lfc025 <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/'
+lfc01vs025_venn_loc <- '/data/scRNA/differential_expression/seurat_MAST/paired_lores_lfc01vs025_minpct01_20200713/meta_paired_lores_lfc01vs025_minpct01_20200713/rna/'
+get_mast_meta_output_overlap(lfc01,lfc025, lfc01vs025_venn_loc, group1name = 'lfc01', group2name = 'lfc025')
+
+# plotting the expression instead of the LFC
+v2_exp_loc <- '/data/scRNA/expression/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617_avgexp_rna.tsv'
+v3_exp_loc <- '/data/scRNA/expression/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617_avgexp_rna.tsv'
+# get expression
+v2_exp <- read.table(v2_exp_loc, sep = '\t', header = T, row.names = 1)
+v3_exp <- read.table(v3_exp_loc, sep = '\t', header = T, row.names = 1)
+# some cleanup required
+v2_exp <- v2_exp[, c(grep('CA|MTB|PA', colnames(v2_exp)))]
+# confine to DE genes
+v2_exp_de <- v2_exp[(rownames(v2_exp) %in% genes_vary_ct),]
+cell_types_to_use_underscore <- paste('^', cell_types_to_use, '_', sep = '')
+v2_exp_de <- v2_exp_de[, c(grep(paste(cell_types_to_use_underscore, collapse = '|'), colnames(v2_exp_de)))]
+v3_exp_de <- v3_exp[(rownames(v3_exp) %in% genes_vary_ct),]
+# plot
+heatmap.3(t(as.matrix(v2_exp_de)),
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(6,10))
+

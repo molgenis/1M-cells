@@ -53,4 +53,4 @@ for lane in lanes:
     scrub_all = pd.concat([scrub_all, assignment])
 
 # save to file
-scrub_all.to_csv(scrub_all_save_loc)
+scrub_all.to_csv(scrub_all_save_loc, index=False, sep='\t')
