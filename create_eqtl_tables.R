@@ -70,6 +70,31 @@ add_MAST_to_table <- function(eqtl_table, MAST_path, name, is_meta=F){
   })
 }
 
+add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add){
+  # in case a GWAS file is not there
+  tryCatch({
+    # grab the SNPs
+    snps <- eqtl_table$SNPName
+    # grab the p-val by SNP name, there are some exceptions to the standard approach
+    pvals <- NULL
+    if(column_name_to_add == 'candida'){
+      pvals <- gwas_output$P[match(snps, gwas_output$SNP)]
+    }
+    else if(column_name_to_add == 'multiple_sclerosis'){
+      pvals <- gwas_output$P[match(snps, gwas_output$rs)]
+    }
+    else{
+      pvals <- gwas_output$p[match(snps, gwas_output$SNP)]
+    }
+    # add to the pvals
+    eqtl_table[column_name_to_add] <- pvals
+    return(eqtl_table)
+  }, error=function(error_condition) {
+    print(paste("Could not read file:", GWAS_path, error_condition))
+    return(eqtl_table)
+  })
+}
+
 
 #cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "mDC", "pDC", "plasma_B")
 cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
@@ -92,6 +117,18 @@ for (cell_type in cell_types_to_use) {
 
 conditions <- c("CA", "MTB", "PA")
 
+GWASses_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/'
+GWASses <- list()
+GWASses[['rheumatoid_arthritis']] <- read.table(paste(GWASses_loc,'RA_GWASmeta_TransEthnic_v2_formatted.txt.gz', sep=''), header = T, sep = '\t')
+GWASses[['coeliac_disease']] <- read.table(paste(GWASses_loc,'TrynkaG_2011_formatted.txt.gz', sep=''), header = T, sep = '\t')
+GWASses[['inflammatory_bowel_disease']] <- read.table(paste(GWASses_loc,'ibd_build37_59957_20161107_formatted.txt.gz', sep=''), header = T, sep = '\t')
+# rs and P as columns!!!
+GWASses[['multiple_sclerosis']] <- read.table(paste(GWASses_loc,'multiple_sclerosis_2013_24076602_hg19.txt.gz', sep=''), header = T, sep = '\t')
+GWASses[['type_1_diabetes']] <- read.table(paste(GWASses_loc,'onengut_2015_25751624_t1d_meta_formatted.txt.gz', sep=''), header = T, sep = '\t')
+# SNP and P as columns!!!
+GWASses[['candida']] <- read.table(paste(GWASses_loc,'onengut_2015_25751624_t1d_meta_formatted.txt.gz', sep='GC_assoc_nohetero_relatives_outliers_hwe1minus6_maf0.05_noMono_US_discovery_cohort_imputed_candida_Feb2017new.assoc'), header = T)
+
+
 eqtl_tables_per_condition <- list()
 
 for (condition in conditions) {
@@ -100,7 +137,7 @@ for (condition in conditions) {
     eqtl_table_condition <- eqtl_table
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "3h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_3h", condition))
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "UT_vs_3h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_UT_vs_3h", condition))
-    # get 
+    # get MAST output 3h
     if(T){
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v2_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_V2', sep = ''))
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v3_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX3h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_3h_V3', sep = ''))
@@ -108,16 +145,27 @@ for (condition in conditions) {
     }
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "24h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_24h", condition))
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "UT_vs_24h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_UT_vs_24h", condition))
+    # get MAST output 24h
     if(T){
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v2_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_V2', sep = ''))
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/v3_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_V3', sep = ''))
       eqtl_table_condition <- add_MAST_to_table(eqtl_table_condition, paste('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/', cell_type,'UTX24h', condition,'.tsv', sep = ''), paste(cell_type, '_UT_vs_24h_meta', sep = ''), is_meta = T)
     }
+    # add the GWAS output
+    for(gwas in names(GWASses)){
+      eqtl_table_condition <- add_GWAS_to_table(eqtl_table_condition, GWASses[[gwas]], gwas)
+    }
+    
+    # for the heatmap?
     eqtls_z_scores_all_conditions[,paste0(condition, "_3h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_3h", condition)]
     eqtls_z_scores_all_conditions[,paste0(condition, "_24h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_24h", condition)]
     
+    # store in list
     eqtl_tables_per_condition[[condition]][[cell_type]] <- eqtl_table_condition
-    write.xlsx2(eqtl_table_condition, file = paste0(base_dir, "eqtl_table_", condition, "_200717_wmast.xlsx"), col.names=TRUE, row.names = FALSE, sheetName = cell_type, append = T)
+    # write to excel file
+    write.xlsx2(eqtl_table_condition, file = paste0(base_dir, "eqtl_table_", condition, "_200717_wmast_lfc01.xlsx"), col.names=TRUE, row.names = FALSE, sheetName = cell_type, append = T)
+    # also write to a separate file to make it easier to analyse
+    write.table(eqtl_table_condition, (paste(base_dir, "eqtl_table_", cell_type, condition, '.tsv', sep = '')), col.names = T, row.names = T, sep = '\t')
   }
 }
 colors <- c("black", "#153057", "#009ddb", "#e64b50", "#edba1b", "#71bc4b", "#965ec8", "#965ec8")
