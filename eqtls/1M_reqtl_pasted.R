@@ -1,5 +1,6 @@
 
-eQTL_results <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/'
+#eQTL_results <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/'
+eQTL_results <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/'
 
 cell_types <- c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')
 stims <- c('CA', 'MTB', 'PA')
@@ -62,7 +63,7 @@ for(cell_type in cell_types){
     merged_table <- rbind(merged_table, ut_24hstim)
   }
 }
-write.table(merged_table, '/data/scRNA/eQTL_mapping/summaries/reqtls_20200723.tsv', sep = '\t', col.names = T, row.names = F)
+write.table(merged_table, '/data/scRNA/eQTL_mapping/summaries/reqtls_20200729.tsv', sep = '\t', col.names = T, row.names = F)
 
 # combine GWASes
 GWASses_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/'
@@ -75,15 +76,27 @@ GWASses[['multiple_sclerosis']] <- 'multiple_sclerosis_2013_24076602_hg19.txt.gz
 GWASses[['type_1_diabetes']] <- 'onengut_2015_25751624_t1d_meta_formatted.txt.gz'
 #GWASses[['tuberculosis']] <- 'TB_ukbb_gwas.tsv.gz'
 
-sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
+sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20200729.txt")
 colnames(sign_eqtls_ut) <- c('SNP', 'gene')
-for(gwas in names(GWASses)){
+for(gwas in c('multiple_sclerosis')){
   # get the path
   path <- paste(GWASses_loc, GWASses[[gwas]], sep = '')
   # read the table
   gwasfile <- read.table(path, sep = '\t', header = T)
   # TB is formatted differently
-  if(gwas != 'tuberculosis'){
+  if(column_name_to_add == 'candida'){
+    print(gwas)
+    # reduce size
+    gwasfile <- gwasfile[gwasfile$SNP %in% sign_eqtls_ut$SNP, ]
+    sign_eqtls_ut[[gwas]] <- gwasfile$P[match(sign_eqtls_ut$SNP, gwasfile$SNP)]
+  }
+  else if(column_name_to_add == 'multiple_sclerosis'){
+    print(gwas)
+    # reduce size
+    gwasfile <- gwasfile[gwasfile$rs %in% sign_eqtls_ut$SNP, ]
+    sign_eqtls_ut[[gwas]] <- gwasfile$P[match(sign_eqtls_ut$SNP, gwasfile$rs)]
+  }
+  else{
     print(gwas)
     # reduce size
     gwasfile <- gwasfile[gwasfile$SNP %in% sign_eqtls_ut$SNP, ]

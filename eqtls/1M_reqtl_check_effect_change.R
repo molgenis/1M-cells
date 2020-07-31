@@ -1,0 +1,41 @@
+# grab the reQTLs
+reQTLs <- read.table('/data/scRNA/eQTL_mapping/summaries/reqtls_20200729.tsv', sep = '\t', header = T)
+# get the significant ones
+reQTLs_sig <- reQTLs[reQTLs$FDR < 0.05, ]
+nrow(reQTLs_sig)
+# grab those whose effect becomes greater
+reQTLs_sig_stronger <- reQTLs_sig[(!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor > 0 & reQTLs_sig$stim_z_dir_cor > reQTLs_sig$ut_z_dir_cor) | (!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor < 0 & reQTLs_sig$stim_z_dir_cor < reQTLs_sig$ut_z_dir_cor), ]
+nrow(reQTLs_sig_stronger)
+# grab those whose effect becomes weaker, extra parameter required because of possible flipped effects
+reQTLs_sig_weaker <- reQTLs_sig[(!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor > 0 & reQTLs_sig$stim_z_dir_cor > 0 & reQTLs_sig$stim_z_dir_cor < reQTLs_sig$ut_z_dir_cor) | (!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor < 0 & reQTLs_sig$stim_z_dir_cor < 0 & reQTLs_sig$stim_z_dir_cor > reQTLs_sig$ut_z_dir_cor), ]
+nrow(reQTLs_sig_weaker)
+# grab those whose effect flips
+reQTLs_sig_flipped <- reQTLs_sig[(!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor < 0 & reQTLs_sig$stim_z_dir_cor > 0) | (!is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor) & reQTLs_sig$ut_z_dir_cor > 0 & reQTLs_sig$stim_z_dir_cor < 0), ]
+nrow(reQTLs_sig_flipped)
+# reQTLs that were not eQTLs in UT
+reQTLs_sig_untested_ut <- reQTLs_sig[is.na(reQTLs_sig$ut_z_dir_cor) & !is.na(reQTLs_sig$stim_z_dir_cor), ]
+nrow(reQTLs_sig_untested_ut)
+# reQTLs that were not eQTLs in stim
+reQTLs_sig_untested_stim <- reQTLs_sig[!is.na(reQTLs_sig$ut_z_dir_cor) & is.na(reQTLs_sig$stim_z_dir_cor), ]
+nrow(reQTLs_sig_untested_stim)
+# reQTLs that were not eQTLs in either
+reQTLs_sig_neither <- reQTLs_sig[is.na(reQTLs_sig$ut_z_dir_cor) & is.na(reQTLs_sig$stim_z_dir_cor), ]
+nrow(reQTLs_sig_neither)
+
+explained <- c(as.character(reQTLs_sig_stronger$eqtlcol), as.character(reQTLs_sig_weaker$eqtlcol), as.character(reQTLs_sig_flipped$eqtlcol), as.character(reQTLs_sig_untested_ut$eqtlcol), as.character(reQTLs_sig_untested_stim$eqtlcol), as.character(reQTLs_sig_neither$eqtlcol))
+
+
+#check how much not significant in a condition
+sum(is.na(reQTLs_sig$ut_fdr) | reQTLs_sig$ut_fdr >= 0.05 | is.na(reQTLs_sig$stim_fdr) | reQTLs_sig$stim_fdr >= 0.05)
+sum(is.na(reQTLs_sig_stronger$ut_fdr) | reQTLs_sig_stronger$ut_fdr >= 0.05 | is.na(reQTLs_sig_stronger$stim_fdr) | reQTLs_sig_stronger$stim_fdr >= 0.05)
+sum(is.na(reQTLs_sig_weaker$ut_fdr) | reQTLs_sig_weaker$ut_fdr >= 0.05 | is.na(reQTLs_sig_weaker$stim_fdr) | reQTLs_sig_weaker$stim_fdr >= 0.05)
+sum(is.na(reQTLs_sig_flipped$ut_fdr) | reQTLs_sig_flipped$ut_fdr >= 0.05 | is.na(reQTLs_sig_flipped$stim_fdr) | reQTLs_sig_flipped$stim_fdr >= 0.05)
+
+
+reQTLs_sig_3hCA <- reQTLs_sig[reQTLs_sig$condition == '3hCA', ]
+reQTLs_sig_24hCA <- reQTLs_sig[reQTLs_sig$condition == '24hCA', ]
+reQTLs_sig_3hMTB <- reQTLs_sig[reQTLs_sig$condition == '3hMTB', ]
+reQTLs_sig_24hMTB <- reQTLs_sig[reQTLs_sig$condition == '24hMTB', ]
+reQTLs_sig_3hPA <- reQTLs_sig[reQTLs_sig$condition == '3hPA', ]
+reQTLs_sig_24hPA <- reQTLs_sig[reQTLs_sig$condition == '24hPA', ]
+reQTLs_sig <- reQTLs_sig[reQTLs_sig$condition == '24hPA', ]
