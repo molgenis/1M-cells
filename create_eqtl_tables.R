@@ -1,15 +1,16 @@
 options(java.parameters = "-Xmx8000m")
 library("xlsx")
+library('stringr')
 
 #sign_eqtls_ut <- read.table("../../1M_cells/data/eqtls/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
-sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
-#sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20200729.txt")
+#sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
+sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20200729.txt")
 sign_eqtls_ut$snp_gene <- paste0(sign_eqtls_ut$V1,sign_eqtls_ut$V2)
 
 base_dir <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/"
 
-pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
-#pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
+#pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
+pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
 pbmc_ut$snp_gene <- paste0(pbmc_ut$SNPName, pbmc_ut$ProbeName)
 pbmc_ut <- pbmc_ut[pbmc_ut$snp_gene %in% sign_eqtls_ut$snp_gene,]
 
@@ -77,6 +78,27 @@ add_MAST_to_table <- function(eqtl_table, MAST_path, name, is_meta=F){
   })
 }
 
+add_matching_rsID_to_GWAS <- function(gwas_output, trityper_snpmapping){
+  # grab the chromosomes
+  chromposses <- stringr::str_extract(gwas_output$variant,regex("^\\d+:", ignore_case = T))
+  chromposses <- substr(chromposses, 1, nchar(chromposses)-1)
+  # grab the positions on the chromosomes
+  snpposses <- stringr::str_extract(gwas_output$variant,regex(":\\d+:", ignore_case = T))
+  snpposses <- substr(snpposses, 2, nchar(snpposses)-1)
+  # paste them together in a nice new column
+  gwas_output$pos <- paste(chromposses, snpposses, sep = ':')
+  # make a similiar column in the trityper file
+  trityper_snpmapping[,4] <- paste(trityper_snpmapping[,1], trityper_snpmapping[,2], sep = ':')
+  # now match them
+  rsIDs <- trityper_snpmapping[,3][match(gwas_output$pos, trityper_snpmapping[,4])]
+  # add the rsIDs
+  gwas_output$SNP <- rsIDs
+  # add the p value in expected format as well
+  gwas_output$p <- gwas_output$pval
+  return(gwas_output)
+}
+
+
 add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add){
   # in case a GWAS file is not there
   tryCatch({
@@ -89,6 +111,9 @@ add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add){
     }
     else if(column_name_to_add == 'multiple_sclerosis'){
       pvals <- gwas_output$P[match(snps, gwas_output$rs)]
+    }
+    else if(column_name_to_add == 'tuberculosis'){
+      pvals <- gwas_output$p[match(snps, gwas_output$SNP)]
     }
     else{
       pvals <- gwas_output$p[match(snps, gwas_output$SNP)]
@@ -135,7 +160,19 @@ GWASses[['multiple_sclerosis']] <- read.table(paste(GWASses_loc,'multiple_sclero
 GWASses[['type_1_diabetes']] <- read.table(paste(GWASses_loc,'onengut_2015_25751624_t1d_meta_formatted.txt.gz', sep=''), header = T, sep = '\t')
 # SNP and P as columns!!!
 GWASses[['candida']] <- read.table(paste(GWASses_loc,'GC_assoc_nohetero_relatives_outliers_hwe1minus6_maf0.05_noMono_US_discovery_cohort_imputed_candida_Feb2017new.assoc', sep=''), header = T)
+# ugly positions instead
+GWASses[['tuberculosis']] <- read.table(paste(GWASses_loc, 'TB_ukbb_gwas.tsv.gz', sep = ''), header = T, sep = '\t', stringsAsFactors=F)
 
+# trityper SNP mappings
+trityper_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/genotypes/LL_tritypes/SNPMappings.txt'
+trityper <- read.table(trityper_loc, sep = '\t', stringsAsFactors=F)
+
+# we need to fix the tuberculosis one so that there is an rsID in there
+tb_matched <- add_matching_rsID_to_GWAS(GWASses[['tuberculosis']], trityper)
+# we can remove the ones we could not match, as we can't link those to our genotypes anyway
+tb_matched <- tb_matched[(!is.na(tb_matched$SNP)),]
+# replace our old tuberculosis file
+GWASses[['tuberculosis']] <- tb_matched
 
 super_table <- NULL
 
