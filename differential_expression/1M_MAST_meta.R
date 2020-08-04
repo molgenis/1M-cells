@@ -95,6 +95,35 @@ write_meta_mast <- function(condition_info, mast_output_loc_prepend, mast_output
   }
 }
 
+write_background_meta <- function(background_loc_prepend, background_loc_append, meta_output_loc, to_ens = F, symbols.to.ensg.mapping = 'genes.tsv'){
+  # go through the conditions
+  for(condition in c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
+    # check for each cell type
+    for(cell_type in c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'hemapoietic stem', 'megakaryocyte', 'monocyte', 'plasma B')){
+      # set the paths
+      background_v2_loc <- paste(background_loc_prepend, '2/', cell_type, '_UT_', condition, background_loc_append, sep = '')
+      background_v3_loc <- paste(background_loc_prepend, '3/', cell_type, '_UT_', condition, background_loc_append, sep = '')
+      # read the genes
+      v2_genes <- read.table(background_v2_loc, header = F)
+      v3_genes <- read.table(background_v3_loc, header = F)
+      # intersect to get the genes that are in both
+      meta_genes <- intersect(v2_genes$V1, v3_genes$V1)
+      # convert the symbols to ensemble IDs
+      if (to_ens) {
+        mapping <- read.table(symbols.to.ensg.mapping, header = F, stringsAsFactors = F)
+        mapping$V2 <- gsub("_", "-", make.unique(mapping$V2))
+        meta_genes <- mapping[match(meta_genes, mapping$V2),"V1"]
+      }
+      # otherwise change the Seurat replacement back
+      else{
+        meta_genes <- gsub("-", "_", meta_genes)
+      }
+      # write the result
+      background_meta_loc <- paste(meta_output_loc, '/', cell_type, '_UT_', condition, background_loc_append, sep = '')
+      write.table(meta_genes, background_meta_loc, col.names = F, row.names = F, quote = F)
+    }
+  }
+}
 
 get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='metap_bonferroni', sig_pval=0.05, max=NULL, max_by_pval=T, only_positive=F, only_negative=F, lfc_column='metafc', to_ens=F, symbols.to.ensg.mapping='genes.tsv'){
   # get the files
@@ -420,17 +449,17 @@ write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_
 # we can go from gene symbols to ensemble IDs with this file
 gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
 # set the location to write the significant genes
-sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713_ensid/rna/'
 # write the significant genes
-get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713_ensid/rna/'
 # write the significantly upregulated genes
-get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713_ensid/rna/'
 # write the significantly upregulated genes
-get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 
 # get the location of the pathways

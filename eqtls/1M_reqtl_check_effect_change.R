@@ -39,3 +39,68 @@ reQTLs_sig_24hMTB <- reQTLs_sig[reQTLs_sig$condition == '24hMTB', ]
 reQTLs_sig_3hPA <- reQTLs_sig[reQTLs_sig$condition == '3hPA', ]
 reQTLs_sig_24hPA <- reQTLs_sig[reQTLs_sig$condition == '24hPA', ]
 reQTLs_sig <- reQTLs_sig[reQTLs_sig$condition == '24hPA', ]
+
+
+# read the DE file
+super_table <- read.table('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/eqtl_table_all_wmast_lfc01_20200729_wtb_wut.tsv', sep = '\t', header = T)
+super_table_bulk <- super_table[super_table$cell_type == 'bulk', ]
+super_table_bulk_24h_lfcup <- super_table_bulk[!is.na(super_table_bulk$logfolds_UT_vs_24h_meta) & super_table_bulk$logfolds_UT_vs_24h_meta < 0, ]
+super_table_bulk_24h_lfcup_sig24hreqtl <- super_table_bulk_24h_lfcup[super_table_bulk_24h_lfcup$fdr_UT_vs_24h == '*', ]
+super_table_bulk_24h_lfcup_sig24hreqtl_zup <- super_table_bulk_24h_lfcup_sig24hreqtl[(super_table_bulk_24h_lfcup_sig24hreqtl$z_UT > 0 & super_table_bulk_24h_lfcup_sig24hreqtl$z_24h > super_table_bulk_24h_lfcup_sig24hreqtl$z_UT) | (super_table_bulk_24h_lfcup_sig24hreqtl$z_UT < 0 & super_table_bulk_24h_lfcup_sig24hreqtl$z_24h < super_table_bulk_24h_lfcup_sig24hreqtl$z_UT), ]
+
+# 24h reQTLs that become stronger or weaker, confined to those which are significant in both conditions
+super_table_sig_24hreqtl <- super_table[super_table$fdr_UT_vs_24h == '*', ]
+super_table_sig_24hreqtl_and_eqtl <- super_table_sig_24hreqtl[super_table_sig_24hreqtl$fdr_UT == '*' & super_table_sig_24hreqtl$fdr_24h == '*', ]
+super_table_sig_24hreqtl_and_eqtl_zup <- super_table_sig_24hreqtl_and_eqtl[(super_table_sig_24hreqtl_and_eqtl$z_UT > 0 & super_table_sig_24hreqtl_and_eqtl$z_24h > super_table_sig_24hreqtl_and_eqtl$z_UT) | (super_table_sig_24hreqtl_and_eqtl$z_UT < 0 & super_table_sig_24hreqtl_and_eqtl$z_24h < super_table_sig_24hreqtl_and_eqtl$z_UT), ]
+genes_up_24h <- unique(super_table_sig_24hreqtl_and_eqtl_zup$HGNCName)
+write.table(genes_up_24h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_24h_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_up_24h_ensid <- unique(super_table_sig_24hreqtl_and_eqtl_zup$ProbeName)
+write.table(genes_up_24h_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+super_table_sig_24hreqtl_and_eqtl_zdown <- super_table_sig_24hreqtl_and_eqtl[(super_table_sig_24hreqtl_and_eqtl$z_UT > 0 & super_table_sig_24hreqtl_and_eqtl$z_24h < super_table_sig_24hreqtl_and_eqtl$z_UT) | (super_table_sig_24hreqtl_and_eqtl$z_UT < 0 & super_table_sig_24hreqtl_and_eqtl$z_24h > super_table_sig_24hreqtl_and_eqtl$z_UT), ]
+genes_down_24h <- unique(super_table_sig_24hreqtl_and_eqtl_zdown$HGNCName)
+write.table(genes_down_24h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_24h_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_down_24h_ensid <- unique(super_table_sig_24hreqtl_and_eqtl_zdown$ProbeName)
+write.table(genes_down_24h_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+# 3h reQTLs that become stronger or weaker, confined to those which are significant in both directions
+super_table_sig_3hreqtl <- super_table[super_table$fdr_UT_vs_3h == '*', ]
+super_table_sig_3hreqtl_and_eqtl <- super_table_sig_3hreqtl[super_table_sig_3hreqtl$fdr_UT == '*' & super_table_sig_3hreqtl$fdr_3h == '*', ]
+super_table_sig_3hreqtl_and_eqtl_zup <- super_table_sig_3hreqtl_and_eqtl[(super_table_sig_3hreqtl_and_eqtl$z_UT > 0 & super_table_sig_3hreqtl_and_eqtl$z_3h > super_table_sig_3hreqtl_and_eqtl$z_UT) | (super_table_sig_3hreqtl_and_eqtl$z_UT < 0 & super_table_sig_3hreqtl_and_eqtl$z_3h < super_table_sig_3hreqtl_and_eqtl$z_UT), ]
+genes_up_3h <-  unique(super_table_sig_3hreqtl_and_eqtl_zup$HGNCName)
+write.table(genes_up_3h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_3h_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_up_3h_ensid <-  unique(super_table_sig_3hreqtl_and_eqtl_zup$ProbeName)
+write.table(genes_up_3h_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+super_table_sig_3hreqtl_and_eqtl_zdown <- super_table_sig_3hreqtl_and_eqtl[(super_table_sig_3hreqtl_and_eqtl$z_UT > 0 & super_table_sig_3hreqtl_and_eqtl$z_3h < super_table_sig_3hreqtl_and_eqtl$z_UT) | (super_table_sig_3hreqtl_and_eqtl$z_UT < 0 & super_table_sig_3hreqtl_and_eqtl$z_3h > super_table_sig_3hreqtl_and_eqtl$z_UT), ]
+genes_down_3h <- unique(super_table_sig_3hreqtl_and_eqtl_zdown$HGNCName)
+write.table(genes_down_3h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_3h_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_down_3h_ensid <- unique(super_table_sig_3hreqtl_and_eqtl_zdown$ProbeName)
+write.table(genes_down_3h_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+# 24h reQTLs that become stronger or weaker, confined to those which are significant in either condition
+super_table_sigeither_24hreqtleither <- super_table[super_table$fdr_UT_vs_24h == '*', ]
+super_table_sigeither_24hreqtleither_and_eqtl <- super_table_sigeither_24hreqtleither[super_table_sigeither_24hreqtleither$fdr_UT == '*' | super_table_sigeither_24hreqtleither$fdr_24h == '*', ]
+super_table_sigeither_24hreqtleither_and_eqtl_zup <- super_table_sigeither_24hreqtleither_and_eqtl[(super_table_sigeither_24hreqtleither_and_eqtl$z_UT > 0 & super_table_sigeither_24hreqtleither_and_eqtl$z_24h > super_table_sigeither_24hreqtleither_and_eqtl$z_UT) | (super_table_sigeither_24hreqtleither_and_eqtl$z_UT < 0 & super_table_sigeither_24hreqtleither_and_eqtl$z_24h < super_table_sigeither_24hreqtleither_and_eqtl$z_UT), ]
+genes_up_24h <- unique(super_table_sigeither_24hreqtleither_and_eqtl_zup$HGNCName)
+write.table(genes_up_24h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_24h_either_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_up_24h_either_ensid <- unique(super_table_sigeither_24hreqtleither_and_eqtl_zup$ProbeName)
+write.table(genes_up_24h_either_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_24h_either_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+super_table_sigeither_24hreqtleither_and_eqtl_zdown <- super_table_sigeither_24hreqtleither_and_eqtl[(super_table_sigeither_24hreqtleither_and_eqtl$z_UT > 0 & super_table_sigeither_24hreqtleither_and_eqtl$z_24h < super_table_sigeither_24hreqtleither_and_eqtl$z_UT) | (super_table_sigeither_24hreqtleither_and_eqtl$z_UT < 0 & super_table_sigeither_24hreqtleither_and_eqtl$z_24h > super_table_sigeither_24hreqtleither_and_eqtl$z_UT), ]
+genes_down_24h <- unique(super_table_sigeither_24hreqtleither_and_eqtl_zdown$HGNCName)
+write.table(genes_down_24h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_24h_either_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_down_24h_either_ensid <- unique(super_table_sigeither_24hreqtleither_and_eqtl_zdown$ProbeName)
+write.table(genes_down_24h_either_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_24h_either_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+# 3h reQTLs that become stronger or weaker, confined to those which are significant in either condition
+super_table_sigeither_3hreqtleither <- super_table[super_table$fdr_UT_vs_3h == '*', ]
+super_table_sigeither_3hreqtleither_and_eqtl <- super_table_sigeither_3hreqtleither[super_table_sigeither_3hreqtleither$fdr_UT == '*' | super_table_sigeither_3hreqtleither$fdr_3h == '*', ]
+super_table_sigeither_3hreqtleither_and_eqtl_zup <- super_table_sigeither_3hreqtleither_and_eqtl[(super_table_sigeither_3hreqtleither_and_eqtl$z_UT > 0 & super_table_sigeither_3hreqtleither_and_eqtl$z_3h > super_table_sigeither_3hreqtleither_and_eqtl$z_UT) | (super_table_sigeither_3hreqtleither_and_eqtl$z_UT < 0 & super_table_sigeither_3hreqtleither_and_eqtl$z_3h < super_table_sigeither_3hreqtleither_and_eqtl$z_UT), ]
+genes_up_3h <- unique(super_table_sigeither_3hreqtleither_and_eqtl_zup$HGNCName)
+write.table(genes_up_3h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_3h_either_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_up_3h_either_ensid <- unique(super_table_sigeither_3hreqtleither_and_eqtl_zup$ProbeName)
+write.table(genes_up_3h_either_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/up_reqtl_3h_either_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+super_table_sigeither_3hreqtleither_and_eqtl_zdown <- super_table_sigeither_3hreqtleither_and_eqtl[(super_table_sigeither_3hreqtleither_and_eqtl$z_UT > 0 & super_table_sigeither_3hreqtleither_and_eqtl$z_3h < super_table_sigeither_3hreqtleither_and_eqtl$z_UT) | (super_table_sigeither_3hreqtleither_and_eqtl$z_UT < 0 & super_table_sigeither_3hreqtleither_and_eqtl$z_3h > super_table_sigeither_3hreqtleither_and_eqtl$z_UT), ]
+genes_down_3h <- unique(super_table_sigeither_3hreqtleither_and_eqtl_zdown$HGNCName)
+write.table(genes_down_3h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_3h_either_20200729.txt', row.names = F, col.names = F, quote = F)
+genes_down_3h_either_ensid <- unique(super_table_sigeither_3hreqtleither_and_eqtl_zdown$ProbeName)
+write.table(genes_down_3h_either_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_3h_either_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+

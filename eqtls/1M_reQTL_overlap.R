@@ -144,7 +144,7 @@ plot_reqtl_overlap_hist <- function(reqtl_loc, image_output_loc, cell_types=c("b
 }
 
 #reqtl_base_path <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/'
-reqtl_base_path <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/'
+reqtl_loc <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/'
 #image_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/reQTL_overlaps/'
 image_output_loc <- '/data/scRNA/eQTL_mapping/reQTL_overlaps/'
 
@@ -164,8 +164,8 @@ for(cell_type in cell_types){
   sigs_per_ct[[cell_type]] <- eqtls
 }
 # set plot location
-output_loc <- paste(image_output_loc, 'UT_vs_24hMTB', '.png', sep = '')
-print(paste('creating:', output_loc))
+#output_loc <- paste(image_output_loc, 'UT_vs_24hMTB', '.png', sep = '')
+#print(paste('creating:', output_loc))
 # create plot
 #png(output_loc, width = 1000, height = 1000)
 upset(fromList(sigs_per_ct), order.by = 'freq', nsets = length(sigs_per_ct))
