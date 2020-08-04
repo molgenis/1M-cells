@@ -145,15 +145,23 @@ get_background_genes_per_cell_type <- function(seurat_object, output_loc, split.
       # paste together the conditions
       tp3h <- paste('X3h', stim, sep = '')
       tp24h <- paste('X24h', stim, sep = '')
-      # get the object
-      seurat_object_UT_3h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp3h]
-      output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
-      # do background check
-      get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
-      # now the same thing for the 24h condition
-      seurat_object_UT_24h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp24h]
-      output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
-      get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+      tryCatch({
+        # get the object
+        seurat_object_UT_3h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp3h]
+        output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
+        # do background check
+        get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
+      }, error=function(error_condition) {
+        print(paste("Could not read file:", tp3h, cell_type, error_condition))
+      })
+      tryCatch({
+        # now the same thing for the 24h condition
+        seurat_object_UT_24h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp24h]
+        output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
+        get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+      }, error=function(error_condition) {
+        print(paste("Could not read file:", tp24h, cell_type, error_condition))
+      })
     }
   }
 
@@ -164,15 +172,23 @@ get_background_genes_per_cell_type <- function(seurat_object, output_loc, split.
     # paste together the conditions
     tp3h <- paste('X3h', stim, sep = '')
     tp24h <- paste('X24h', stim, sep = '')
-    # get the object
-    seurat_object_UT_3h <- seurat_object_cell_type[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp3h]
-    output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
-    # do background check
-    get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
+    tryCatch({
+      # get the object
+      seurat_object_UT_3h <- seurat_object_cell_type[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp3h]
+      output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
+      # do background check
+      get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
+    }, error=function(error_condition) {
+      print(paste("Could not read file:", tp3h, cell_type, error_condition))
+    })
+    tryCatch({
     # now the same thing for the 24h condition
-    seurat_object_UT_24h <- seurat_object_cell_type[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp24h]
-    output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
-    get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+      seurat_object_UT_24h <- seurat_object_cell_type[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp24h]
+      output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
+      get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+    }, error=function(error_condition) {
+      print(paste("Could not read file:", tp3h, cell_type, error_condition))
+    })
   }
 }
 
@@ -213,8 +229,8 @@ mast_output_paired_lores_loc_v3_sct <- paste(mast_output_paired_lores_loc_v3, 's
 
 # for pathway analysis we may want some background genes
 background_gene_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/background_genes/'
-background_gene_loc_v2 <- paste(background_gene_loc, 'v2/')
-background_gene_loc_v3 <- paste(background_gene_loc, 'v3/')
+background_gene_loc_v2 <- paste(background_gene_loc, 'v2/', sep = '')
+background_gene_loc_v3 <- paste(background_gene_loc, 'v3/', sep = '')
 
 # some pathway analysis tools prefer Ensemble IDs, so we need to map to those
 gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
