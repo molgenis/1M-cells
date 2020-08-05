@@ -192,6 +192,53 @@ get_background_genes_per_cell_type <- function(seurat_object, output_loc, split.
   }
 }
 
+get_pct <- function(seurat_object, output_loc=NULL, slot='data', assay='RNA', symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv"){
+  # set to the correct assay
+  DefaultAssay(seurat_object) <- assay
+  # grab all the genes
+  genes <- rownames(seurat_object[[assay]]@data)
+  # grab the expression
+  exp <- NULL
+  if(slot == 'counts'){
+    exp <- seurat_object@assays[[assay]]@counts
+  }
+  else if(slot == 'data'){
+    exp <- seurat_object@assays[[assay]]@data
+  }
+  else if(slot == 'scaled.data'){
+    exp <- seurat_object@assays[[assay]]@scaled.data
+  }
+  else{
+    print('unknown slot')
+  }
+  # get the percentages
+  pcts <- as.matrix(rowMeans(exp  > 0))
+  if(symbols.to.ensg){
+    # this is the 10X genes file with the gene symbols and the ensemble IDs
+    genes_mapping <- read.table(symbols.to.ensg.mapping, header = F, stringsAsFactors = F)
+    # do the same replacement of characters that Seurat did, or the mapping does not work
+    genes_mapping$V2 <- gsub("_", "-", make.unique(genes_mapping$V2))
+    ensemble_ids <- genes_mapping[match(rownames(pcts), genes_mapping$V2),"V1"]
+    # set new names
+    rownames(pcts) <- ensemble_ids
+  }
+  # write the output if required
+  write.table(pcts, output_loc, sep = '\t', row.names = T, col.names = F)
+  return(pcts)
+}
+
+get_pct_per_cell_type <- function(seurat_object, output_loc, cell.type.column = 'cell_type', slot='data', assay='RNA', symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv"){
+  # go through the cell types
+  for(cell_type in unique(seurat_object@meta.data[[cell.type.column]])){
+    # make a more specific path
+    output_loc_cell_type <- paste(output_loc, cell_type, '.tsv', sep = '')
+    # grab the subset
+    seurat_object_cell_type <- seurat_object[,seurat_object@meta.data[cell.type.column] == cell_type]
+    # get the table
+    get_pct(seurat_object_cell_type, output_loc_cell_type, slot = slot, assay = assay, symbols.to.ensg = symbols.to.ensg, symbols.to.ensg.mapping = symbols.to.ensg.mapping)
+  }
+}
+
 ####################
 # Main Code        #
 ####################
