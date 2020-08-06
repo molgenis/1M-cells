@@ -1,6 +1,7 @@
 options(java.parameters = "-Xmx8000m")
 library("xlsx")
 library('stringr')
+library(data.table)
 
 #sign_eqtls_ut <- read.table("../../1M_cells/data/eqtls/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
 #sign_eqtls_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_ut_all_cell_types_eqtlgen_confine_20200529.txt")
@@ -99,14 +100,30 @@ add_matching_rsID_to_GWAS <- function(gwas_output, trityper_snpmapping){
 }
 
 
-add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add){
+add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add, ld_matched = F){
   # in case a GWAS file is not there
   tryCatch({
     # grab the SNPs
     snps <- eqtl_table$SNPName
     # grab the p-val by SNP name, there are some exceptions to the standard approach
     pvals <- NULL
-    if(column_name_to_add == 'candida'){
+    if(ld_matched){
+      # subset to ld_matched SNPs to speed up the search
+      gwas_output <- gwas_output[!is.na(gwas_output$SNP_ld), ]
+      # if the subset leaves nothing, add NAs
+      if(nrow(gwas_output) == 0){
+        pvals <- rep(NA, times = nrow(eqtl_table))
+      }
+      else if(column_name_to_add == 'candida' | column_name_to_add == 'multiple_sclerosis'){
+        # get the pvals
+        pvals <- gwas_output$P[match(snps, gwas_output$SNP_ld)]
+      }
+      else{
+        # get the pvals
+        pvals <- gwas_output$p[match(snps, gwas_output$SNP_ld)]
+      }
+    }
+    else if(column_name_to_add == 'candida'){
       pvals <- gwas_output$P[match(snps, gwas_output$SNP)]
     }
     else if(column_name_to_add == 'multiple_sclerosis'){
@@ -126,6 +143,56 @@ add_GWAS_to_table <- function(eqtl_table, gwas_output, column_name_to_add){
     return(eqtl_table)
   })
 }
+
+get_best_matched_ld_snps <- function(ld_table, snps_you_have, snps_with_data, accepted_r2=NULL, verbose=T){
+  # subset the ld table to only have the records important to us
+  ld_table_ss <- ld_table[ld_table$A %in% snps_you_have & ld_table$B %in% snps_with_data, ]
+  # create a table to save results
+  matched_table <- data.table(SNP_in = snps_you_have, SNP_matched = as.character(rep(NA, times = length(snps_you_have))), R2 = as.numeric(rep(NA, times = length(snps_you_have))))
+  i <- 0
+  # look for a match for every snp
+  for(snp_to_match in snps_you_have){
+    # if the SNP is already in our snps with data, there is no need to search
+    if(snp_to_match %in% snps_with_data){
+      # set to match to itself
+      matched_table[matched_table$SNP_in == snp_to_match,]$SNP_matched <- snp_to_match
+      matched_table[matched_table$SNP_in == snp_to_match,]$R2 <- 1
+    }
+    else{
+      # get a matching snp that is also in the second list
+      matched_snps <- ld_table_ss[ld_table_ss$A == snp_to_match & ld_table_ss$B %in% snps_with_data,]
+      # if we have matches, we can check which to use
+      if(nrow(matched_snps) > 0){
+        # order by R2
+        matched_snps <- matched_snps[order(-R2)]
+        # grab the first one
+        matched_table[matched_table$SNP_in == snp_to_match,]$SNP_matched <- matched_snps[1,'B']
+        matched_table[matched_table$SNP_in == snp_to_match,]$R2 <- matched_snps[1,'R2']
+      }
+    }
+    i <- i + 1
+    if(verbose & i %% 100 == 0){
+      print(paste(i, 'of', length(snps_you_have)))
+    }
+  }
+  # if the user supplied an acceptable R2, then filter on that R2
+  if(!is.null(accepted_r2)){
+    matched_table[matched_table$R2 < accepted_r2, ]$SNP_matched <- NA
+    matched_table[matched_table$R2 < accepted_r2, ]$R2 <- NA
+  }
+  return(matched_table)
+}
+
+add_ld_snp_to_gwas <- function(GWAS_output, ld_table, snps_you_have, snp_column='SNP'){
+  # get the SNPs we have data for
+  snps_with_data <- GWAS_output[[snp_column]]
+  # get matching table
+  snp_matched <- get_best_matched_ld_snps(ld_table, snps_you_have, snps_with_data, accepted_r2 = 0.95)
+  # add the matched snps
+  GWAS_output$SNP_ld <- snp_matched$SNP_in[match(snps_with_data, snp_matched$SNP_matched)]
+  return(GWAS_output)
+}
+
 
 
 #cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "mDC", "pDC", "plasma_B")
@@ -163,16 +230,76 @@ GWASses[['candida']] <- read.table(paste(GWASses_loc,'GC_assoc_nohetero_relative
 # ugly positions instead
 GWASses[['tuberculosis']] <- read.table(paste(GWASses_loc, 'TB_ukbb_gwas.tsv.gz', sep = ''), header = T, sep = '\t', stringsAsFactors=F)
 
+# we need to fix the tuberculosis one so that there is an rsID in there
 # trityper SNP mappings
 trityper_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/genotypes/LL_tritypes/SNPMappings.txt'
 trityper <- read.table(trityper_loc, sep = '\t', stringsAsFactors=F)
-
-# we need to fix the tuberculosis one so that there is an rsID in there
+# match
 tb_matched <- add_matching_rsID_to_GWAS(GWASses[['tuberculosis']], trityper)
 # we can remove the ones we could not match, as we can't link those to our genotypes anyway
 tb_matched <- tb_matched[(!is.na(tb_matched$SNP)),]
 # replace our old tuberculosis file
 GWASses[['tuberculosis']] <- tb_matched
+
+# read initial table
+ld <- read.table('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/ld/plink.ld', header = T)
+# read the columns we care about
+ld_snp1 <- as.character(ld$SNP_A)
+ld_snp2 <- as.character(ld$SNP_B)
+ld_r2 <- ld$R2
+# double the table, so it is easier to check SNP1 against SNP2
+ld_mapping <- data.table(A = c(ld_snp1, ld_snp2), B = c(ld_snp2, ld_snp1), R2 = c(ld_r2, ld_r2))
+# clean up memory, we'll need it...
+rm(ld)
+rm(ld_snp1)
+rm(ld_snp2)
+rm(ld_r2)
+# constrain to SNPs that we have
+ld_mapping <- ld_mapping[ld_mapping$A %in% sign_eqtls_ut$V1]
+
+# try to add missing SNPs to GWASes
+ra <- GWASses[['rheumatoid_arthritis']] #session 1
+# add ld matched rsIDs
+ra_lded <- add_ld_snp_to_gwas(ra, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(ra_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ra_ldmatched.tsv',sep = '\t', col.names=T, row.names = F)
+# now cd
+cd <- GWASses[['coeliac_disease']] #session 2
+cd_lded <- add_ld_snp_to_gwas(cd, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(cd_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/coeliac_disease_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+# now IBD
+ibd <- GWASses[['inflammatory_bowel_disease']] #session 2
+ibd_lded <- add_ld_snp_to_gwas(ibd, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(ibd_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ibd_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+# now for type 1 diabetis
+t1d <- GWASses[['type_1_diabetes']] #session 1
+t1d_lded <- add_ld_snp_to_gwas(t1d, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(t1d_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/t1d_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+# now for ms
+ms <- GWASses[['multiple_sclerosis']] #session 1
+ms_lded <- add_ld_snp_to_gwas(ms, ld_mapping, unique(sign_eqtls_ut$V1), snp_column = 'rs')
+write.table(ms_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ms_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+# now for candida
+ca <- GWASses[['candida']] #session 1
+ca_lded <- add_ld_snp_to_gwas(ca, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(ca_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ca_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+# now for tb
+tb <- GWASses[['tuberculosis']] #session 1
+tb_lded <- add_ld_snp_to_gwas(tb, ld_mapping, unique(sign_eqtls_ut$V1))
+write.table(tb_lded, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/tb_ldmatched.tsv', sep = '\t', col.names=T, row.names=F)
+
+# backup the old GWAS
+GWASses_unmodified <- GWASses
+# set the new gwasses
+GWASses[['rheumatoid_arthritis']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ra_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+GWASses[['coeliac_disease']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/coeliac_disease_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+GWASses[['inflammatory_bowel_disease']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ibd_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+GWASses[['multiple_sclerosis']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ms_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+GWASses[['type_1_diabetes']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/t1d_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+GWASses[['candida']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ca_ldmatched.tsv', sep = '\t', header = T, stringsAsFactors=F)
+GWASses[['tuberculosis']] <- read.table('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/tb_ldmatched.tsv', header = T, sep = '\t', stringsAsFactors=F)
+
+
+
 
 super_table <- NULL
 
@@ -209,7 +336,7 @@ for (condition in conditions) {
     }
     # add the GWAS output
     for(gwas in names(GWASses)){
-      eqtl_table_condition <- add_GWAS_to_table(eqtl_table_condition, GWASses[[gwas]], gwas)
+      eqtl_table_condition <- add_GWAS_to_table(eqtl_table_condition, GWASses[[gwas]], gwas, ld_matched = T)
     }
     
     # for the heatmap?
