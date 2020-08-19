@@ -6,11 +6,16 @@
 
 # full.eQTL.table <- read.table("/Users/dylandevries/Documents/work/projects/1M_single-cell/data/GWAS/eqtl_table_all_wmast_lfc01_20200729_wtb_wut.tsv", header=T, sep="\t", stringsAsFactors=F)
 
-full.eQTL.table <- read.table("/Users/dylandevries/Documents/work/projects/1M_single-cell/data/GWAS/eqtl_table_all_wmast_lfc01_20200729_120llimp.tsv", header=T, sep="\t", stringsAsFactors=F)
+#full.eQTL.table <- read.table("/Users/dylandevries/Documents/work/projects/1M_single-cell/data/GWAS/eqtl_table_all_wmast_lfc01_20200729_120llimp.tsv", header=T, sep="\t", stringsAsFactors=F)
+full.eQTL.table <- read.table("/Users/royoelen/Desktop/eqtl_table_all_wmast_lfc01_20200729_120llimp.tsv", header=T, sep="\t", stringsAsFactors=F)
 
-GWAS.other.full <- read.delim("/Users/dylandevries/Documents/work/projects/1M_single-cell/data/GWAS/eQTLGen-LD-all.txt.gz", header=T, sep="\t", stringsAsFactors=F)
+#GWAS.other.full <- read.delim("/Users/dylandevries/Documents/work/projects/1M_single-cell/data/GWAS/eQTLGen-LD-all.txt.gz", header=T, sep="\t", stringsAsFactors=F)
+ GWAS.other.full <- read.table('~/Desktop/eQTLgen-LD-all.txt', header=T, sep="\t", stringsAsFactors=F, quote = '', comment.char = '')
 
 traits <- c("rheumatoid_arthritis", "coeliac_disease", "inflammatory_bowel_disease", "multiple_sclerosis", "type_1_diabetes", "candida", "tuberculosis")
+
+# the traits from the GWAS collection we are interested in
+other.traits <- c("Crohn's disease", "psoriasis", "ulcerative colitis", "ankylosing spondylitis", "Chronic inflammatory diseases (ankylosing spondylitis, Crohn's disease, psoriasis, primary sclerosing cholangitis, ulcerative colitis)", "Inflammatory bowel disease", "Juvenile idiopathic arthritis (oligoarticular or rheumatoid factor-negative polyarticular)", "Takayasu arteritis", "Ankylosing spondylitis", "Multiple sclerosis", "Celiac disease")
 
 
 ################
@@ -36,7 +41,7 @@ gwas.filter <- function(input.set, traits, threshold=0.05){
 	}
 	input.set <- data.frame(input.set, to.add)
 
-	output.set <- input.set[min.immune.specific.gwas.pvals < threshold | nchar(input.set$TraitP) > 0,]
+	output.set <- input.set[min.immune.specific.gwas.pvals < threshold | !is.na(input.set$Trait), ]
 	return(output.set)
 }
 
@@ -97,6 +102,11 @@ response.QTL.filter <- full.eQTL.table[intersect(sig.DE.3h, sig.DE.24h),]
 #Filter for DE testing
 DE.filter <- response.QTL.filter[!is.na(response.QTL.filter$logfolds_UT_vs_3h_meta) | !is.na(response.QTL.filter$logfolds_UT_vs_24h_meta),]
 
+#restrict to the huge GWAS file to just what we care about
+greptouse <- paste(other.traits, collapse = '|')
+exact_trait_names <- unique(GWAS.other.full$Trait)[grep(greptouse, unique(GWAS.other.full$Trait))]
+GWAS.other.full<- GWAS.other.full[GWAS.other.full$Trait %in% exact_trait_names, ]
+
 out.set <- gwas.filter(DE.filter, traits, 0.05)
 dim(out.set)
 
@@ -104,5 +114,5 @@ unique.GWAS.traits <- table(unlist(lapply(out.set$Trait, function(x){strsplit(x,
 
 final.out.set <- make.output.table(out.set)
 
-write.table(final.out.set, file="/Users/dylandevries/Documents/work/projects/1M_single-cell/out/eQTL/excel_sheets/full_overlap_gwas05_call_set.txt", row.names=F, col.names=T, quote=F, sep="\t")
+write.table(final.out.set, file="~/Desktop/full_overlap_gwas05_call_set.txt", row.names=F, col.names=T, quote=F, sep="\t")
 

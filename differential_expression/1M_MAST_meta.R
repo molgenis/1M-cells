@@ -166,7 +166,7 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
       }
       # otherwise change the Seurat replacement back
       else{
-        genes <- gsub("-", "_", genes)
+        #genes <- gsub("-", "_", genes)
       }
       # create a regex to get the last index of .
       last_dot_pos <- "\\.[^\\.]*$"
@@ -432,6 +432,27 @@ get_most_varying_from_df <- function(dataframe, top_so_many=10){
   return(most_varied)
 }
 
+get_color_coding_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[["3hCA"]] <- "khaki2"
+  color_coding[["24hCA"]] <- "khaki4"
+  color_coding[["3hMTB"]] <- "paleturquoise1"
+  color_coding[["24hMTB"]] <- "paleturquoise3"
+  color_coding[["3hPA"]] <- "rosybrown1"
+  color_coding[["24hPA"]] <- "rosybrown3"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#E64B50"
+  color_coding[["NK"]] <- "#EDBA1B"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  return(color_coding)
+}
+
+
 # cell counts loc
 #cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
 # grab the cell counts
@@ -520,11 +541,22 @@ heatmap.3(t(as.matrix(deg_meta_fc_all_conditions[sds > .5,])),
 # /Harm                           #
 ##################################
 
+
+
+
 # show pathways
-heatmap.3(t(as.matrix(pathway_up_df_top_3)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(15,10))
+cc <- get_color_coding_dict()
+colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
+colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),rep(cc[['monocyte']], times=6),rep(cc[['NK']], times=6))
+colors_m <- cbind(colors_ct, colors_cond)
+colnames(colors_m) <- c('celltype',
+                        'condition')
+heatmap.3(t(as.matrix(pathway_up_df_top_5)),
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(15,10))
 
-
+ggplot(df_merged, aes(x= as.numeric(df_merged$avg_logFC.x), y=as.numeric(df_merged$avg_logFC.y)))+
+  geom_point() + labs(y="LogFC genes upon IRF2 sgRNA", x = "LogFC genes upon IRF1 sgRNA")+
+  ggtitle('Correlation IRF1 vs IRF2 sgRNA')
 
 # get table of logfc of all ct and tp
 #deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
