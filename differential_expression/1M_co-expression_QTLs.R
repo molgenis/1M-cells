@@ -498,10 +498,10 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
       genotypes <- genotypes[,match(sample.names, colnames(genotypes))]
       
       #cor.dir = "/groups/umcg-wijmenga/tmp03/projects/scRNAseq_10X_pilot/interactionAnalysis/nonImputed/correlationMatrices/"
-      cor.dir = paste("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
+      cor.dir = paste(output_loc,"/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
       #cor.dir = paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
       #output.dir = "/groups/umcg-wijmenga/tmp03/projects/scRNAseq_10X_pilot/interactionAnalysis/nonImputed/"
-      output.dir = paste("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '_', sep = '')
+      output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
       #output.dir = paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '_', sep = '')
       
       #if (!file.exists(paste0(output.dir, "/permutations"))){
@@ -514,7 +514,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
       create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
       interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=10)
       
-      saveRDS(interaction.output, paste("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '.rds', sep = ''))
+      saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
       #saveRDS(interaction.output, paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
   }
@@ -568,6 +568,30 @@ plot_module_correlation(v2, genotypes, 'rs2278089', plot_output_loc=plot_loc, pl
 
 do_coexqtl(v3, snp_probes, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/', genotypes)
 do_coexqtl(v2, snp_probes, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/', genotypes)
+
+
+
+# confined co-eQTL analysis
+mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
+mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
+v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
+v2 <- v2[,!is.na(v2@meta.data$timepoint)]
+v2 <- v2[,!is.na(v2@meta.data$assignment)]
+v2_mono <- subset(v2, subset = cell_type_lowerres == 'monocyte')
+DefaultAssay(v2_mono) <- 'SCT'
+v2_mono_confined <- v2_mono[mono_cors_tnfaip6_cor_genes_confine$V1,]
+do_coexqtl(v2_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_v2/', genotypes, cell_types = c('monocyte'))
+
+# confined co-eQTL analysis
+mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
+mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
+v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
+v3 <- v3[,!is.na(v3@meta.data$timepoint)]
+v3 <- v3[,!is.na(v3@meta.data$assignment)]
+v3_mono <- subset(v3, subset = cell_type_lowerres == 'monocyte')
+DefaultAssay(v3_mono) <- 'SCT'
+v3_mono_confined <- v3_mono[mono_cors_tnfaip6_cor_genes_confine$V1,]
+do_coexqtl(v3_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_v3/', genotypes, cell_types='monocyte')
 
 
 mtb <- franke[((!is.na(franke$fdr_UT_vs_3h) & franke$fdr_UT_vs_3h == '*') | (!is.na(franke$fdr_UT_vs_24h)) & franke$fdr_UT_vs_24h == '*') & franke$pathogen == 'MTB', ]
