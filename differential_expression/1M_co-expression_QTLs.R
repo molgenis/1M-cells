@@ -594,4 +594,19 @@ v3_mono_confined <- v3_mono[mono_cors_tnfaip6_cor_genes_confine$V1,]
 do_coexqtl(v3_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_v3/', genotypes, cell_types='monocyte')
 
 
+cd8t_cors_nmi_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/cd8t_nmi_cor_genes.txt'
+cd8t_cors_nmi_cor_genes_confine <- read.table(cd8t_cors_nmi_cor_genes_loc)
+DefaultAssay(v2_cd8t) <- 'SCT'
+v2_cd8t_confined <- v2_cd8t[cd8t_cors_nmi_cor_genes_confine$V1,]
+do_coexqtl(v2_cd8t_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_NMI_confine_v2/', genotypes, cell_types='CD8T')
+
+
+cd8t_cors_nmi_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/cd8t_nmi_cor_genes.txt'
+cd8t_cors_nmi_cor_genes_confine <- read.table(cd8t_cors_nmi_cor_genes_loc)
+DefaultAssay(v3_cd8t) <- 'SCT'
+v3_cd8t_confined <- v3_cd8t[cd8t_cors_nmi_cor_genes_confine$V1,]
+do_coexqtl(v3_cd8t_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_NMI_confine_v3/', genotypes, cell_types='CD8T')
+
+
+
 mtb <- franke[((!is.na(franke$fdr_UT_vs_3h) & franke$fdr_UT_vs_3h == '*') | (!is.na(franke$fdr_UT_vs_24h)) & franke$fdr_UT_vs_24h == '*') & franke$pathogen == 'MTB', ]
