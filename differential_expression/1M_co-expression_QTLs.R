@@ -606,8 +606,8 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
   }
   
   # FIXTHIS >> print(head(r.matrix))
-  
-  #rownames(p.value.matrix) <- rownames(cor.matrix)
+  # setting rownames the same way we obtained them in the p value calculation
+  rownames(p.value.matrix) <- intersect(rownames(cor.matrix.1), rownames(cor.matrix.2))
   # FIXTHIS >> rownames(r.matrix) <- rownames(cor.matrix)
   
   colnames(p.value.matrix) <- eqtl.genes
