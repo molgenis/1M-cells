@@ -256,7 +256,6 @@ create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method 
   }
   # #Remove the target gene itself
   # cor.matrix <- cor.matrix[-which(rownames(cor.matrix) == eqtl.gene),]
-  
   return(cor.matrix)
 }
 
@@ -819,6 +818,7 @@ do_coexqtl(v2, snp_probes, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/o
 
 # confined co-eQTL analysis
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
+mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_TNFAIP6_coexpression_pos_allcond.txt'
 mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
 v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
 v2 <- v2[,!is.na(v2@meta.data$timepoint)]
@@ -830,6 +830,7 @@ do_coexqtl(v2_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_ce
 
 # confined co-eQTL analysis
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
+mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_TNFAIP6_coexpression_pos_allcond.txt'
 mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
 v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
 v3 <- v3[,!is.na(v3@meta.data$timepoint)]
