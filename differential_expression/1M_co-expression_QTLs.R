@@ -825,7 +825,8 @@ v2 <- v2[,!is.na(v2@meta.data$timepoint)]
 v2 <- v2[,!is.na(v2@meta.data$assignment)]
 v2_mono <- subset(v2, subset = cell_type_lowerres == 'monocyte')
 DefaultAssay(v2_mono) <- 'SCT'
-v2_mono_confined <- v2_mono[mono_cors_tnfaip6_cor_genes_confine$V1,]
+v2_mono_subset_genes <- c(as.character(mono_cors_tnfaip6_cor_genes_confine$V1), 'TNFAIP6')
+v2_mono_confined <- v2_mono[v2_mono_subset_genes,]
 do_coexqtl(v2_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_v2/', genotypes_all, cell_types = c('monocyte'))
 
 # confined co-eQTL analysis
@@ -837,7 +838,8 @@ v3 <- v3[,!is.na(v3@meta.data$timepoint)]
 v3 <- v3[,!is.na(v3@meta.data$assignment)]
 v3_mono <- subset(v3, subset = cell_type_lowerres == 'monocyte')
 DefaultAssay(v3_mono) <- 'SCT'
-v3_mono_confined <- v3_mono[mono_cors_tnfaip6_cor_genes_confine$V1,]
+v3_mono_subset_genes <- c(as.character(mono_cors_tnfaip6_cor_genes_confine$V1), 'TNFAIP6')
+v3_mono_confined <- v3_mono[v3_mono_subset_genes,]
 do_coexqtl(v3_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_v3/', genotypes_all, cell_types='monocyte')
 
 
