@@ -116,7 +116,7 @@ write_background_meta <- function(background_loc_prepend, background_loc_append,
       }
       # otherwise change the Seurat replacement back
       else{
-        meta_genes <- gsub("-", "_", meta_genes)
+        #meta_genes <- gsub("-", "_", meta_genes)
       }
       # write the result
       background_meta_loc <- paste(meta_output_loc, '/', cell_type, '_UT_', condition, background_loc_append, sep = '')
@@ -432,6 +432,43 @@ get_most_varying_from_df <- function(dataframe, top_so_many=10){
   return(most_varied)
 }
 
+filter_pathway_df_on_starting_id <- function(pathway_df, filtered_pathway_names){
+  # get the ones now in the pathway df
+  pathway_names_with_id <- rownames(pathway_df)
+  last_dash_pos <- "\\_[^\\_]*$"
+  # get the pathway names by skipping from the underscore
+  pathway_names <- substr(pathway_names_with_id, regexpr(last_dash_pos, pathway_names_with_id)+1, nchar(pathway_names_with_id))
+  print(head(pathway_names))
+  # filter the pathway df
+  pathway_df_filtered <- pathway_df[pathway_names %in% filtered_pathway_names, ]
+  return(pathway_df_filtered)
+}
+
+get_filtered_pathway_names <- function(pathway_table, relation_table, starting_id){
+  # get all of the children of the starting ID
+  all_children <- get_children(relation_table, starting_id)
+  # get the names of the pathways that are children
+  pathway_names <- as.character(pathway_table[pathway_table$V1 %in% all_children, ]$V2)
+  return(pathway_names)
+}
+
+get_children <- function(relation_table, starting_id){
+  # get all of the children of the starting ID
+  children <- as.character(relation_table[relation_table$V1 == starting_id, 'V2'])
+  # these children are all family
+  family <- children
+  # see if there were any children
+  if(length(children) > 0){
+    # if there were children, we need to get their children as well
+    for(child in children){
+      # get the grandchildren and add these to the family
+      grand_children <- get_children(relation_table, child)
+      family <- c(family, grand_children)
+    }
+  }
+  return(family)
+}
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -481,6 +518,19 @@ get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T
 sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713_ensid/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+
+# set the location to write the significant genes
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713/rna/'
+# write the significant genes
+get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+# set the location for the significant genes that were upregulated
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+# write the significantly upregulated genes
+get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+# set the location for the significant genes that were upregulated
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+# write the significantly upregulated genes
+get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 
 # get the location of the pathways
@@ -632,4 +682,29 @@ v3_exp_de <- v3_exp[(rownames(v3_exp) %in% genes_vary_ct),]
 # plot
 heatmap.3(t(as.matrix(v2_exp_de)),
           col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(6,10))
+
+# this is the reactome ID for the immune system
+immune_system_reactome_id <- 'R-HSA-168256'
+# load the pathways
+pathways <- read.table('/data/scRNA/pathways/ReactomePathways.tsv', sep='\t')
+# subset to just human to speed up the search
+pathways <- pathways[pathways$V3 == 'Homo sapiens', ]
+# load the pathway mapping
+pathway_mappings <- read.table('/data/scRNA/pathways/ReactomePathwaysRelation.tsv', sep = '\t')
+# get the filtered names
+filtered_names <- get_filtered_pathway_names(pathways, pathway_mappings, 'R-HSA-168256')
+# get the df that is left after filtering
+pathway_up_df_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)
+# check what is top now
+pathway_up_df_filtered_top_5 <- get_top_pathways(pathway_up_df_filtered, 5, T)
+# show pathways
+cc <- get_color_coding_dict()
+colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
+colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),rep(cc[['monocyte']], times=6),rep(cc[['NK']], times=6))
+colors_m <- cbind(colors_ct, colors_cond)
+colnames(colors_m) <- c('celltype',
+                        'condition')
+heatmap.3(t(as.matrix(pathway_up_df_filtered_top_5)),
+          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(15,10))
+
 
