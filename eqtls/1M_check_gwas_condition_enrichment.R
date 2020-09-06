@@ -72,6 +72,13 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
       output <- read.table(output_loc, header = T, sep = '\t')
       # grab the SNPs
       snps <- unique(output$SNPName)
+      
+      other_GWAS_to_use <- NULL
+      # subset the other GWAS to only the SNPs we have
+      if(!is.null(other_GWAS)){
+        other_GWAS_to_use <- other_GWAS[other_GWAS$SNP %in% snps | (!is.na(other_GWAS$SNP_ld) & other_GWAS$SNP_ld %in% snps), ]
+      }
+      
       # we care about the number of SNPs
       nr_snps <- length(snps)
       if(verbose){
@@ -85,8 +92,8 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
         if(nrow(trait_table_snp) > 0){
           traits[[snp]] <- unique(trait_table_snp$Trait)
         }
-        if(!is.null(other_GWAS)){
-          other_trait_rows <- other_GWAS[other_GWAS$SNP == snp | (!is.na(other_GWAS$SNP_ld) & other_GWAS$SNP_ld == snp), ]
+        if(!is.null(other_GWAS_to_use)){
+          other_trait_rows <- other_GWAS_to_use[(other_GWAS_to_use$SNP == snp | (!is.na(other_GWAS_to_use$SNP_ld) & other_GWAS_to_use$SNP_ld == snp)) & other_GWAS_to_use$p < threshold, ]
           if(nrow(other_trait_rows) > 0){
             if(nrow(trait_table_snp) == 0){
               traits[[snp]] <- unique(other_trait_rows$Trait)
@@ -107,9 +114,12 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
       else{
         counts_df <- rbind(counts_df, c(cell_type, condition, nr_snps, nr_snps_associated))
       }
-      rownames(counts_df) <- NULL
+      
     }
-    print(head(counts_df))
+    rownames(counts_df) <- NULL
+    print((counts_df))
+    assoc_percentage <- as.numeric(counts_df[, 'associated_snps'])/as.numeric(counts_df[, 'snps'])
+    barplot(assoc_percentage, names.arg = as.character(counts_df[, 'condition']), main=cell_type)
   }
 }
 
@@ -133,8 +143,18 @@ GWAS_other <- read.table(other_gwas_loc, header = T, sep = '\t')
 
 interested_traits <- c("Type 1 diabetes", "Allergic disease", "Rheumatoid arthritis", "Crohn's disease", "psoriasis", "ulcerative colitis", "ankylosing spondylitis", "Chronic inflammatory diseases (ankylosing spondylitis, Crohn's disease, psoriasis, primary sclerosing cholangitis, ulcerative colitis)", "Inflammatory bowel disease", "Juvenile idiopathic arthritis (oligoarticular or rheumatoid factor-negative polyarticular)", "Takayasu arteritis", "Ankylosing spondylitis", "Multiple sclerosis", "Celiac disease")
 plot_gwas_enrichment(eQTL_output_loc, GWAS, interested_traits, other_GWAS = GWAS_other)
+plot_gwas_enrichment(eQTL_output_loc, GWAS, interested_traits)
+
 
 GWAS_traits <- unique(GWAS$Trait)
 GWAS_traits <- GWAS_traits[grep('ENSG', GWAS_traits)*-1]
 GWAS_ENSG_filtered <- GWAS[GWAS$Trait %in% GWAS_traits, ]
 plot_gwas_enrichment(eQTL_output_loc, GWAS_ENSG_filtered)
+
+# check specifically for Candida
+GWAS_CA <- GWAS_other[GWAS_other$Trait == 'CA', ]
+GWAS_MTB <- GWAS_other[GWAS_other$Trait == 'TB', ]
+# make plots, giving empty normal GWAS
+plot_gwas_enrichment(eQTL_output_loc, GWAS[0,], traits_to_use = c(), other_GWAS = GWAS_CA, conditions=c('UT', '3hCA', '24hCA'))
+plot_gwas_enrichment(eQTL_output_loc, GWAS[0,], traits_to_use = c(), other_GWAS = GWAS_MTB, conditions=c('UT', '3hMTB', '24hMTB'))
+

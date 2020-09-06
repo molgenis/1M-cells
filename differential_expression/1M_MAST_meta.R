@@ -432,7 +432,7 @@ get_most_varying_from_df <- function(dataframe, top_so_many=10){
   return(most_varied)
 }
 
-filter_pathway_df_on_starting_id <- function(pathway_df, filtered_pathway_names){
+filter_pathway_df_on_starting_id <- function(pathway_df, filtered_pathway_names, remove_id_from_pathway_name=T){
   # get the ones now in the pathway df
   pathway_names_with_id <- rownames(pathway_df)
   last_dash_pos <- "\\_[^\\_]*$"
@@ -441,6 +441,10 @@ filter_pathway_df_on_starting_id <- function(pathway_df, filtered_pathway_names)
   print(head(pathway_names))
   # filter the pathway df
   pathway_df_filtered <- pathway_df[pathway_names %in% filtered_pathway_names, ]
+  # remove the ID from the pathway name if asked
+  if(remove_id_from_pathway_name){
+    rownames(pathway_df_filtered) <- substr(rownames(pathway_df_filtered), regexpr(last_dash_pos, rownames(pathway_df_filtered))+1, nchar(rownames(pathway_df_filtered)))
+  }
   return(pathway_df_filtered)
 }
 
@@ -705,6 +709,6 @@ colors_m <- cbind(colors_ct, colors_cond)
 colnames(colors_m) <- c('celltype',
                         'condition')
 heatmap.3(t(as.matrix(pathway_up_df_filtered_top_5)),
-          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(15,10))
+          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(27,10))
 
 
