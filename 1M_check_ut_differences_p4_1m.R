@@ -44,7 +44,7 @@ perform_mast_per_celltype <- function(seurat_object, output_loc, split.column = 
     # grab the subset
     seurat_object_cell_type <- seurat_object[,seurat_object@meta.data[cell.type.column] == cell_type]
     # do the MAST
-    try({perform_mast(seurat_object_cell_type, output_loc_cell_type, condition.1 = '1M_cells', condition.2 = 'pilot4_unstimulated' ,split.column = split.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, features = features, latent.vars = latent.vars)})
+    try({perform_mast(seurat_object_cell_type, output_loc_cell_type, condition.1 = condition.1, condition.2 = condition.2 ,split.column = split.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, features = features, latent.vars = latent.vars)})
   }
   # finally do a bulk analysis as well
   output_loc_bulk <- paste(output_loc, 'bulk', sep = '')
@@ -73,8 +73,8 @@ perform_mast_per_celltype_subsampled_same <- function(seurat_object, output_loc,
     # set the location
     output_loc_ss <- paste(output_loc, i, '_', sep = '')
     # grab a subsample
-    subsampled_assignments <- sample(unique(seurat_object@meta.data[[subsample_column]]), subsample_size)
-    subsampled_assignments_split <- split(subsampled_assignments, sort(subsampled_assignments%%2))
+    subsampled_assignments <- as.character(sample(unique(seurat_object@meta.data[[subsample_column]]), subsample_size))
+    subsampled_assignments_split <- split(subsampled_assignments, sample(2, length(subsampled_assignments), repl = TRUE) )
     subsampled_assignments_1 <- subsampled_assignments_split[[1]]
     subsampled_assignments_2 <- subsampled_assignments_split[[2]]
     # grab the subsampled object
