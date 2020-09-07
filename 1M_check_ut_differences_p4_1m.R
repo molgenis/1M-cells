@@ -68,7 +68,7 @@ perform_mast_per_celltype_subsampled <- function(seurat_object, seurat_object2, 
   }
 }
 
-perform_mast_per_celltype_subsampled_same <- function(seurat_object, output_loc, subsample_size, subsample_times=10, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL){
+perform_mast_per_celltype_subsampled_same <- function(seurat_object, output_loc, subsample_size, subsample_times=10, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1='1', condition.2='2'){
   for(i in 1:subsample_times){
     # set the location
     output_loc_ss <- paste(output_loc, i, '_', sep = '')
@@ -79,12 +79,96 @@ perform_mast_per_celltype_subsampled_same <- function(seurat_object, output_loc,
     subsampled_assignments_2 <- subsampled_assignments_split[[2]]
     # grab the subsampled object
     seurat_object_subsampled <- seurat_object[, seurat_object@meta.data[[subsample_column]] %in% subsampled_assignments]
-    seurat_object_subsampled@meta.data[seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_1, ][[split.column]] <- '1'
-    seurat_object_subsampled@meta.data[seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_2, ][[split.column]] <- '2'
+    seurat_object_subsampled@meta.data[seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_1, ][[split.column]] <- condition.1
+    seurat_object_subsampled@meta.data[seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_2, ][[split.column]] <- condition.2
     # normalize data
     seurat_object_subsampled <- NormalizeData(seurat_object_subsampled)
     # actually perform
-    perform_mast_per_celltype(seurat_object_subsampled, output_loc_ss, split.column = split.column, cell.type.column = cell.type.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, use_top_expressed = use_top_expressed, latent.vars=latent.vars, condition.1 = '1', condition.2 = '2')
+    perform_mast_per_celltype(seurat_object_subsampled, output_loc_ss, split.column = split.column, cell.type.column = cell.type.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, use_top_expressed = use_top_expressed, latent.vars=latent.vars, condition.1 = condition.1, condition.2 = condition.2)
+  }
+}
+
+perform_mast_per_celltype_subsampled_tp2 <- function(seurat_object, output_loc, subsample_size, subsample_times=10, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1='1', condition.2='2'){
+  for(i in 1:subsample_times){
+    # set the location
+    output_loc_ss <- paste(output_loc, i, '_', sep = '')
+    # grab a subsample
+    subsampled_assignments <- as.character(sample(unique(seurat_object@meta.data[[subsample_column]]), subsample_size))
+    subsampled_assignments_split <- split(subsampled_assignments, sample(2, length(subsampled_assignments), repl = TRUE) )
+    subsampled_assignments_1 <- subsampled_assignments_split[[1]]
+    subsampled_assignments_2 <- subsampled_assignments_split[[2]]
+    # grab the subsampled object
+    seurat_object_subsampled <- seurat_object[, seurat_object@meta.data[[subsample_column]] %in% subsampled_assignments]
+    # subsample to the two conditions
+    seurat_object_subsampled <- seurat_object_subsampled[, ((seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_1 & seurat_object_subsampled@meta.data[[split.column]] == condition.1) | (seurat_object_subsampled@meta.data[[subsample_column]] %in% subsampled_assignments_2 & seurat_object_subsampled@meta.data[[split.column]] == condition.2))]
+    # normalize data
+    seurat_object_subsampled <- NormalizeData(seurat_object_subsampled)
+    # actually perform
+    perform_mast_per_celltype(seurat_object_subsampled, output_loc_ss, split.column = split.column, cell.type.column = cell.type.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, use_top_expressed = use_top_expressed, latent.vars=latent.vars, condition.1 = condition.1, condition.2 = condition.2)
+  }
+}
+
+
+combine_mast_results_ss <- function(mast_output_loc, merged_output_loc, condition.1 = '1M_cells', condition.2 = 'pilot4_unstimulated', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')){
+  for(cell_type in cell_types_to_check){
+    # create regex to list the files
+    list_dir_regex <- paste('*_', cell_type, condition.1, condition.2, '.tsv', sep = '')
+    # list the files
+    files <- list.files(mast_output_loc, list_dir_regex)
+    # init DE result
+    de_table_ct <- NULL
+    # check each file
+    for(i in 1:length(files)){
+      # get the file
+      file_loc <- paste(mast_output_loc, files[[i]], sep = '')
+      # read the table
+      de_results <- read.table(file_loc, sep = '\t', header = T, row.names = 1)
+      # add prepend
+      colnames(de_results) <- paste(i, colnames(de_results), sep = '_')
+      # add gene as column name
+      de_results$gene <- rownames(de_results)
+      # convert to datatable
+      de_results <- data.table(de_results)
+      # add to table or create new one if non-existant
+      if(is.null(de_table_ct)){
+        de_table_ct <- de_results
+      }
+      else{
+        de_table_ct <- merge(de_table_ct, de_results, by='gene', all=T)
+      }
+    }
+    merged_output_loc_ct <- paste(merged_output_loc, cell_type, condition.1, condition.2, '.tsv', sep = '')
+    write.table(de_table_ct, merged_output_loc_ct, sep = '\t', col.names = T, row.names = F)
+  }
+}
+
+plot_DE_distributions <- function(merged_mast_output_locs, comparison_names, cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')){
+  for(cell_type in cell_types_to_check){
+    par(mfrow=c(1,length(merged_mast_output_locs)))
+    for(i in 1:length(merged_mast_output_locs)){
+      output_loc <- merged_mast_output_locs[i]
+      # create regex to list the files
+      list_dir_regex <- cell_type
+      # list the files
+      files <- list.files(output_loc)
+      # filter
+      files <- files[grepl(list_dir_regex, files)]
+      # there should be only one result
+      file <- files[[1]]
+      # append file loc
+      file_loc <- paste(output_loc, file, sep = '')
+      # read the file
+      de_results <- read.table(file_loc, sep = '\t', header = T, row.names = 1)
+      # get the distribution of DE genes
+      nr_of_times_de <- apply(de_results, 1, function(x){
+        # grab the p_val_adj columns
+        x <- x[names(x)[grep('p_val_adj', names(x))]]
+        # check how often they are significant
+        x_sig <- sum(!is.na(x) & x < 0.05)
+        return(x_sig)
+      })
+      hist(nr_of_times_de, main = paste(cell_type, comparison_names[i]))
+    }
   }
 }
 
@@ -117,6 +201,8 @@ v2_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_pre
 v2 <- readRDS(v2_loc)
 # grab just UT
 v2_ut <- v2[, !is.na(v2@meta.data$timepoint) & v2@meta.data$timepoint == 'UT']
+# grab UT and 24hMTB
+v2_ut_24hmtb <- v2[, !is.na(v2@meta.data$timepoint) & (v2@meta.data$timepoint == 'UT' | v2@meta.data$timepoint == 'X24hMTB')]
 # clear some memory
 rm(v2)
 # harmonise the cell types
@@ -139,7 +225,28 @@ mast_output_loc_full <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongo
 mast_output_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output/'
 # do all vs all
 perform_mast_per_celltype(seurat_object = ut_merged, output_loc = mast_output_loc_full, split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25)
-#
+# perform with subsampling, taking ten participants each time
 perform_mast_per_celltype_subsampled(v2_ut, pilot4_ut, output_loc = mast_output_loc, subsample_size=10, subsample_times=20, subsample_column='assignment', split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL)
+# to compare to differences in the dataset itself, do the same by subsampling from the 1M object and comparing then
 perform_mast_per_celltype_subsampled_same(v2_ut, output_loc = mast_output_loc, subsample_size=20, subsample_times=20, subsample_column='assignment', split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL)
+# now compare two actual timepoints in the same dataset
+perform_mast_per_celltype_subsampled_tp2(v2_ut_24hmtb, output_loc = mast_output_loc, subsample_size=20, subsample_times=20, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type_lowerres', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = 'UT', condition.2 = 'X24hMTB')
+
+
+# set location to store the combined MAST output
+mast_output_loc_merged <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged/'
+# created the merged columns
+combine_mast_results_ss(mast_output_loc, mast_output_loc_merged, condition.1 = '1M_cells', condition.2 = 'pilot4_unstimulated', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
+
+# set location to store the combined MAST output for the subset of the same 1M
+mast_output_loc_merged_ss <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged_ss_self/'
+combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_ss, condition.1 = '1', condition.2 = '2', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
+
+# set location to store the combined MAST output for the subset of the same 1M
+mast_output_loc_merged_2tp <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged_ss_2tp/'
+combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_2tp, condition.1 = 'UT', condition.2 = 'X24hMTB', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
+
+
+
+
 

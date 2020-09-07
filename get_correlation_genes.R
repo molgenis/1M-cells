@@ -1,6 +1,7 @@
 library(Seurat)
 library(Matrix)
 library(data.table)
+library(meta)
 
 check_cor <- function(seurat_object, correlation_gene){
   cor_per_condition <- list()
@@ -18,6 +19,14 @@ check_cor <- function(seurat_object, correlation_gene){
     cor_per_condition[[condition]] <- cors
   }
   return(cor_per_condition)
+}
+
+check_cor_per_celltype <- function(seurat_object, correlation_gene, output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+  for(cell_type in cell_types){
+    seurat_object_ct <- seurat_object_ct <- seurat_object[,seurat_object@meta.data['cell_type_lowerres'] == cell_type]
+    corcalculated <- check_cor(seurat_object_ct, correlation_gene)
+    saveRDS(corcalculated, paste(output_loc, correlation_gene, '_', cell_type, '.rds', sep = ''))
+  }
 }
 
 get_outer_join_cor_genes <- function(full_cor_table, cutoff_value){
@@ -202,4 +211,37 @@ gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.
 mapping <- read.table(gene_to_ens_mapping, header = F, stringsAsFactors = F)
 mapping$V2 <- gsub("_", "-", make.unique(mapping$V2))
 mono_tnfaip6_sig_up_cor_both_ensid <- mapping[match(mono_tnfaip6_sig_up_cor_both, mapping$V2),"V1"]
-write.table(mono_tnfaip6_sig_up_cor_both_ensid, '/data/scRNA/eQTL_mapping/summaries/mono_TNFAIP6_coexpression_pos_allcond.txt', row.names=F, col.names =F, quote=F)
+write.table(mono_tnfaip6_sig_up_cor_both_ensid, '/data/scRNA/eQTL_mapping/summaries/mono_TNFAIP6_coexpression_pos_allcond_ensid.txt', row.names=F, col.names =F, quote=F)
+write.table(mono_tnfaip6_sig_up_cor_both, '/data/scRNA/eQTL_mapping/summaries/mono_TNFAIP6_coexpression_pos_allcond.txt', row.names=F, col.names =F, quote=F)
+
+
+# we also want to check, disregarding UT
+meta_p_mono_tnfaip6_bonf_nout <- meta_p_mono_tnfaip6_bonf
+meta_p_mono_tnfaip6_bonf_nout$UT <- NULL
+v2_mono_cors_tnfaip6_table_nout <- v2_mono_cors_tnfaip6_table
+v2_mono_cors_tnfaip6_table_nout$UT <- NULL
+v3_mono_cors_tnfaip6_table_nout <- v3_mono_cors_tnfaip6_table
+v2_mono_cors_tnfaip6_table_nout$UT <- NULL
+# check what was significant at least twice
+sig_at_least_twice_nout <- apply(meta_p_mono_tnfaip6_bonf_nout,1,function(x){sum(x<0.05)>5})
+genes_sig_at_least_twice_nout <- names(sig_at_least_twice_nout)[!is.na(sig_at_least_twice_nout) & sig_at_least_twice_nout == T]
+# subset to what was significant at least twice
+meta_p_mono_tnfaip6_bonf_sigtwice_nout <- meta_p_mono_tnfaip6_bonf[genes_sig_at_least_twice_nout,]
+v2_mono_cors_tnfaip6_table_sigtwice_nout <- v2_mono_cors_tnfaip6_table_nout[genes_sig_at_least_twice_nout, ]
+v3_mono_cors_tnfaip6_table_sigtwice_nout <- v3_mono_cors_tnfaip6_table_nout[genes_sig_at_least_twice_nout, ]
+# check what was significant and positivel correlated
+v2_mono_tnfaip6_sig_up_cor_nout <- get_outer_join_cor_genes_wp(v2_mono_cors_tnfaip6_table_sigtwice_nout, meta_p_mono_tnfaip6_bonf_sigtwice_nout)
+v3_mono_tnfaip6_sig_up_cor_nout <- get_outer_join_cor_genes_wp(v3_mono_cors_tnfaip6_table_sigtwice_nout, meta_p_mono_tnfaip6_bonf_sigtwice_nout)
+# since we will be doing a meta-analysis, confine only to those in both chemistries
+mono_tnfaip6_sig_up_cor_both_nout <- intersect(v2_mono_tnfaip6_sig_up_cor_nout, v3_mono_tnfaip6_sig_up_cor_nout)
+# we can go from gene symbols to ensemble IDs with this file
+gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
+mapping <- read.table(gene_to_ens_mapping, header = F, stringsAsFactors = F)
+mapping$V2 <- gsub("_", "-", make.unique(mapping$V2))
+mono_tnfaip6_sig_up_cor_both_nout_ensid <- mapping[match(mono_tnfaip6_sig_up_cor_both_nout, mapping$V2),"V1"]
+write.table(mono_tnfaip6_sig_up_cor_both_nout_ensid, '/data/scRNA/eQTL_mapping/summaries/mono_TNFAIP6_coexpression_pos_allcond_nout_ensid.txt', row.names=F, col.names =F, quote=F)
+write.table(mono_tnfaip6_sig_up_cor_both_nout, '/data/scRNA/eQTL_mapping/summaries/mono_TNFAIP6_coexpression_pos_allcond_nout.txt', row.names=F, col.names =F, quote=F)
+
+
+
+
