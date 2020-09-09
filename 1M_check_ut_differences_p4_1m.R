@@ -2,6 +2,8 @@
 
 library(Seurat)
 library(MAST)
+library(UpSetR)
+library(data.table)
 
 
 ####################
@@ -30,7 +32,7 @@ perform_mast <- function(seurat_object, output_loc, condition.1, condition.2, sp
   }
 }
 
-perform_mast_per_celltype <- function(seurat_object, output_loc, split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = '1M_cells', condition.2 = 'pilot4_unstimulated'){
+perform_mast_per_celltype <- function(seurat_object, output_loc, split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = '1', condition.2 = '2'){
   # do subselection based on features
   features = NULL
   # grab the top expressed genes if that is what the user wanted
@@ -51,7 +53,7 @@ perform_mast_per_celltype <- function(seurat_object, output_loc, split.column = 
   try({perform_mast(seurat_object, output_loc_bulk, condition.1 = condition.1, condition.2 = condition.2, split.column = split.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, latent.vars = latent.vars)})
 }
 
-perform_mast_per_celltype_subsampled <- function(seurat_object, seurat_object2, output_loc, subsample_size, subsample_times=10, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL){
+perform_mast_per_celltype_subsampled <- function(seurat_object, seurat_object2, output_loc, subsample_size, subsample_times=10, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = '1', condition.2 = '2'){
   for(i in 1:subsample_times){
     # set the location
     output_loc_ss <- paste(output_loc, i, '_', sep = '')
@@ -64,7 +66,7 @@ perform_mast_per_celltype_subsampled <- function(seurat_object, seurat_object2, 
     # normalize data
     seurat_object_merged <- NormalizeData(seurat_object_merged)
     # actually perform
-    perform_mast_per_celltype(seurat_object_merged, output_loc_ss, split.column = split.column, cell.type.column = cell.type.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, use_top_expressed = use_top_expressed, latent.vars=latent.vars)
+    perform_mast_per_celltype(seurat_object_merged, output_loc_ss, split.column = split.column, cell.type.column = cell.type.column, assay = assay, min.pct = min.pct, logfc.threshold = logfc.threshold, use_top_expressed = use_top_expressed, latent.vars=latent.vars, condition.1 = condition.1, condition.2 = condition.2)
   }
 }
 
@@ -142,35 +144,116 @@ combine_mast_results_ss <- function(mast_output_loc, merged_output_loc, conditio
   }
 }
 
+get_nr_of_times_DE <- function(output_loc, cell_type){
+  # create regex to list the files
+  list_dir_regex <- cell_type
+  # list the files
+  files <- list.files(output_loc)
+  # filter
+  files <- files[grepl(list_dir_regex, files)]
+  # there should be only one result
+  file <- files[[1]]
+  # append file loc
+  file_loc <- paste(output_loc, file, sep = '')
+  # read the file
+  de_results <- read.table(file_loc, sep = '\t', header = T, row.names = 1)
+  # get the distribution of DE genes
+  nr_of_times_de <- apply(de_results, 1, function(x){
+    # grab the p_val_adj columns
+    x <- x[names(x)[grep('p_val_adj', names(x))]]
+    # check how often they are significant
+    x_sig <- sum(!is.na(x) & x < 0.05)
+    return(x_sig)
+  })
+  return(nr_of_times_de)
+}
+
 plot_DE_distributions <- function(merged_mast_output_locs, comparison_names, cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')){
+  # make a plot per cell type
   for(cell_type in cell_types_to_check){
+    # display all the plots for the cell type
     par(mfrow=c(1,length(merged_mast_output_locs)))
+    # read each output file
     for(i in 1:length(merged_mast_output_locs)){
       output_loc <- merged_mast_output_locs[i]
-      # create regex to list the files
-      list_dir_regex <- cell_type
-      # list the files
-      files <- list.files(output_loc)
-      # filter
-      files <- files[grepl(list_dir_regex, files)]
-      # there should be only one result
-      file <- files[[1]]
-      # append file loc
-      file_loc <- paste(output_loc, file, sep = '')
-      # read the file
-      de_results <- read.table(file_loc, sep = '\t', header = T, row.names = 1)
-      # get the distribution of DE genes
-      nr_of_times_de <- apply(de_results, 1, function(x){
-        # grab the p_val_adj columns
-        x <- x[names(x)[grep('p_val_adj', names(x))]]
-        # check how often they are significant
-        x_sig <- sum(!is.na(x) & x < 0.05)
-        return(x_sig)
-      })
+      # grab the numer of times each gene was DE in all the subsampling
+      nr_of_times_de <- get_nr_of_times_DE(output_loc, cell_type)
+      # add a plot for this specific comparison
       hist(nr_of_times_de, main = paste(cell_type, comparison_names[i]))
     }
   }
 }
+
+
+
+plot_DE_overlaps <- function(merged_mast_output_locs, comparison_names, cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), true_de_cutoff=15){
+  # make a plot per cell type
+  for(cell_type in cell_types_to_check){
+    # create a list to put the DE genes in
+    de_per_comparison <- list()
+    for(i in 1:length(merged_mast_output_locs)){
+      # grab the output location
+      output_loc <- merged_mast_output_locs[i]
+      # grab the numer of times each gene was DE in all the subsampling
+      nr_of_times_de <- get_nr_of_times_DE(output_loc, cell_type)
+      # grab the gene names that were DE more times than given in the threshold
+      true_de_comparison <- names(nr_of_times_de)[nr_of_times_de >= true_de_cutoff]
+      # grab the name of the comparison
+      comparison_name <- comparison_names[i]
+      # add these genes to the list
+      de_per_comparison[[comparison_name]] <- true_de_comparison
+    }
+    upset(fromList(de_per_comparison), order.by = 'freq')
+  }
+}
+
+get_DE_overlap_plot_ct<- function(merged_mast_output_locs, comparison_names, cell_type, true_de_cutoff=15){
+  # create a list to put the DE genes in
+  de_per_comparison <- list()
+  for(i in 1:length(merged_mast_output_locs)){
+    # grab the output location
+    output_loc <- merged_mast_output_locs[i]
+    # grab the numer of times each gene was DE in all the subsampling
+    nr_of_times_de <- get_nr_of_times_DE(output_loc, cell_type)
+    # grab the gene names that were DE more times than given in the threshold
+    true_de_comparison <- names(nr_of_times_de)[nr_of_times_de >= true_de_cutoff]
+    # grab the name of the comparison
+    comparison_name <- comparison_names[i]
+    # add these genes to the list
+    de_per_comparison[[comparison_name]] <- true_de_comparison
+  }
+  upset(fromList(de_per_comparison), order.by = 'freq')
+}
+
+
+output_shared_and_exclusive_de_genes <- function(merged_mast_output_loc1, merged_mast_output_loc2, comparison_name1, comparison_name2, output_loc, cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), true_de_cutoff=15){
+  # make a file per cell type
+  for(cell_type in cell_types_to_check){
+    # grab the numer of times each gene was DE in all the subsampling
+    nr_of_times_de1 <- get_nr_of_times_DE(merged_mast_output_loc1, cell_type)
+    # grab the gene names that were DE more times than given in the threshold
+    true_de_comparison1 <- names(nr_of_times_de1)[nr_of_times_de1 >= true_de_cutoff]
+    # grab the numer of times each gene was DE in all the subsampling
+    nr_of_times_de2 <- get_nr_of_times_DE(merged_mast_output_loc2, cell_type)
+    # grab the gene names that were DE more times than given in the threshold
+    true_de_comparison2 <- names(nr_of_times_de2)[nr_of_times_de2 >= true_de_cutoff]
+    # these were the common DE genes
+    common_de <- intersect(true_de_comparison1, true_de_comparison2)
+    # these were the set1 exclusive genes
+    set1_exclusive_de <- setdiff(true_de_comparison1, true_de_comparison2)
+    # these were the set2 exclusive genes
+    set2_exclusive_de <- setdiff(true_de_comparison2, true_de_comparison1)
+    # create the output paths
+    common_de_output_path <- paste(output_loc, cell_type, '_', comparison_name1, '_vs_', comparison_name2, '_common.txt', sep = '')
+    set1_de_output_path <- paste(output_loc, cell_type, '_', comparison_name1, '_vs_', comparison_name2, '_', comparison_name1, '_exclusive.txt', sep = '')
+    set2_de_output_path <- paste(output_loc, cell_type, '_', comparison_name1, '_vs_', comparison_name2, '_', comparison_name2, '_exclusive.txt', sep = '')
+    # write the files
+    write.table(common_de, common_de_output_path, col.names = F, row.names = F, quote = F)
+    write.table(set1_exclusive_de, set1_de_output_path, col.names = F, row.names = F, quote = F)
+    write.table(set2_exclusive_de, set2_de_output_path, col.names = F, row.names = F, quote = F)
+  }
+}
+
 
 
 
@@ -226,17 +309,17 @@ mast_output_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/u
 # do all vs all
 perform_mast_per_celltype(seurat_object = ut_merged, output_loc = mast_output_loc_full, split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25)
 # perform with subsampling, taking ten participants each time
-perform_mast_per_celltype_subsampled(v2_ut, pilot4_ut, output_loc = mast_output_loc, subsample_size=10, subsample_times=20, subsample_column='assignment', split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL)
+perform_mast_per_celltype_subsampled(v2_ut, pilot4_ut, output_loc = mast_output_loc, subsample_size=10, subsample_times=20, subsample_column='assignment', split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = 'pilot4_unstimulated', condition.2 = '1M_cells')
 # to compare to differences in the dataset itself, do the same by subsampling from the 1M object and comparing then
 perform_mast_per_celltype_subsampled_same(v2_ut, output_loc = mast_output_loc, subsample_size=20, subsample_times=20, subsample_column='assignment', split.column = 'orig.ident', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL)
 # now compare two actual timepoints in the same dataset
-perform_mast_per_celltype_subsampled_tp2(v2_ut_24hmtb, output_loc = mast_output_loc, subsample_size=20, subsample_times=20, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type_lowerres', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = 'UT', condition.2 = 'X24hMTB')
+perform_mast_per_celltype_subsampled_tp2(v2_ut_24hmtb, output_loc = mast_output_loc, subsample_size=20, subsample_times=20, subsample_column='assignment', split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, logfc.threshold = 0.25, use_top_expressed = NULL, latent.vars=NULL, condition.1 = 'UT', condition.2 = 'X24hMTB')
 
 
 # set location to store the combined MAST output
 mast_output_loc_merged <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged/'
 # created the merged columns
-combine_mast_results_ss(mast_output_loc, mast_output_loc_merged, condition.1 = '1M_cells', condition.2 = 'pilot4_unstimulated', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
+combine_mast_results_ss(mast_output_loc, mast_output_loc_merged, condition.1 = 'pilot4_unstimulated', condition.2 = '1M_cells',  cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
 
 # set location to store the combined MAST output for the subset of the same 1M
 mast_output_loc_merged_ss <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged_ss_self/'
@@ -246,7 +329,22 @@ combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_ss, condition.1 
 mast_output_loc_merged_2tp <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged_ss_2tp/'
 combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_2tp, condition.1 = 'UT', condition.2 = 'X24hMTB', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
 
+# upsetR has issues with plotting in loops, so unfortunately we will have to manually create the plots per cell type
+merged_mast_output_locs <- c(mast_output_loc_merged, mast_output_loc_merged_ss, mast_output_loc_merged_2tp)
+merged_mast_output_locs <- c('/data/scRNA/ut_compare/mast_output_merged/', '/data/scRNA/ut_compare/mast_output_merged_ss_self/', '/data/scRNA/ut_compare/mast_output_merged_ss_2tp/') # I copied these locally
+comparison_names <- c('vsp4', 'vsself', 'vsreal')
+# so per cell type
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='B')
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='CD4T')
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='CD8T')
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='DC')
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='monocyte')
+get_DE_overlap_plot_ct(merged_mast_output_locs, comparison_names, cell_type='NK')
 
+# next we should check to see which genes are specifically shared or exclusive
+gene_list_output_loc <- '/data/scRNA/ut_compare/de_gene_sharing/'
 
+# 
+output_shared_and_exclusive_de_genes('/data/scRNA/ut_compare/mast_output_merged/', '/data/scRNA/ut_compare/mast_output_merged_ss_2tp/', 'P4UT1MUT', '1MUT1M24hMTB', gene_list_output_loc)
 
 
