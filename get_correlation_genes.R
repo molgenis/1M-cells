@@ -14,7 +14,8 @@ check_cor <- function(seurat_object, correlation_gene){
     # subset to expressed genes
     seurat_object_tp <- seurat_object_tp[expressed_genes, ]
     # get the correlation
-    cors <- apply(seurat_object_tp@assays$SCT@counts,1,function(x){cor.test(as.numeric(seurat_object_tp@assays$SCT@counts[correlation_gene, ]), x, method = c('spearman'))$p.value})
+    #cors <- apply(seurat_object_tp@assays$SCT@counts,1,function(x){cor.test(as.numeric(seurat_object_tp@assays$SCT@counts[correlation_gene, ]), x, method = c('spearman'))$p.value})
+    cors <- apply(seurat_object_tp@assays$SCT@counts,1,function(x){cor(as.numeric(seurat_object_tp@assays$SCT@counts[correlation_gene, ]), x, method = c('spearman'))})
     # save the correlation for this condition
     cor_per_condition[[condition]] <- cors
   }

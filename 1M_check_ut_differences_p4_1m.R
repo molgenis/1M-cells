@@ -329,6 +329,15 @@ combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_ss, condition.1 
 mast_output_loc_merged_2tp <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/ut_compare/mast_output_merged_ss_2tp/'
 combine_mast_results_ss(mast_output_loc, mast_output_loc_merged_2tp, condition.1 = 'UT', condition.2 = 'X24hMTB', cell_types_to_check=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'))
 
+# set vectors of locations and the names
+merged_mast_output_locs <- c(mast_output_loc_merged, mast_output_loc_merged_ss, mast_output_loc_merged_2tp)
+merged_mast_output_locs <- c('/data/scRNA/ut_compare/mast_output_merged/', '/data/scRNA/ut_compare/mast_output_merged_ss_self/', '/data/scRNA/ut_compare/mast_output_merged_ss_2tp/') # I copied these locally
+comparison_names <- c('Plos UT vs 1M UT subsampled 20*10', '1M UT vs 1M UT subsampled 20*10', '1M UT vs 24hMTB subsampled 20*10')
+
+
+# plot the number of times a DE gene was found back to be DE in subsampling
+plot_DE_distributions(merged_mast_output_locs, comparison_names)
+
 # upsetR has issues with plotting in loops, so unfortunately we will have to manually create the plots per cell type
 merged_mast_output_locs <- c(mast_output_loc_merged, mast_output_loc_merged_ss, mast_output_loc_merged_2tp)
 merged_mast_output_locs <- c('/data/scRNA/ut_compare/mast_output_merged/', '/data/scRNA/ut_compare/mast_output_merged_ss_self/', '/data/scRNA/ut_compare/mast_output_merged_ss_2tp/') # I copied these locally
