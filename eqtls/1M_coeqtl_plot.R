@@ -57,7 +57,7 @@ plot_coexqtl <- function(seurat_object, individuals_to_use, gene1, gene2, genoty
   ggsave(paste(output_loc, "co-expressionQTL", gene1, gene2, version_chem, '.png', sep = ''))
 }
 
-plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, version_chem, output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL){
+plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, version_chem, output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T){
   # go through all the conditions
   for(condition in unique(seurat_object@meta.data$timepoint)){
     plot.matrix <- NULL
@@ -67,7 +67,13 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
       # subset to only this participant
       seurat_object_condition_participant <- seurat_object_condition[, seurat_object_condition@meta.data$assignment == sample]
       # grab the normalized counts
-      sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
+      sample.matrix <- NULL
+      if(use_SCT){
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
+      }
+      else{
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@data[gene1, ], seurat_object_condition_participant@assays$RNA@data[gene2, ])
+      }
       # remove the rownames, we don't need them
       rownames(sample.matrix) <- NULL
       # set the new colnames
@@ -108,7 +114,7 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
         ylab("") + xlab("") +
         ggtitle(levels(plot.matrix$snp)[i])
     }
-    title <- paste(gene1, "/", gene2, "/", snp.name)
+    title <- paste(gene1, "/", gene2, "/", snp.name, '/', condition, '/', version_chem)
     if(!is.null(p.value) & !is.null(r) & !is.null(sign.cutoff)){
       title <- paste(gene1, "/", gene2, "/", snp.name, "\n", signif(p.value, 3), "/", signif(r, 3), "/ cutoff=", sign.cutoff)
     }
