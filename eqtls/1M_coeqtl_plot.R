@@ -72,7 +72,7 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
         sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
       }
       else{
-        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@data[gene1, ], seurat_object_condition_participant@assays$RNA@data[gene2, ])
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@scale.data[gene1, ], seurat_object_condition_participant@assays$RNA@scale.data[gene2, ])
       }
       # remove the rownames, we don't need them
       rownames(sample.matrix) <- NULL
@@ -210,3 +210,13 @@ rs1131017 <- droplevels(unlist(genotypes_matched[SNP,]))
 
 # do the work
 plot_coexqtl(v2_ct, individuals_to_use, gene1, gene2, rs1131017, 'V2', plot_output_loc)
+
+plot_interaction(seurat_object=v2_ct, gene1='RPS26', gene2='TMSB4X', genotype=rs1131017, snp.name='rs1131017', version_chem='V2', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v3_ct, gene1='RPS26', gene2='TMSB4X', genotype=rs1131017, snp.name='rs1131017', version_chem='V3', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v2_ct, gene1='RPS26', gene2='RPL21', genotype=rs1131017, snp.name='rs1131017', version_chem='V2', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v3_ct, gene1='RPS26', gene2='RPL21', genotype=rs1131017, snp.name='rs1131017', version_chem='V3', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v2_ct, gene1='RPS26', gene2='RPL39', genotype=rs1131017, snp.name='rs1131017', version_chem='V2', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v3_ct, gene1='RPS26', gene2='RPL39', genotype=rs1131017, snp.name='rs1131017', version_chem='V3', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v2_ct, gene1='RPS26', gene2='RPL10A', genotype=rs1131017, snp.name='rs1131017', version_chem='V2', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+plot_interaction(seurat_object=v3_ct, gene1='RPS26', gene2='RPL10A', genotype=rs1131017, snp.name='rs1131017', version_chem='V3', output_loc=paste(plot_output_loc, 'RNA_', sep=''), use_SCT=F)
+

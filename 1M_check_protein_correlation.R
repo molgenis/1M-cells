@@ -1,3 +1,6 @@
+library(ggplot2)
+library(ggpubr)
+
 
 # get the average of expression of genes from the expression file
 get_average_expression_data <- function(features_loc, condition, cell_type){
@@ -88,6 +91,87 @@ get_correlations_gene_per_gt_per_chem_per_condition <- function(average_gene_exp
   return(complete_table)
 }
 
+plot_gene_vs_protein_per_chem_per_condition <- function(average_gene_expression_loc_v2, average_gene_expression_loc_v3, cell_type, protein_expression, gene, protein, genotype, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), conditions_vertical=T, draw_regression=T, draw_correlation=F){
+  # create the list of plots
+  plot_list <- list()
+  # make plots for each condition
+  for(condition in conditions){
+    # get plots for both chems
+    plots_chem_condition <- plot_gene_vs_protein_per_chem(average_gene_expression_loc_v2, average_gene_expression_loc_v3, cell_type, condition, protein_expression, gene, protein, genotype, draw_regression, draw_correlation)
+    # add the plots
+    plot_list[[paste(condition, 'v2', sep='_')]] <- plots_chem_condition[['v2']]
+    plot_list[[paste(condition, 'v3', sep='_')]] <- plots_chem_condition[['v3']]
+  }
+  # set the number of cols and nrows
+  ncol <- 2
+  nrow <- length(conditions)
+  # create the plot
+  arranged_plot <- ggarrange(plotlist = plot_list, ncol = ncol, nrow = nrow, labels = names(plot_list))
+  return(arranged_plot)
+}
+
+
+plot_gene_vs_protein_per_chem <- function(average_gene_expression_loc_v2, average_gene_expression_loc_v3, cell_type, condition, protein_expression, gene, protein, genotype, draw_regression=T, draw_correlation=F){
+  # grab the plots per chemistry
+  plot_v2 <- plot_gene_vs_protein(average_gene_expression_loc_v2, cell_type, condition, protein_expression, gene, protein, genotype, draw_regression, draw_correlation)
+  plot_v3 <- plot_gene_vs_protein(average_gene_expression_loc_v3, cell_type, condition, protein_expression, gene, protein, genotype, draw_regression, draw_correlation)
+  # put them into a list
+  plots <- list()
+  plots[['v2']] <- plot_v2
+  plots[['v3']] <- plot_v3
+  return(plots)
+}
+
+
+plot_gene_vs_protein <- function(average_gene_expression_loc, cell_type, condition, protein_expression, gene, protein, genotype, draw_regression=T, draw_correlation=F){
+  # grab the average expressions of the RNA expression
+  rna_expression <- get_average_expression_data(average_gene_expression_loc, condition, cell_type)
+  # subset to the participants we are using
+  genotypes_matched <- genotype[names(genotype) %in% colnames(rna_expression)]
+  # subset to the gene we are using
+  rna_expression_gene <- rna_expression[gene, ]
+  # subset to the protein we are using
+  protein_expression_protein <- protein_expression[protein, ]
+  # create the plot df
+  plot_df <- NULL
+  # check each genotype
+  for(alleles in levels(genotypes_matched)){
+    # grab the participants with these alleles
+    participants_alleles <- names(genotypes_matched[genotypes_matched == alleles])
+    # grab the expression and protein data for these participants
+    rna_expression_participants <- as.numeric(rna_expression_gene[, participants_alleles])
+    protein_expression_participants <- as.numeric(protein_expression_protein[, participants_alleles])
+    # collect info
+    plot_df_gt <- data.frame(rna_expression_participants, protein_expression_participants, alleles, stringsAsFactors = F)
+    colnames(plot_df_gt) <- c('RNA', 'protein', 'genotype')
+    # put into the plot dataframe
+    if(is.null(plot_df)){
+      plot_df <- plot_df_gt
+    }
+    else{
+      plot_df <- rbind(plot_df, plot_df_gt)
+    }
+  }
+  # turn genotype into factor
+  plot_df$genotype <- as.factor(plot_df$genotype)
+  # paste together the title
+  title <- paste('                   RNA', gene, 'vs protein', protein)
+  # create the scatterplot
+  plot_created  <- ggplot(plot_df, aes(x=as.numeric(RNA), y=as.numeric(protein), color=genotype)) +
+    geom_point(size=3) +
+    labs(x = 'RNA expression', y = 'protein expression', title = title)
+  if(draw_regression){
+    plot_created <- plot_created + geom_smooth(method='lm')
+  }
+  if(draw_correlation){
+    plot_created <- stat_cor(method = 'spearman')
+  }
+  # return the plot
+  return(plot_created)
+}
+
+
+
 # location of the protein data
 #protein_expression_loc <- '/data/scRNA/olink/features/24hCA_olink_data_QC_ensg.csv'
 protein_expression_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/pqtls/24hCA_olink_data_QC_ensg.csv'
@@ -123,6 +207,9 @@ SNP_TNFAIP6 <- 'rs2278089'
 # genes we are interested in
 ENS_NMI <- 'ENSG00000123609'
 ENS_TNFAIP6 <- 'ENSG00000123610'
+ENS_IFNgamma <- 'ENSG00000111537'
+ENS_IL1alpha <- 'ENSG00000115008'
+ENS_TNF <- 'ENSG00000232810'
 
 # subset to the SNP we need
 rs4665150 <- droplevels(unlist(genotypes[SNP_NMI,]))
@@ -194,5 +281,8 @@ conditionalFormatting(wb2, 'monocyte', style = c("red", "yellow", "green"), rule
 setColWidths(wb2, 1, 1:ncol(bulk_tnfaip6_correlations), widths = "auto")
 setColWidths(wb2, 2, 1:ncol(monocyte_tnfaip6_correlations), widths = "auto")
 
-
+# create plots of some of the rna>protein expressions
+plot_gene_vs_protein_per_chem_per_condition(paste(features_loc, features_v2, sep = ''), paste(features_loc, features_v3, sep = ''), 'CD8T', olink_data, ENS_NMI, ENS_IFNgamma, rs4665150, conditions=c('UT', '3hCA', '24hCA'))
+plot_gene_vs_protein_per_chem_per_condition(paste(features_loc, features_v2, sep = ''), paste(features_loc, features_v3, sep = ''), 'monocyte', olink_data, ENS_TNFAIP6, ENS_IL1alpha, rs2278089, conditions=c('UT', '3hCA', '24hCA'))
+plot_gene_vs_protein_per_chem_per_condition(paste(features_loc, features_v2, sep = ''), paste(features_loc, features_v3, sep = ''), 'monocyte', olink_data, ENS_TNFAIP6, ENS_TNF, rs2278089, conditions=c('UT', '3hCA', '24hCA'))
 
