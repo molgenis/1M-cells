@@ -336,7 +336,7 @@ plot_gwas_enrichment_reQTL_snps <- function(eqtl_table, stims=c('3hCA', '24hCA',
       nr_of_sig_eQTLs_stim_w_snp <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
       nr_of_sig_eQTLs_both_condition <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
       nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05, ])
-      nr_of_sig_reQTLs_w_snp <- nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
+      nr_of_sig_reQTLs_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
       nr_of_sig_reQTLs_weaker <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
                                                        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
                                                          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]])), ])
