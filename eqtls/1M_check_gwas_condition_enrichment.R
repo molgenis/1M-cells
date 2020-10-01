@@ -123,6 +123,277 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
   }
 }
 
+plot_gwas_enrichment_SNPs <- function(snp_list, GWAS, traits_to_use=NULL, threshold=0.05, other_GWAS=NULL, verbose=T){
+  GWAS_to_use <- GWAS
+  # if the user supplied traits to use, only use those
+  if(!is.null(traits_to_use)){
+    greptouse <- paste(traits_to_use, collapse = '|')
+    exact_trait_names <- unique(GWAS_to_use$Trait)[grep(greptouse, unique(GWAS_to_use$Trait))]
+    GWAS_to_use <- GWAS_to_use[GWAS_to_use$Trait %in% exact_trait_names, ]
+    if(verbose){
+      print('taking into account: ')
+      print(unique(GWAS_to_use$Trait))
+    }
+  }
+  # put counts in dataframe
+  counts_df <- NULL
+  # grab per condition
+  for(direction in unique(snp_list$direction)){
+    if(verbose){
+      print(direction)
+    }
+    # grab the SNPs
+    snps <- unique(snp_list[snp_list$direction == direction, ]$SNP)
+    
+    other_GWAS_to_use <- NULL
+    # subset the other GWAS to only the SNPs we have
+    if(!is.null(other_GWAS)){
+      other_GWAS_to_use <- other_GWAS[other_GWAS$SNP %in% snps | (!is.na(other_GWAS$SNP_ld) & other_GWAS$SNP_ld %in% snps), ]
+    }
+    
+    # we care about the number of SNPs
+    nr_snps <- length(snps)
+    if(verbose){
+      print(paste(nr_snps, ' snps'))
+    }
+    # store the traits per snp
+    traits <- list()
+    # check each snp
+    for(snp in snps){
+      trait_table_snp <- get_traits_snp(snp, GWAS_to_use, threshold)
+      if(nrow(trait_table_snp) > 0){
+        traits[[snp]] <- unique(trait_table_snp$Trait)
+      }
+      if(!is.null(other_GWAS_to_use)){
+        other_trait_rows <- other_GWAS_to_use[(other_GWAS_to_use$SNP == snp | (!is.na(other_GWAS_to_use$SNP_ld) & other_GWAS_to_use$SNP_ld == snp)) & other_GWAS_to_use$p < threshold, ]
+        if(nrow(other_trait_rows) > 0){
+          if(nrow(trait_table_snp) == 0){
+            traits[[snp]] <- unique(other_trait_rows$Trait)
+          }
+          else{
+            traits[[snp]] <- c(traits[[snp]], unique(other_trait_rows$Trait))
+          }
+        }
+      }
+    }
+    # the number of snps with info is the number of snps associated with a GWAS
+    nr_snps_associated <- length(names(traits))
+    # add info to the dataframe
+    if(is.null(counts_df)){
+      counts_df <- t(data.frame(c('any', direction, nr_snps, nr_snps_associated)))
+      colnames(counts_df) <- c('cell_type', 'direction', 'snps', 'associated_snps')
+    }
+    else{
+      counts_df <- rbind(counts_df, c('any', direction, nr_snps, nr_snps_associated))
+    }
+    
+  }
+  rownames(counts_df) <- NULL
+  print((counts_df))
+  assoc_percentage <- as.numeric(counts_df[, 'associated_snps'])/as.numeric(counts_df[, 'snps'])
+  barplot(assoc_percentage, names.arg = as.character(counts_df[, 'direction']), main='GWAS reQTL SNP percenage')
+}
+
+get_gwas_enrichment_reQTL_effects <- function(eQTL_output_loc, snps_to_check, SNP_GWAS, stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')){
+  # get the number of traits per SNP
+  nr_of_traits_per_snp <- get_number_of_traits_snp(SNP_GWAS, snps_to_check)
+  # store df per in a list
+  enrichment_per_ct <- list()
+  # check each cell type
+  for(cell_type in cell_types){
+    # get the UT first
+    eQTLs_ut_ct_loc <- paste(eQTL_output_loc, 'UT/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+    eQTLs <- read.table(eQTLs_ut_ct_loc, sep = '\t', header = T)
+    # create a dataframe
+    eQTLs_snp <- data.frame(snps_to_check)
+    # add the Z-scores
+    ut_zscore <- eQTLs[match(as.character(snps_to_check), as.character(eQTLs$SNPName)), ]$OverallZScore
+    # add the FDR
+    ut_fdr <- eQTLs[match(as.character(snps_to_check), as.character(eQTLs$SNPName)), ]$FDR
+    # check for any NAs
+    if(sum(is.na(ut_fdr)) > 0){
+      # replace NA with zero
+      ut_fdr[is.na(ut_fdr)] <- 1
+      # replace NA with zero
+      ut_zscore[is.na(ut_zscore)] <- 0
+    }
+    # add to the dataframe
+    #eQTLs_snp[[paste('UT_Z_', cell_type, sep='')]] <- ut_zscore
+    #eQTLs_snp[[paste('UT_FDR_', cell_type, sep='')]] <- ut_fdr
+    eQTLs_snp[[paste('UT_Z', sep='')]] <- ut_zscore
+    eQTLs_snp[[paste('UT_FDR', sep='')]] <- ut_fdr
+    # add the reQTL conditions
+    reqtl_conditions <- paste('UT_vs_', stims, sep = '')
+    # add with the regular stims
+    all_conds <- c(stims, reqtl_conditions)
+    # check the conditions
+    for(condition in all_conds){
+      eQTLs_stim_ct_loc <- paste(eQTL_output_loc, condition, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+      eQTLs_stim <- read.table(eQTLs_stim_ct_loc, sep = '\t', header = T)
+      # add the Z-scores
+      stim_zscore <- eQTLs_stim[match(as.character(snps_to_check), as.character(eQTLs_stim$SNPName)), ]$OverallZScore
+      # add the FDR
+      stim_fdr <- eQTLs_stim[match(as.character(snps_to_check), as.character(eQTLs_stim$SNPName)), ]$FDR
+      # check for any NAs
+      if(sum(is.na(stim_fdr)) > 0){
+        # replace NA with zero
+        stim_fdr[is.na(stim_fdr)] <- 1
+        # replace NA with zero
+        stim_zscore[is.na(stim_zscore)] <- 0
+      }
+      # add to the dataframe
+      #eQTLs_snp[[paste(condition, '_Z_', cell_type, sep='')]] <- stim_zscore
+      #eQTLs_snp[[paste(condition, '_FDR_', cell_type, sep='')]] <- stim_fdr
+      eQTLs_snp[[paste(condition, '_Z', sep='')]] <- stim_zscore
+      eQTLs_snp[[paste(condition, '_FDR', sep='')]] <- stim_fdr
+    }
+    # add the SNP info
+    nr_of_traits_per_eQTL_snp <- nr_of_traits_per_snp[match(as.character(snps_to_check), as.character(nr_of_traits_per_snp$SNP)), ]$nr_of_traits
+    eQTLs_snp$nr_of_traits <- nr_of_traits_per_eQTL_snp
+    # turn the NAs into 0
+    #eQTLs_snp[is.na(eQTLs_snp$nr_of_traits), ]$nr_of_traits <- 0
+    # store the result in the list
+    enrichment_per_ct[[cell_type]] <- eQTLs_snp
+  }
+  return(enrichment_per_ct)
+}
+
+
+get_number_of_traits_snp <- function(SNP_GWAS, snps_to_check){
+  # init table
+  nr_of_traits_per_snp <- NULL
+  # loop through each snp
+  for(snp in snps_to_check){
+    # each row for the SNP constitutes a trait, so the number of rows is the number of traits
+    nr_of_traits <- length(SNP_GWAS[[snp]])
+    # turn info df
+    df_snps <- data.frame(c(snp), nr_of_traits, stringsAsFactors = F)
+    colnames(df_snps) <- c('SNP', 'nr_of_traits')
+    # add to existing table
+    if(is.null(nr_of_traits_per_snp)){
+      nr_of_traits_per_snp <- df_snps
+    }
+    else{
+      nr_of_traits_per_snp <- rbind(nr_of_traits_per_snp, df_snps)
+    }
+  }
+  return(nr_of_traits_per_snp)
+}
+
+
+get_snps_GWAS <- function(snps, GWAS, traits_to_use=NULL, threshold=0.05, other_GWAS_to_use=NULL, verbose=T){
+  GWAS_to_use <- GWAS
+  # if the user supplied traits to use, only use those
+  if(!is.null(traits_to_use)){
+    greptouse <- paste(traits_to_use, collapse = '|')
+    exact_trait_names <- unique(GWAS_to_use$Trait)[grep(greptouse, unique(GWAS_to_use$Trait))]
+    GWAS_to_use <- GWAS_to_use[GWAS_to_use$Trait %in% exact_trait_names, ]
+    if(verbose){
+      print('taking into account: ')
+      print(unique(GWAS_to_use$Trait))
+    }
+  }
+  # create the traits list
+  traits <- list()
+  # check each snp
+  for(snp in snps){
+    # get the traits
+    trait_table_snp <- get_traits_snp(snp, GWAS_to_use, threshold)
+    # if there are traits, add them
+    if(nrow(trait_table_snp) > 0){
+      traits[[snp]] <- unique(as.character(trait_table_snp$Trait))
+    }
+    # check the other GWAS
+    if(!is.null(other_GWAS_to_use)){
+      # get the other associated traits
+      other_trait_rows <- other_GWAS_to_use[(other_GWAS_to_use$SNP == snp | (!is.na(other_GWAS_to_use$SNP_ld) & other_GWAS_to_use$SNP_ld == snp)) & other_GWAS_to_use$p < threshold, ]
+      # add to existing table if it exists
+      if(nrow(other_trait_rows) > 0){
+        if(nrow(trait_table_snp) == 0){
+          traits[[snp]] <- unique(as.character(other_trait_rows$Trait))
+        }
+        else{
+          traits[[snp]] <- c(traits[[snp]], as.character(unique(other_trait_rows$Trait)))
+        }
+      }
+    }
+  }
+  return(traits)
+}
+
+plot_gwas_enrichment_reQTL_snps <- function(eqtl_table, stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')){
+  plot_per_ct <- list()
+  # check each cell type
+  for(cell_type in names(eqtl_table)){
+    specific_table <- eqtl_table[[cell_type]]
+    # turn into a df we can plot
+    nr_of_sig_eQTLs_ut <- nrow(specific_table[specific_table$UT_FDR < 0.05, ])
+    nr_of_sig_eQTLs_ut_w_snp <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table$nr_of_traits > 0, ])
+    plot_per_stim <- list()
+    # check each stim
+    for(stim in stims){
+      nr_of_sig_eQTLs_stim <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
+      nr_of_sig_eQTLs_stim_w_snp <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
+      nr_of_sig_eQTLs_both_condition <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
+      nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05, ])
+      nr_of_sig_reQTLs_w_snp <- nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
+      nr_of_sig_reQTLs_weaker <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+                                                       (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
+                                                         (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]])), ])
+      nr_of_sig_reQTLs_stronger <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
+          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]])), ])
+      nr_of_sig_reQTLs_weaker_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
+          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]))
+        & specific_table$nr_of_traits > 0, ])
+      nr_of_sig_reQTLs_stronger_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
+          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]))
+        & specific_table$nr_of_traits > 0, ])
+      # turn into plot data
+      plot_df <- data.frame(labels=c('ut\neqtls', 'ut\ngwas\neqtls', 'stim\neqtls', 'stim\ngwas\neqtls', 'both\neqtls', 'reqtls', 'gwas\nreqtls', 'weaker\nreqtls', 'stronger\nreqtls', 'gwas\nweaker\nreqtls', 'gwas\nstronger\nreqtls'),
+                            numbers=c(nr_of_sig_eQTLs_ut, nr_of_sig_eQTLs_ut_w_snp, nr_of_sig_eQTLs_stim, nr_of_sig_eQTLs_stim_w_snp, nr_of_sig_eQTLs_both_condition, nr_of_sig_reQTLs, nr_of_sig_reQTLs_w_snp, nr_of_sig_reQTLs_weaker, nr_of_sig_reQTLs_stronger, nr_of_sig_reQTLs_weaker_w_snp, nr_of_sig_reQTLs_stronger_w_snp))
+      # make plot
+      plot_colour <- get_color_coding_dict()[[cell_type]]
+      plot <- ggplot(data=plot_df, aes(x=labels, y=numbers)) +
+        geom_bar(stat="identity", fill=plot_colour)+
+        geom_text(aes(label=numbers), vjust=-0.3, size=3.5)+
+        theme_minimal() +
+        ggtitle(paste('nr of (r)eqtls', cell_type, stim)) +
+        labs(y = 'number', x='') +
+        scale_x_discrete(limits = plot_df$labels)
+      # put into plot list
+      plot_per_stim[[stim]] <- plot
+    }
+    # plot all condition combinations
+    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']], 
+              ncol = 3, nrow = 2)
+    plot_per_ct[[cell_type]] <- plot_ct
+  }
+  return(plot_per_ct)
+}
+
+get_color_coding_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[["3hCA"]] <- "khaki2"
+  color_coding[["24hCA"]] <- "khaki4"
+  color_coding[["3hMTB"]] <- "paleturquoise1"
+  color_coding[["24hMTB"]] <- "paleturquoise3"
+  color_coding[["3hPA"]] <- "rosybrown1"
+  color_coding[["24hPA"]] <- "rosybrown3"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  return(color_coding)
+}
 
 # location of GWAS file
 GWAS_loc <- '/data/scRNA/GWAS/eQTLgen-LD-all.txt.gz'
@@ -157,4 +428,23 @@ GWAS_MTB <- GWAS_other[GWAS_other$Trait == 'TB', ]
 # make plots, giving empty normal GWAS
 plot_gwas_enrichment(eQTL_output_loc, GWAS[0,], traits_to_use = c(), other_GWAS = GWAS_CA, conditions=c('UT', '3hCA', '24hCA'))
 plot_gwas_enrichment(eQTL_output_loc, GWAS[0,], traits_to_use = c(), other_GWAS = GWAS_MTB, conditions=c('UT', '3hMTB', '24hMTB'))
+
+# the location the pli score file, which has the SNPs
+pli_score_loc <- '/data/scRNA/GWAS/pLI_scores_reQTL_directions.txt'
+# read the pli file
+pli_score <- read.table(pli_score_loc, sep = '\t', header = T)
+# plot stronger vs weaker
+plot_gwas_enrichment_SNPs(pli_score, GWAS, traits_to_use=interested_traits, threshold=0.05, other_GWAS=GWAS_other, verbose=T)
+
+# the location of the confinement
+reqtl_confine_loc <- '/data/scRNA/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20200729.txt'
+# get the confinement
+reqtl_confine <- read.table(reqtl_confine_loc, sep = '\t', header = F)
+reqtl_snps <- as.character(reqtl_confine[,1])
+# get any traits associated with these SNPs
+snp_to_traits <- get_snps_GWAS(snps = reqtl_snps, GWAS=GWAS, traits_to_use=interested_traits, threshold=0.05, other_GWAS_to_use=GWAS_other)
+# get get the GWAS SNPs per SNP
+eqtl_table <- get_gwas_enrichment_reQTL_effects(eQTL_output_loc, reqtl_snps, SNP_GWAS = snp_to_traits)
+# get the plots
+plots <- plot_gwas_enrichment_reQTL_snps(eqtl_table)
 
