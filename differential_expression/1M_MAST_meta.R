@@ -95,6 +95,153 @@ write_meta_mast <- function(condition_info, mast_output_loc_prepend, mast_output
   }
 }
 
+get_unique_condition_DE_genes <- function(mast_meta_output_loc, unique_output_loc, stims=c('CA', 'MTB', 'PA'), timepoints=c('3h', '24h'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', only_positive=F, only_negative=F){
+  # check each cell type
+  for(cell_type in cell_types){
+    # check for each timepoint
+    for(timepoint in timepoints){
+      stim_de_genes <- list()
+      # combine with each stim
+      for(stim in stims){
+        # create the output loc string
+        output_loc <- paste(mast_meta_output_loc, cell_type, 'UTX', timepoint, stim, '.tsv', sep = '')
+        # read the output
+        mast <- read.table(output_loc, header=T)
+        # filter to only include the significant results
+        mast <- mast[mast[[pval_column]] <= sig_pval, ]
+        # filter for only the positive lfc if required
+        if(only_positive){
+          mast <- mast[mast[[lfc_column]] < 0, ]
+        }
+        # filter for only the positive lfc if required
+        if(only_negative){
+          mast <- mast[mast[[lfc_column]] > 0, ]
+        }
+        # the genes are the rows
+        de_genes <- rownames(mast)
+        # add to the list
+        stim_de_genes[[paste('UTX', timepoint, stim, sep = '')]] <- de_genes
+      }
+      # now check the combinations
+      for(condition in names(stim_de_genes)){
+        # make a copy of the list with all conditions
+        stim_de_genes_copy <- stim_de_genes
+        # grab the genes for this condition
+        de_genes_condition <- stim_de_genes_copy[[condition]]
+        # remove these genes from the copied list
+        stim_de_genes_copy[[condition]] <- NULL
+        # now grab what is left in the list, so anything that was not this condition
+        de_genes_other_conditions <- as.vector(unlist(stim_de_genes_copy))
+        # do a setdiff to get what is left
+        de_unique <- setdiff(de_genes_condition, de_genes_other_conditions)
+        # write these out
+        output_loc_full <- paste(unique_output_loc, cell_type, condition, '_unique.txt', sep = '')
+        write.table(data.frame(de_unique), output_loc_full, row.names = F, col.names = F, quote = F)
+      }
+    }
+  }
+}
+
+
+get_shared_condition_DE_genes <- function(mast_meta_output_loc, shared_output_loc, stims=c('CA', 'MTB', 'PA'), timepoints=c('3h', '24h'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', only_positive=F, only_negative=F){
+  # check each cell type
+  for(cell_type in cell_types){
+    # check for each timepoint
+    for(timepoint in timepoints){
+      stim_de_genes <- NULL
+      # combine with each stim
+      for(stim in stims){
+        # create the output loc string
+        output_loc <- paste(mast_meta_output_loc, cell_type, 'UTX', timepoint, stim, '.tsv', sep = '')
+        # read the output
+        mast <- read.table(output_loc, header=T)
+        # filter to only include the significant results
+        mast <- mast[mast[[pval_column]] <= sig_pval, ]
+        # filter for only the positive lfc if required
+        if(only_positive){
+          mast <- mast[mast[[lfc_column]] < 0, ]
+        }
+        # filter for only the positive lfc if required
+        if(only_negative){
+          mast <- mast[mast[[lfc_column]] > 0, ]
+        }
+        # the genes are the rows
+        de_genes <- rownames(mast)
+        # add to the list
+        if(is.null(stim_de_genes)){
+          stim_de_genes <- de_genes
+        }
+        else{
+          stim_de_genes <- intersect(stim_de_genes, de_genes)
+        }
+      }
+      # write these out
+      output_loc_full <- paste(shared_output_loc, cell_type, timepoint, '_shared.txt', sep = '')
+      write.table(data.frame(stim_de_genes), output_loc_full, row.names = F, col.names = F, quote = F)
+    }
+  }
+}
+
+write_meta_mast_3hvs24h <- function(condition_info, mast_output_loc_prepend, mast_output_loc_append, mast_meta_output_loc_prepend){
+  # go through the conditions
+  for(condition in c('CA', 'PA', 'MTB')){
+    # check for each cell type
+    for(cell_type in c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'hemapoietic stem', 'megakaryocyte', 'monocyte', 'plasma B')){
+      # get the mast output
+      mast_loc_v2 <- paste(mast_output_loc_prepend, '2', mast_output_loc_append, cell_type, 'X3h', condition, 'X24h', condition, '.tsv', sep = '')
+      mast_loc_v3 <- paste(mast_output_loc_prepend, '3', mast_output_loc_append, cell_type, 'X3h', condition, 'X24h', condition, '.tsv', sep = '')
+      try({
+        # read the mast output
+        mast_v2 <- read.table(mast_loc_v2, header=T)
+        mast_v3 <- read.table(mast_loc_v3, header=T)
+        # get the genes that are in both
+        genes_both <- intersect(rownames(mast_v2), rownames(mast_v3))
+        # select only those genes
+        mast_v2 <- mast_v2[rownames(mast_v2) %in% genes_both,]
+        mast_v3 <- mast_v3[rownames(mast_v3) %in% genes_both,]
+        # morph P val to minimum
+        if(nrow(mast_v2[mast_v2$p_val == 0, ]) > 0){
+          mast_v2[mast_v2$p_val == 0, ]$p_val <- .Machine$double.xmin
+        }
+        if(nrow(mast_v3[mast_v3$p_val == 0, ]) > 0){
+          mast_v3[mast_v3$p_val == 0, ]$p_val <- .Machine$double.xmin
+        }
+        # add the gene name also in a column
+        mast_v2$gene <- rownames(mast_v2)
+        mast_v3$gene <- rownames(mast_v3)
+        # add the mast results
+        masts <- list()
+        masts$v2 <- mast_v2
+        masts$v3 <- mast_v3
+        # perform the metavolcanor approach
+        meta_degs_comb <- combining_mv(diffexp=masts, pcriteria='p_val', foldchangecol='avg.logFC', genenamecol = 'gene', collaps = T)
+        # grab the result we care about
+        volcanometa <- meta_degs_comb@metaresult
+        volcanometa$metap_bonferroni <- volcanometa$metap*length(genes_both)
+        # add the genes as rownames
+        rownames(volcanometa) <- volcanometa$gene
+        # add a colname append
+        colnames(mast_v2) <- paste(colnames(mast_v2), 'v2', sep = '_')
+        colnames(mast_v3) <- paste(colnames(mast_v3), 'v3', sep = '_')
+        # merge the frames
+        mast <- merge(mast_v2, mast_v3, by=0, all=TRUE)
+        rownames(mast) <- mast$Row.names
+        mast$Row.names <- NULL
+        # also add the volcanometa stuff
+        mast <- merge(mast, volcanometa, by=0, all=TRUE)
+        rownames(mast) <- mast$Row.names
+        mast$Row.names <- NULL
+        if(nrow(mast[mast$metap_bonferroni > 1, ]) > 0){
+          mast[mast$metap_bonferroni > 1, ]$metap_bonferroni <- 1
+        }
+        # write the result
+        output_loc <- paste(mast_meta_output_loc_prepend, cell_type, 'X3h', condition, 'X24h', condition,'.tsv', sep = '')
+        write.table(mast, output_loc, sep = '\t')
+      })
+    }
+  }
+}
+
 write_background_meta <- function(background_loc_prepend, background_loc_append, meta_output_loc, to_ens = F, symbols.to.ensg.mapping = 'genes.tsv'){
   # go through the conditions
   for(condition in c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
@@ -473,6 +620,54 @@ get_children <- function(relation_table, starting_id){
   return(family)
 }
 
+plot_de_vs_ct_numbers <- function(ct_number_loc, mast_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), pval_column='metap_bonferroni'){
+  ct_numbers <- read.table(ct_number_loc, header = T, sep = '\t')
+  # create table to store results
+  numbers_table <- NULL
+  # check each cell type
+  for(cell_type in cell_types_to_use){
+    # check each condition
+    for(condition in conditions){
+      # paste the output loc together
+      file <- paste(cell_type, 'UT', 'X', condition, '.tsv', sep='')
+      # read the mast output
+      mast <- read.table(paste(mast_output_loc, file, sep = ''), header=T, sep='\t', row.names=1)
+      # filter to only include the significant results
+      mast <- mast[mast[[pval_column]] <= 0.05, ]
+      # get number of DE genes
+      de_gene_count <- nrow(mast)
+      # get the number of cells in chem2
+      nr_of_cells_chem2 <- ct_numbers[ct_numbers$chem == 'V2' & ct_numbers$cell_type == cell_type & ct_numbers$condition1 == 'UT' & ct_numbers$condition2 == paste('X', condition, sep = ''), 'nr_of_cells_condition1'] +
+        ct_numbers[ct_numbers$chem == 'V2' & ct_numbers$cell_type == cell_type & ct_numbers$condition1 == 'UT' & ct_numbers$condition2 == paste('X', condition, sep = ''), 'nr_of_cells_condition2']
+      # and in chem 3
+      nr_of_cells_chem3 <- ct_numbers[ct_numbers$chem == 'V3' & ct_numbers$cell_type == cell_type & ct_numbers$condition1 == 'UT' & ct_numbers$condition2 == paste('X', condition, sep = ''), 'nr_of_cells_condition1'] +
+        ct_numbers[ct_numbers$chem == 'V3' & ct_numbers$cell_type == cell_type & ct_numbers$condition1 == 'UT' & ct_numbers$condition2 == paste('X', condition, sep = ''), 'nr_of_cells_condition2']
+      # sum these
+      nr_of_cells_both <- nr_of_cells_chem2 + nr_of_cells_chem3
+      # put into dataframe
+      print(paste(condition, cell_type, nr_of_cells_both, de_gene_count))
+      numbers_combination <- data.frame(c(condition), c(cell_type), c(nr_of_cells_both), c(de_gene_count), stringsAsFactors = F)
+      colnames(numbers_combination) <- c('condition', 'cell_type', 'nr_of_cells', 'nr_of_DE_genes')
+      # add to larger df
+      if(is.null(numbers_table)){
+        numbers_table <- numbers_combination
+      }
+      else{
+        numbers_table <- rbind(numbers_table, numbers_combination)
+      }
+    }
+  }
+  # the label is different depending on whether we show the proportion or not
+  xlab <- 'nr of cells'
+  cc <- get_color_coding_dict()
+  colScale <- scale_colour_manual(name = "cell_type",values = unlist(cc[cell_types_to_use]))
+  ggplot(numbers_table, aes(x=as.numeric(nr_of_cells), y=as.numeric(nr_of_DE_genes), shape=condition, color=cell_type)) +
+    geom_point(size=3) +
+    labs(x = xlab, y = 'nr of DE genes', title = 'cells vs nr of DE genes') +
+    colScale
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -486,8 +681,8 @@ get_color_coding_dict <- function(){
   color_coding[["Bulk"]] <- "black"
   color_coding[["CD4T"]] <- "#153057"
   color_coding[["CD8T"]] <- "#009DDB"
-  color_coding[["monocyte"]] <- "#E64B50"
-  color_coding[["NK"]] <- "#EDBA1B"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
   color_coding[["B"]] <- "#71BC4B"
   color_coding[["DC"]] <- "#965EC8"
   return(color_coding)
@@ -507,6 +702,11 @@ mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/
 
 # write meta output
 write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
+
+# do the same for the 3h vs 24h stuff
+mast_meta_output_3h24h_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+write_meta_mast_3hvs24h(NULL, mast_output_prepend, mast_output_append, mast_meta_output_3h24h_loc)
+
 
 # we can go from gene symbols to ensemble IDs with this file
 gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
@@ -536,6 +736,30 @@ sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
+# do all this stuff for the 3h vs 24h as well
+sig_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+get_significant_genes(mast_meta_output_3h24h_loc, sig_output_3h24h_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+sig_up_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+get_significant_genes(mast_meta_output_3h24h_loc, sig_up_output_3h24h_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+sig_down_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+get_significant_genes(mast_meta_output_3h24h_loc, sig_down_output_3h24h_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
+
+# check unique DE genes per timepoint
+sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
+sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
+sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
+
+# check shared DE genes per timepoint
+sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
+sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
+sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
+
 
 # get the location of the pathways
 pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs/'
@@ -546,7 +770,7 @@ pathway_df[pathway_df==0] <- 600
 write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the locaiton of the pathways of only upregulated genes
-pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc025minpct01_20200713/rna/sigs_pos/'
+pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
 # write the combined pathway file
 pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
 pathway_up_df[pathway_up_df==0] <- 600
@@ -698,9 +922,11 @@ pathway_mappings <- read.table('/data/scRNA/pathways/ReactomePathwaysRelation.ts
 # get the filtered names
 filtered_names <- get_filtered_pathway_names(pathways, pathway_mappings, 'R-HSA-168256')
 # get the df that is left after filtering
+pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
 pathway_up_df_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)
+pathway_up_df_filtered[pathway_up_df_filtered==0] <- 400
 # check what is top now
-pathway_up_df_filtered_top_5 <- get_top_pathways(pathway_up_df_filtered, 5, T)
+pathway_up_df_filtered_top_10 <- get_top_pathways(pathway_up_df_filtered, 10, T)
 # show pathways
 cc <- get_color_coding_dict()
 colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
@@ -708,7 +934,7 @@ colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T'
 colors_m <- cbind(colors_ct, colors_cond)
 colnames(colors_m) <- c('celltype',
                         'condition')
-heatmap.3(t(as.matrix(pathway_up_df_filtered_top_5)),
-          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(27,10))
+heatmap.3(t(as.matrix(pathway_up_df_filtered_top_10)),
+          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(22,10), dendrogram = 'none')
 
-
+cell_type_numbers_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'

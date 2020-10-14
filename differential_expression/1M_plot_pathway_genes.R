@@ -2,7 +2,7 @@ library(Seurat)
 library(ggplot2)
 
 
-plot_average_expression <- function(seurat_object, module_score_column_name, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_type_column='cell_type_lowerres', condition_column='timepoint', title='pathway'){
+plot_average_expression <- function(seurat_object, module_score_column_name, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_type_column='cell_type_lowerres', condition_column='timepoint', title='pathway', color_by_ct=T){
   # get the metadata
   metadata <- seurat_object@meta.data
   # limit the cell types
@@ -17,23 +17,42 @@ plot_average_expression <- function(seurat_object, module_score_column_name, cel
   metadata$cttp_column <- paste(metadata$ct_column, metadata$tp_column, sep = '\n')
   
   cc <- get_color_coding_dict()
-  colScale <- scale_fill_manual(name = metadata$ct_column, values = unlist(cc[cell_types]))
-  ggplot(metadata, aes(x=cttp_column, y=msc_column, fill=ct_column)) +
-    geom_boxplot() +
-    colScale +
-    ggtitle(title) +
-    labs(y = 'module scores', x='cell type and condition')
+  if(color_by_ct){
+    colScale <- scale_fill_manual(name = metadata$ct_column, values = unlist(cc[cell_types]))
+    ggplot(metadata, aes(x=cttp_column, y=msc_column, fill=ct_column)) +
+      geom_boxplot() +
+      colScale +
+      ggtitle(title) +
+      labs(y = 'module scores', x='cell type and condition')
+  }
+  else{
+    ct_tp_order <- paste(rep(cell_type, each = length(conditions)), conditions, sep = "\n")
+    colScale <- scale_fill_manual(name = metadata$tp_column, values = unlist(cc[conditions]))
+    ggplot(metadata, aes(x=cttp_column, y=msc_column, fill=tp_column)) +
+      geom_boxplot() +
+      colScale +
+      ggtitle(title) +
+      labs(y = 'module scores', x='cell type and condition') +
+      scale_x_discrete(limits = ct_tp_order)
+  }
 }
 
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
+  color_coding[["UT"]] <- 'grey'
   color_coding[["3hCA"]] <- "khaki2"
   color_coding[["24hCA"]] <- "khaki4"
   color_coding[["3hMTB"]] <- "paleturquoise1"
   color_coding[["24hMTB"]] <- "paleturquoise3"
   color_coding[["3hPA"]] <- "rosybrown1"
   color_coding[["24hPA"]] <- "rosybrown3"
+  color_coding[["X3hCA"]] <- "khaki2"
+  color_coding[["X24hCA"]] <- "khaki4"
+  color_coding[["X3hMTB"]] <- "paleturquoise1"
+  color_coding[["X24hMTB"]] <- "paleturquoise3"
+  color_coding[["X3hPA"]] <- "rosybrown1"
+  color_coding[["X24hPA"]] <- "rosybrown3"
   # set the cell type colors
   color_coding[["Bulk"]] <- "black"
   color_coding[["CD4T"]] <- "#153057"

@@ -12,8 +12,8 @@ get_strong_vs_weaker_effect_size <- function(eqtl_output_loc, genes_output, cell
       eQTLs_stim_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
       eQTLs_stim <- read.table(eQTLs_stim_ct_loc, sep = '\t', header = T)
       # grab the significant ones in either condition
-      eQTLs_ut$snp_probe <- paste(as.character(eQTLs_ut$SNPName), as.character(eQTLs_ut$ProbeName), sep = '_')
-      eQTLs_stim$snp_probe <- paste(as.character(eQTLs_stim$SNPName), as.character(eQTLs_stim$ProbeName), sep = '_')
+      eQTLs_ut$snp_probe <- paste(as.character(eQTLs_ut$SNPName), as.character(eQTLs_ut$HGNCName), sep = '_')
+      eQTLs_stim$snp_probe <- paste(as.character(eQTLs_stim$SNPName), as.character(eQTLs_stim$HGNCName), sep = '_')
       eQTLs_ut_sig <- eQTLs_ut[eQTLs_ut$FDR < 0.05, ]$snp_probe
       eQTLs_stim_sig <- eQTLs_stim[eQTLs_stim$FDR < 0.05, ]$snp_probe
       # get the eQTLs in both
@@ -48,6 +48,10 @@ get_strong_vs_weaker_effect_size <- function(eqtl_output_loc, genes_output, cell
       stronger_genes <- get_weaker_or_stronger_genes(plot_df, stronger = T, sig_in = 'stim')
       # get the weaker ones
       weaker_genes <- get_weaker_or_stronger_genes(plot_df, stronger = F, sig_in = 'UT')
+      # get the stronger ones
+      stronger_genes <- get_weaker_or_stronger_genes(plot_df, stronger = T, sig_in = 'either')
+      # get the weaker ones
+      weaker_genes <- get_weaker_or_stronger_genes(plot_df, stronger = F, sig_in = 'either')
       # create the output files
       output_loc_stronger <- paste(genes_output, stim, '_', cell_type, '_stronger.txt', sep = '')
       output_loc_weaker <- paste(genes_output, stim, '_', cell_type, '_weaker.txt', sep = '')
@@ -87,9 +91,9 @@ get_weaker_or_stronger_genes <- function(eqtl_df, stronger=T, sig_in='either'){
   # convert to regular character
   snp_probes <- as.character(snp_probes)
   # get the gene from the snp_probe combination
-  last_dash_pos <- "\\-"
+  last_dash_pos <- "\\_"
   # the probe is the second part of the snp_probe combination
-  probes <- substr(snp_probes, regexpr(last_dash_pos, snp_probes), nchar(snp_probes) + 1)
+  probes <- substr(snp_probes, regexpr(last_dash_pos, snp_probes) + 1, nchar(snp_probes) + 1)
   # there might be multiple SNPs on one probe, so we need to get the unique probes
   probes <- unique(probes)
   return(probes)
