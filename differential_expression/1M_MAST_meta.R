@@ -135,7 +135,7 @@ get_unique_condition_DE_genes <- function(mast_meta_output_loc, unique_output_lo
         # do a setdiff to get what is left
         de_unique <- setdiff(de_genes_condition, de_genes_other_conditions)
         # write these out
-        output_loc_full <- paste(unique_output_loc, cell_type, condition, '_unique.txt', sep = '')
+        output_loc_full <- paste(unique_output_loc, cell_type, condition, '_unique_to_pathogen_across_timepoint.txt', sep = '')
         write.table(data.frame(de_unique), output_loc_full, row.names = F, col.names = F, quote = F)
       }
     }
@@ -176,11 +176,99 @@ get_shared_condition_DE_genes <- function(mast_meta_output_loc, shared_output_lo
         }
       }
       # write these out
-      output_loc_full <- paste(shared_output_loc, cell_type, timepoint, '_shared.txt', sep = '')
+      output_loc_full <- paste(shared_output_loc, cell_type, timepoint, '_shared_at_timepoint_across_pathogens.txt', sep = '')
       write.table(data.frame(stim_de_genes), output_loc_full, row.names = F, col.names = F, quote = F)
     }
   }
 }
+
+get_unique_timepoint_DE_genes <- function(mast_meta_output_loc, unique_output_loc, stims=c('CA', 'MTB', 'PA'), timepoints=c('3h', '24h'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', only_positive=F, only_negative=F){
+  # check each cell type
+  for(cell_type in cell_types){
+    # check for each timepoint
+    for(stim in stims){
+      timepoint_de_genes <- list()
+      # combine with each stim
+      for(timepoint in timepoints){
+        # create the output loc string
+        output_loc <- paste(mast_meta_output_loc, cell_type, 'UTX', timepoint, stim, '.tsv', sep = '')
+        # read the output
+        mast <- read.table(output_loc, header=T)
+        # filter to only include the significant results
+        mast <- mast[mast[[pval_column]] <= sig_pval, ]
+        # filter for only the positive lfc if required
+        if(only_positive){
+          mast <- mast[mast[[lfc_column]] < 0, ]
+        }
+        # filter for only the positive lfc if required
+        if(only_negative){
+          mast <- mast[mast[[lfc_column]] > 0, ]
+        }
+        # the genes are the rows
+        de_genes <- rownames(mast)
+        # add to the list
+        timepoint_de_genes[[paste('UTX', timepoint, stim, sep = '')]] <- de_genes
+      }
+      # now check the combinations
+      for(timepoint in names(timepoint_de_genes)){
+        # make a copy of the list with all conditions
+        timepoint_de_genes_copy <- timepoint_de_genes
+        # grab the genes for this condition
+        de_genes_timepoint <- timepoint_de_genes_copy[[timepoint]]
+        # remove these genes from the copied list
+        timepoint_de_genes_copy[[timepoint]] <- NULL
+        # now grab what is left in the list, so anything that was not this condition
+        de_genes_other_timepoints <- as.vector(unlist(timepoint_de_genes_copy))
+        # do a setdiff to get what is left
+        de_unique <- setdiff(de_genes_timepoint, de_genes_other_timepoints)
+        # write these out
+        output_loc_full <- paste(unique_output_loc, cell_type, timepoint, '_unique_to_timepoint_same_pathogen.txt', sep = '')
+        write.table(data.frame(de_unique), output_loc_full, row.names = F, col.names = F, quote = F)
+      }
+    }
+  }
+}
+
+get_shared_timepoint_DE_genes <- function(mast_meta_output_loc, shared_output_loc, stims=c('CA', 'MTB', 'PA'), timepoints=c('3h', '24h'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', only_positive=F, only_negative=F){
+  # check each cell type
+  for(cell_type in cell_types){
+    # check for each timepoint
+    for(stim in stims){
+      timepoint_de_genes <- NULL
+      # combine with each stim
+      for(timepoint in timepoints){
+        # create the output loc string
+        output_loc <- paste(mast_meta_output_loc, cell_type, 'UTX', timepoint, stim, '.tsv', sep = '')
+        # read the output
+        mast <- read.table(output_loc, header=T)
+        # filter to only include the significant results
+        mast <- mast[mast[[pval_column]] <= sig_pval, ]
+        # filter for only the positive lfc if required
+        if(only_positive){
+          mast <- mast[mast[[lfc_column]] < 0, ]
+        }
+        # filter for only the positive lfc if required
+        if(only_negative){
+          mast <- mast[mast[[lfc_column]] > 0, ]
+        }
+        # the genes are the rows
+        de_genes <- rownames(mast)
+        # add to the list
+        if(is.null(timepoint_de_genes)){
+          timepoint_de_genes <- de_genes
+        }
+        else{
+          timepoint_de_genes <- intersect(timepoint_de_genes, de_genes)
+        }
+      }
+      # write these out
+      output_loc_full <- paste(shared_output_loc, cell_type, stim, '_shared_across_timepoints_same_pathogen.txt', sep = '')
+      write.table(data.frame(timepoint_de_genes), output_loc_full, row.names = F, col.names = F, quote = F)
+    }
+  }
+}
+
+
 
 write_meta_mast_3hvs24h <- function(condition_info, mast_output_loc_prepend, mast_output_loc_append, mast_meta_output_loc_prepend){
   # go through the conditions
@@ -500,6 +588,63 @@ get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F)
   return(deg_meta_combined)
 }
 
+create_overlap_pathway_df_cell_type <- function(cell_type, locations, use_ranking=T){
+  # put all results in a list
+  pathways_analysis <- list()
+  # put all results in a shared DF
+  pathway_df <- NULL
+  # check each cell type
+  for(location in locations){
+    # get the output of the specific cell type
+    files_to_read <- list.files(location, pattern = cell_type)
+    # check each stim
+    for(file in files_to_read){
+      try({
+        print(file)
+        # paste the filepath together
+        #filepath <- paste(pathway_output_loc, cell_type, 'UT',stim,'_sig_pathways.txt', sep = '')
+        filepath <- paste(location, file, sep = '')
+        # read the file
+        pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+        # create column name
+        newcolname <- substr(file, 1, nchar(file)-4)
+        # get the log2 of the significance value
+        #pathways[[newcolname]] <- log2(pathways[[sig_val_to_use]])
+        if(use_ranking){
+          pathways[[newcolname]] <- as.numeric(rownames(pathways))
+        }
+        else{
+          pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+        }
+        pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
+        # reduce to the only two columns we care about
+        pathways <- pathways[, c('id_name', newcolname)]
+        # join with other pathway files
+        if(is.null(pathway_df)){
+          # just set as df if the first round through
+          pathway_df <- pathways
+          pathway_df <- data.table(pathway_df, key = c('id_name'))
+        }
+        else{
+          # otherwise, merge with existing pathways
+          pathway_df <- merge(pathway_df, data.table(pathways, key = c('id_name')), by.x='id_name', by.y='id_name', all=T)
+        }
+      })
+    }
+  }
+  # turn into regular df
+  pathway_df <- setDF(pathway_df)
+  # set all NA to zero
+  pathway_df[is.na(pathway_df)] <- 0
+  # set rownames
+  rownames(pathway_df) <- pathway_df$id_name
+  pathway_df$id_name <- NULL
+  # remove rows which amount to zero
+  pathway_df <- pathway_df[apply(pathway_df[,-1], 1, function(x) !all(x==0)),]
+  return(pathway_df)
+}
+
+
 get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_cutoff=0.5, use_dynamic_sd=F, top_so_many=10, must_be_positive_once=F, pathogens=c("CA", "MTB", "PA"), timepoints=c("3h", "24h"), cell_types=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
   top_vary_de <- c()
   cols_to_loop <- NULL
@@ -744,7 +889,7 @@ get_significant_genes(mast_meta_output_3h24h_loc, sig_up_output_3h24h_loc, only_
 sig_down_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
 get_significant_genes(mast_meta_output_3h24h_loc, sig_down_output_3h24h_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
-# check unique DE genes per timepoint
+# check unique DE genes per timepoint for the different pathogens
 sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
 get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
 sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
@@ -752,7 +897,15 @@ get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, o
 sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
 get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
 
-# check shared DE genes per timepoint
+# check unique DE genes per timepoint for the same pathogen
+sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
+sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
+sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
+
+# check shared DE genes per timepoint for the different pathogens
 sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20200713/rna/'
 get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
 sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
@@ -760,6 +913,13 @@ get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, o
 sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
 get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
 
+# check shared DE genes per timepoint for the same pathogen
+sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
+sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
+sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
 
 # get the location of the pathways
 pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs/'
@@ -938,3 +1098,41 @@ heatmap.3(t(as.matrix(pathway_up_df_filtered_top_10)),
           col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(22,10), dendrogram = 'none')
 
 cell_type_numbers_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
+
+
+
+
+# get the specific monocyte sharing pathways
+sigs_pos_shared_across_pathogens_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_shared_across_pathogens_same_timepoint/'
+sigs_pos_shared_across_timepoints_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_shared_across_timepoints_same_pathogen/'
+sigs_pos_unique_to_timepoint_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_unique_to_timepoint_same_pathogen/'
+sigs_pos_unique_to_pathogen_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_unique_to_pathogen_same_timepoint/'
+sigs_pos_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
+mono_pathway_locs <- c(sigs_pos_shared_across_pathogens_same_timepoint_loc, sigs_pos_shared_across_timepoints_same_pathogen_loc, sigs_pos_unique_to_timepoint_same_pathogen_loc, sigs_pos_unique_to_pathogen_same_timepoint_loc, sigs_pos_output_loc)
+# get the pathway df
+mono_pathways_df <- create_overlap_pathway_df_cell_type('monocyte', mono_pathway_locs)
+# only get the upregulated files
+mono_pathways_df <- mono_pathways_df[, grep('up', colnames(mono_pathways_df))]
+# filter for immune related traits
+mono_pathways_df_filtered <- filter_pathway_df_on_starting_id(mono_pathways_df, filtered_names)
+# set zeroes to max value
+mono_pathways_df_filtered[mono_pathways_df_filtered==0] <- 400
+# rename the columns to be shorted
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_sig_up_pathways','')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), 'monocyte','')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_shared_across_timepoints_same_pathogen',' timepoints shared')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_unique_to_timepoint_same_pathogen',' timepoint unique')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_shared_across_pathogens_same_timepoint',' pathogens shared')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_unique_to_pathogen_same_timepoint',' pathogen unique')
+colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), 'UTX','')
+# get the top ten per column
+mono_pathways_df_filtered_top_10 <- get_top_pathways(mono_pathways_df_filtered, 10, T)
+# create the heatmap
+heatmap.3(t(mono_pathways_df_filtered_top_10), dendrogram = 'none', margins=c(28,10))
+# now for the top 5
+mono_pathways_df_filtered_top_5 <- get_top_pathways(mono_pathways_df_filtered, 5, T)
+# create the heatmap
+heatmap.3(t(mono_pathways_df_filtered_top_5), dendrogram = 'none', margins=c(30,10))
+
+
+
