@@ -548,31 +548,29 @@ get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2,
 }
 
 
-get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F){
-  pathogens <- c("CA", "MTB", "PA")
-  timepoints <- c("3h", "24h")
-  cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
-  
-  b_3h_ca_degs <- read.table(paste0(meta_output_loc, "BUTX3hCA.tsv"), stringsAsFactors = F, sep = "\t")
-  b_3h_ca_degs <- b_3h_ca_degs['metafc']
-  colnames(b_3h_ca_degs) <- c('BUTX3hCA')
-  deg_meta_combined <- data.frame(row.names = rownames(b_3h_ca_degs))
-  rows <- rownames(deg_meta_combined)
-  deg_meta_combined <- data.table(deg_meta_combined)
-  deg_meta_combined$genes <- rows
-  
-  
+get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F, convert_insignificant_p_to_lfc0=F, pval_column='metap_bonferroni', lfc_column='metafc', pval_significance_threshold=0.05, pathogens=c("CA", "MTB", "PA"),timepoints=c("3h", "24h"), cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")){
+  deg_meta_combined <- NULL
   for(pathogen in pathogens) {
     for (timepoint in timepoints) {
       for (cell_type in cell_types_to_use) {
         deg_table <- read.table(paste0(meta_output_loc, cell_type, "UTX", timepoint, pathogen, ".tsv"), stringsAsFactors = F, sep = "\t")
-        deg_table <- deg_table['metafc']
+        # subset to only the significant ones if so selected
+        if(convert_insignificant_p_to_lfc0){
+          deg_table <- deg_table[deg_table[[pval_column]] < pval_significance_threshold, ]
+        }
+        deg_table <- deg_table[lfc_column]
         colnames(deg_table) <- c(paste(cell_type, "UTX", timepoint, pathogen, sep=''))
         deg_table$genes <- rownames(deg_table)
         deg_table <- data.table(deg_table)
         print(head(deg_table))
-        deg_meta_combined <- merge(deg_meta_combined, deg_table, by.x='genes', by.y='genes', all=TRUE)
-        #deg_meta_combined[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
+        if(is.null(deg_meta_combined)){
+          deg_meta_combined <- deg_table
+        }
+        else{
+          deg_meta_combined <- merge(deg_meta_combined, deg_table, by.x='genes', by.y='genes', all=TRUE)
+          #deg_meta_combined[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
+        }
+        
       }
     }
   }
@@ -998,7 +996,9 @@ ggplot(df_merged, aes(x= as.numeric(df_merged$avg_logFC.x), y=as.numeric(df_merg
 
 # get table of logfc of all ct and tp
 #deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
-deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/', T)
+#deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/', T)
+deg_meta_fc_all_conditions <- get_combined_meta_de_table(mast_meta_output_loc, T)
+
 
 # genes most varying within cell type and timepoint
 genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
@@ -1134,5 +1134,13 @@ mono_pathways_df_filtered_top_5 <- get_top_pathways(mono_pathways_df_filtered, 5
 # create the heatmap
 heatmap.3(t(mono_pathways_df_filtered_top_5), dendrogram = 'none', margins=c(30,10))
 
+# check DE genes for monocytes
+deg_meta_fc_monos <- get_combined_meta_de_table(mast_meta_output_loc, must_be_positive_once = T, convert_insignificant_p_to_lfc0 = T, cell_types_to_use = c('monocyte'), pval_significance_threshold = 0.05)
+deg_meta_fc_monos_vary_pathogen_timepoint_genes <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=100, must_be_positive_once = T, cell_types = c('monocyte'))
+deg_meta_fc_monos_vary_pathogen_timepoint <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes, ]
+colnames(deg_meta_fc_monos) <- str_replace(colnames(deg_meta_fc_monos), 'monocyte', '')
+colnames(deg_meta_fc_monos_vary_pathogen_timepoint) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint), 'monocyte', '')
+heatmap.3(t(deg_meta_fc_monos), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
+heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
 
 
