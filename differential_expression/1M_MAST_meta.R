@@ -832,6 +832,42 @@ get_color_coding_dict <- function(){
 }
 
 
+get_gene_list_from_hm_branch <- function(heatmap, branch_directions, use_col=T){
+  branch <- NULL
+  # grab the row or column 
+  if(use_col){
+    branch <- heatmap$colDendrogram
+  }
+  else{
+    branch <- heatmap$rowDendrogram
+  }
+  # go through the branch depths to get to the specific branch
+  for(branch_direction in branch_directions){
+    # the branch direction is 1 for left and 2 for right
+    branch <- branch[[branch_direction]]
+  }
+  # now get all the children of this branch
+  genes <- get_child_genes(branch)
+  return(genes)
+}
+
+get_child_genes <- function(heatmap_branch){
+  genes <- c()
+  # if the height is zero, we are at the leaf and we can get the gene
+  if(attr(heatmap_branch, 'height') == 0){
+    genes <- names(attr(heatmap_branch, 'value'))
+  }
+  # if we are not at zero, there are more branches or leaves and we need to go further down both directions
+  else{
+    genes_branch1 <- get_child_genes(heatmap_branch[[1]])
+    genes_branch2 <- get_child_genes(heatmap_branch[[2]])
+    genes <- c(genes_branch1, genes_branch2)
+  }
+  return(genes)
+}
+
+
+
 # cell counts loc
 #cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
 # grab the cell counts
@@ -1137,10 +1173,23 @@ heatmap.3(t(mono_pathways_df_filtered_top_5), dendrogram = 'none', margins=c(30,
 # check DE genes for monocytes
 deg_meta_fc_monos <- get_combined_meta_de_table(mast_meta_output_loc, must_be_positive_once = T, convert_insignificant_p_to_lfc0 = T, cell_types_to_use = c('monocyte'), pval_significance_threshold = 0.05)
 deg_meta_fc_monos_vary_pathogen_timepoint_genes <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=100, must_be_positive_once = T, cell_types = c('monocyte'))
+deg_meta_fc_monos_vary_pathogen_timepoint_genes_250 <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=250, must_be_positive_once = T, cell_types = c('monocyte'))
+deg_meta_fc_monos_vary_pathogen_timepoint_genes_500 <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=500, must_be_positive_once = T, cell_types = c('monocyte'))
 deg_meta_fc_monos_vary_pathogen_timepoint <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes, ]
+deg_meta_fc_monos_vary_pathogen_timepoint_250 <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes_250, ]
+deg_meta_fc_monos_vary_pathogen_timepoint_500 <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes_500, ]
 colnames(deg_meta_fc_monos) <- str_replace(colnames(deg_meta_fc_monos), 'monocyte', '')
 colnames(deg_meta_fc_monos_vary_pathogen_timepoint) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint), 'monocyte', '')
+colnames(deg_meta_fc_monos_vary_pathogen_timepoint_250) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint_250), 'monocyte', '')
+colnames(deg_meta_fc_monos_vary_pathogen_timepoint_500) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint_500), 'monocyte', '')
 heatmap.3(t(deg_meta_fc_monos), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
 heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
+heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_250), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
+heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_500), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
 
+
+hm_monos_vary_pathogen_timepoint_250 <- heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_250), labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
+hm_monos_vary_pathogen_timepoint_500 <- heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_500), labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
+monos_vary_pathogen_timepoint_250_genes_branch1212 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_250, c(1,2,1,2), use_col=T)
+monos_vary_pathogen_timepoint_500_genes_branch1112 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_500, c(1,1,1,2), use_col=T)
 
