@@ -4,6 +4,8 @@
 #
 ###########################################################################################################################
 
+library(ggplot2)
+library(ggpubr)
 
 ###########################################################################################################################
 #
@@ -332,28 +334,7 @@ plot_gwas_enrichment_reQTL_snps <- function(eqtl_table, stims=c('3hCA', '24hCA',
     plot_per_stim <- list()
     # check each stim
     for(stim in stims){
-      nr_of_sig_eQTLs_stim <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
-      nr_of_sig_eQTLs_stim_w_snp <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
-      nr_of_sig_eQTLs_both_condition <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
-      nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05, ])
-      nr_of_sig_reQTLs_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
-      nr_of_sig_reQTLs_weaker <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
-                                                       (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
-                                                         (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]])), ])
-      nr_of_sig_reQTLs_stronger <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
-        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
-          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]])), ])
-      nr_of_sig_reQTLs_weaker_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
-        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
-          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]))
-        & specific_table$nr_of_traits > 0, ])
-      nr_of_sig_reQTLs_stronger_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
-        (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
-          (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]))
-        & specific_table$nr_of_traits > 0, ])
-      # turn into plot data
-      plot_df <- data.frame(labels=c('ut\neqtls', 'ut\ngwas\neqtls', 'stim\neqtls', 'stim\ngwas\neqtls', 'both\neqtls', 'reqtls', 'gwas\nreqtls', 'weaker\nreqtls', 'stronger\nreqtls', 'gwas\nweaker\nreqtls', 'gwas\nstronger\nreqtls'),
-                            numbers=c(nr_of_sig_eQTLs_ut, nr_of_sig_eQTLs_ut_w_snp, nr_of_sig_eQTLs_stim, nr_of_sig_eQTLs_stim_w_snp, nr_of_sig_eQTLs_both_condition, nr_of_sig_reQTLs, nr_of_sig_reQTLs_w_snp, nr_of_sig_reQTLs_weaker, nr_of_sig_reQTLs_stronger, nr_of_sig_reQTLs_weaker_w_snp, nr_of_sig_reQTLs_stronger_w_snp))
+      plot_df <- get_gwas_eqtl_snp_df(specific_table, stim)
       # make plot
       plot_colour <- get_color_coding_dict()[[cell_type]]
       plot <- ggplot(data=plot_df, aes(x=labels, y=numbers)) +
@@ -374,9 +355,172 @@ plot_gwas_enrichment_reQTL_snps <- function(eqtl_table, stims=c('3hCA', '24hCA',
   return(plot_per_ct)
 }
 
+get_gwas_eqtl_snp_df <- function(specific_table, stim){
+  # turn into a df we can plot
+  nr_of_sig_eQTLs_ut <- nrow(specific_table[specific_table$UT_FDR < 0.05, ])
+  nr_of_sig_eQTLs_ut_w_snp <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table$nr_of_traits > 0, ])
+  nr_of_sig_eQTLs_stim <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
+  nr_of_sig_eQTLs_stim_w_snp <- nrow(specific_table[specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
+  nr_of_sig_eQTLs_both_condition <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table[[paste(stim, '_FDR', sep = '')]] < 0.05, ])
+  nr_of_sig_reQTLs <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05, ])
+  nr_of_sig_reQTLs_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & specific_table$nr_of_traits > 0, ])
+  nr_of_sig_reQTLs_weaker <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+    (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
+      (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]])), ])
+  nr_of_sig_reQTLs_stronger <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+    (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
+      (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]])), ])
+  nr_of_sig_reQTLs_weaker_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+    (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]) |
+      (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]))
+    & specific_table$nr_of_traits > 0, ])
+  nr_of_sig_reQTLs_stronger_w_snp <- nrow(specific_table[specific_table[[paste('UT_vs_', stim, '_FDR', sep = '')]] < 0.05 & (
+    (specific_table$UT_Z > 0 & specific_table[[paste(stim, '_Z', sep = '')]] > 0 & specific_table$UT_Z < specific_table[[paste(stim, '_Z', sep = '')]]) |
+      (specific_table$UT_Z < 0 & specific_table[[paste(stim, '_Z', sep = '')]] < 0 & specific_table$UT_Z > specific_table[[paste(stim, '_Z', sep = '')]]))
+    & specific_table$nr_of_traits > 0, ])
+  # turn into plot data
+  plot_df <- data.frame(labels=c('ut\neqtls', 'ut\ngwas\neqtls', 'stim\neqtls', 'stim\ngwas\neqtls', 'both\neqtls', 'reqtls', 'gwas\nreqtls', 'weaker\nreqtls', 'stronger\nreqtls', 'gwas\nweaker\nreqtls', 'gwas\nstronger\nreqtls'),
+                        numbers=c(nr_of_sig_eQTLs_ut, nr_of_sig_eQTLs_ut_w_snp, nr_of_sig_eQTLs_stim, nr_of_sig_eQTLs_stim_w_snp, nr_of_sig_eQTLs_both_condition, nr_of_sig_reQTLs, nr_of_sig_reQTLs_w_snp, nr_of_sig_reQTLs_weaker, nr_of_sig_reQTLs_stronger, nr_of_sig_reQTLs_weaker_w_snp, nr_of_sig_reQTLs_stronger_w_snp))
+  return(plot_df)
+}
+
+plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), use_ct_color=T, merge_reqtls=F){
+  plot_per_ct <- list()
+  # check each cell type
+  for(cell_type in names(eqtl_table)){
+    specific_table <- eqtl_table[[cell_type]]
+    # turn into a df we can plot
+    nr_of_sig_eQTLs_ut <- nrow(specific_table[specific_table$UT_FDR < 0.05, ])
+    nr_of_sig_eQTLs_ut_w_snp <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table$nr_of_traits > 0, ])
+    plot_per_stim <- list()
+    # check each stim
+    for(stim in stims){
+      plot_df <- get_gwas_eqtl_snp_df(specific_table, stim)
+      # go to percentages instead
+      ut_snp_perc <- plot_df[plot_df$labels =='ut\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='ut\neqtls', 'numbers']
+      stim_snp_perc <- plot_df[plot_df$labels =='stim\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='stim\neqtls', 'numbers']
+      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      # check the co-eQTL gene?
+      
+      # create the dataframe
+      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, weaker_snp_perc, stronger_snp_perc))
+      colnames(perc_df_ct_stim) <- c('numbers')
+      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', 'stim\neQTLs\nSNPs', 'weaker\nreQTLs\nSNPs', 'stronger\nreQTLs\nSNPs')
+      perc_df_ct_stim$cell_type <- cell_type
+      perc_df_ct_stim$stim <- stim
+      # round to two digits
+      perc_df_ct_stim$numbers <- round(perc_df_ct_stim$numbers, digits = 2)
+      
+      # make plot
+      plot <- NULL
+      if(use_ct_color){
+        plot_colour <- get_color_coding_dict()[[cell_type]]
+        plot <- ggplot(data=perc_df_ct_stim, aes(x=labels, y=numbers)) +
+          geom_bar(stat="identity", fill=plot_colour)+
+          geom_text(aes(label=numbers), vjust=-0.3, size=3.5)+
+          theme_minimal() +
+          ggtitle(paste('(r)eQTL SNPs in GWAS ', cell_type, stim)) +
+          labs(y = 'fraction', x='') +
+          scale_x_discrete(limits = perc_df_ct_stim$labels)
+      }
+      else{
+        if(merge_reqtls){
+          perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
+          perc_df_ct_stim$type <- c('eQTL', 'eQTL', 'weaker\nreQTL', 'stronger\nreQTL')
+          perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', 'stim\neQTLs\nSNPs', 'reQTLs\nSNPs', 'reQTLs\nSNPs')
+          plot <- ggplot(data=perc_df_ct_stim, aes(x=labels, y=numbers)) +
+            geom_bar(stat="identity", fill=perc_df_ct_stim$color, position='stack')+
+            geom_text(aes(label=numbers), vjust=-0.3, size=3.5)+
+            theme_minimal() +
+            ggtitle(paste('(r)eQTL SNPs in GWAS ', cell_type, stim)) +
+            labs(y = 'fraction', x='') +
+            scale_x_discrete(limits = perc_df_ct_stim$labels)
+        }
+        else{
+          perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
+          plot <- ggplot(data=perc_df_ct_stim, aes(x=labels, y=numbers)) +
+            geom_bar(stat="identity", fill=perc_df_ct_stim$color)+
+            geom_text(aes(label=numbers), vjust=-0.3, size=3.5)+
+            theme_minimal() +
+            ggtitle(paste('(r)eQTL SNPs in GWAS ', cell_type, stim)) +
+            labs(y = 'fraction', x='') +
+            scale_x_discrete(limits = perc_df_ct_stim$labels)
+        }
+        
+      }
+      
+      # put into plot list
+      plot_per_stim[[stim]] <- plot
+    }
+    # plot all condition combinations
+    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']], 
+                         ncol = 3, nrow = 2)
+    plot_per_ct[[cell_type]] <- plot_ct
+  }
+  return(plot_per_ct)
+}
+
+plot_gwas_enrichment_eQTL_snp_percentages_combined <- function(eqtl_table, stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), use_ct_color=T, merge_reqtls=F){
+  plot_per_ct <- list()
+  # check each cell type
+  for(cell_type in names(eqtl_table)){
+    specific_table <- eqtl_table[[cell_type]]
+    # turn into a df we can plot
+    nr_of_sig_eQTLs_ut <- nrow(specific_table[specific_table$UT_FDR < 0.05, ])
+    nr_of_sig_eQTLs_ut_w_snp <- nrow(specific_table[specific_table$UT_FDR < 0.05 & specific_table$nr_of_traits > 0, ])
+    stim_plot_df <- NULL
+    # check each stim
+    for(stim in stims){
+      plot_df <- get_gwas_eqtl_snp_df(specific_table, stim)
+      # go to percentages instead
+      ut_snp_perc <- plot_df[plot_df$labels =='ut\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='ut\neqtls', 'numbers']
+      stim_snp_perc <- plot_df[plot_df$labels =='stim\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='stim\neqtls', 'numbers']
+      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      # check the co-eQTL gene?
+      
+      # create the dataframe
+      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, weaker_snp_perc, stronger_snp_perc))
+      colnames(perc_df_ct_stim) <- c('numbers')
+      perc_df_ct_stim$type <- c('UT\neQTL', paste(stim,'\neQTL', sep=''), paste('weaker\nreQTL', sep=''), paste('stronger\nreQTL',sep=''))
+      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', paste(stim,'\neQTLs\nSNPs', sep=''), paste(stim,'\nreQTLs\nSNPs', sep=''), paste(stim,'\nreQTLs\nSNPs', sep=''))
+      perc_df_ct_stim$cell_type <- cell_type
+      perc_df_ct_stim$stim <- stim
+      perc_df_ct_stim[1, ]$stim <- 'UT'
+      # round to two digits
+      perc_df_ct_stim$numbers <- round(perc_df_ct_stim$numbers, digits = 2)
+      perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
+      
+      if(is.null(stim_plot_df)){
+        stim_plot_df <- perc_df_ct_stim
+      }
+      else{
+        stim_plot_df <- rbind(stim_plot_df, perc_df_ct_stim[2:nrow(perc_df_ct_stim), ])
+      }
+    }
+    stim_plot_df$color <- as.factor(stim_plot_df$color)
+    # plot all condition combinations
+    plot_ct <- ggplot(data=stim_plot_df, aes(x=labels, y=numbers, fill=color)) +
+      geom_bar(stat="identity", position='stack')+
+      geom_text(aes(label=numbers), size=3.5, position = position_stack(vjust = 0.5)) +
+      scale_fill_manual(values = levels(stim_plot_df$color)) +
+      theme_minimal() +
+      ggtitle(paste('(r)eQTL SNPs in GWAS ', cell_type)) +
+      labs(y = 'fraction', x='') +
+      scale_x_discrete(limits = stim_plot_df$labels) +
+      theme(legend.position="none")
+    plot_per_ct[[cell_type]] <- plot_ct
+  }
+  return(plot_per_ct)
+}
+
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
+  color_coding[["UT"]] <- 'grey'
   color_coding[["3hCA"]] <- "khaki2"
   color_coding[["24hCA"]] <- "khaki4"
   color_coding[["3hMTB"]] <- "paleturquoise1"
@@ -443,8 +587,10 @@ reqtl_confine <- read.table(reqtl_confine_loc, sep = '\t', header = F)
 reqtl_snps <- as.character(reqtl_confine[,1])
 # get any traits associated with these SNPs
 snp_to_traits <- get_snps_GWAS(snps = reqtl_snps, GWAS=GWAS, traits_to_use=interested_traits, threshold=0.05, other_GWAS_to_use=GWAS_other)
+snp_to_traits <- readRDS('/data/scRNA/GWAS/GWAS_to_sig_eQTL_SNPs.rds')
 # get get the GWAS SNPs per SNP
 eqtl_table <- get_gwas_enrichment_reQTL_effects(eQTL_output_loc, reqtl_snps, SNP_GWAS = snp_to_traits)
 # get the plots
 plots <- plot_gwas_enrichment_reQTL_snps(eqtl_table)
-
+plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table)
+plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table, use_ct_color = F)
