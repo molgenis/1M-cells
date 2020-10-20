@@ -9,6 +9,7 @@ library(data.table)
 require("heatmap.plus")
 library(RColorBrewer)
 library(VennDiagram)
+library(Matrix)
 
 ####################
 # Functions        #
@@ -866,6 +867,67 @@ get_child_genes <- function(heatmap_branch){
   return(genes)
 }
 
+get_average_gene_expression_per_ct_and_tp <- function(seurat_object, condition.column = 'timepoint', cell.type.column = 'cell_type_lowerres', cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), assay='RNA'){
+  exp_df <- NULL
+  # calculate for each condition
+  for(condition in conditions){
+    # subset to just the cells of this condition
+    seurat_object_condition <- seurat_object[,seurat_object@meta.data[condition.column] == condition]
+    # calculate for each cell_type
+    for(cell_type in cell_types_to_use){
+      # subset to just the cells of the cell type
+      seurat_object_cell_type <- seurat_object_condition[,seurat_object_condition@meta.data[cell.type.column] == cell_type]
+      # calculate the relevant matrix from the relevant assay
+      exp_df_ct_cond <- NULL
+      if(assay == 'RNA'){
+        DefaultAssay(seurat_object_cell_type) <- 'RNA'
+        averages <- apply(seurat_object_cell_type$RNA@data, 1, mean)
+        exp_df_ct_cond <- data.frame(condition=rep(condition, times = length(averages)), cell_type=rep(cell_type, times = length(averages)), gene=rownames(seurat_object_cell_type$RNA@data), average=averages)
+      }
+      else if(assay == 'SCT'){
+        DefaultAssay(seurat_object_cell_type) <- 'SCT'
+        averages <- apply(seurat_object_cell_type$SCT@counts, 1, mean)
+        exp_df_ct_cond <- data.frame(condition=rep(condition, times = length(averages)), cell_type=rep(cell_type, times = length(averages)), gene=rownames(seurat_object_cell_type$SCT@counts), average=averages)
+      }
+      # paste to the overall df
+      if(is.null(exp_df)){
+        exp_df <- exp_df_ct_cond
+      }
+      else{
+        exp_df <- rbind(exp_df, exp_df_ct_cond)
+      }
+    }
+  }
+  return(exp_df)
+}
+
+
+
+transform.to.zscore <- function(x){
+  if (as.numeric(x[3]) < 5e-324*2){
+    x[3] <- 5e-324*2
+  }
+  z.score <- qnorm(as.numeric(x[3])/2)
+  if (as.numeric(x[2]) > 0){
+    return(z.score * -1)
+  }
+  else {
+    return(z.score)
+  }
+}
+
+transform.to.zscore.log10 <- function(x){
+	z.score <- -log10(as.numeric(x[3]))
+	if (is.infinite(z.score)){
+		z.score <- -log10(5e-324)
+	}
+	if (as.numeric(x[2]) > 0){
+		return(z.score)
+	}
+	else {
+		return(z.score * -1)
+	}
+}
 
 
 # cell counts loc
