@@ -901,7 +901,105 @@ get_average_gene_expression_per_ct_and_tp <- function(seurat_object, condition.c
   return(exp_df)
 }
 
+get_normed_to_max_expression <- function(expression_table, cell_type){
+  # subset to table of cell_type
+  expression_table_ct <- expression_table[expression_table$cell_type == cell_type, ]
+  # check each gene
+  for(gene in unique(expression_table_ct$gene)){
+    # get the highest value
+    max_expression <- max(expression_table_ct[expression_table_ct$gene == gene, ]$average)
+    # divide the expression in all conditions by that max value
+    expression_table_ct[expression_table_ct$gene == gene, ]$average <- expression_table_ct[expression_table_ct$gene == gene, ]$average / max_expression
+  }
+  return(expression_table_ct)
+}
 
+subset_expression_table_by_de <- function(expression_table, mast_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=F, only_negative=F, lfc_column='metafc'){
+  genes_de <- c()
+  # get the files
+  for(cell_type in cell_types_to_use){
+    # try to read each file
+    for(condition in conditions){
+      # paste together the file
+      file <- paste(cell_type, 'UT', condition, '.tsv', sep = '')
+      try({
+        # read the mast output
+        mast <- read.table(paste(mast_output_loc, file, sep = ''), header=T)
+        # filter to only include the significant results
+        mast <- mast[mast[[pval_column]] <= 0.05, ]
+        # filter for only the positive lfc if required
+        if(only_positive){
+          mast <- mast[mast[[lfc_column]] < 0, ]
+        }
+        # filter for only the positive lfc if required
+        if(only_negative){
+          mast <- mast[mast[[lfc_column]] > 0, ]
+        }
+        # grab the genes from the column names
+        genes <- rownames(mast)
+        # add to our overarching list
+        genes_de <- c(genes_de, genes)
+      })
+    }
+  }
+  # remove duplicates
+  genes_de <- unique(genes_de)
+  # subset to genes that are in the DE genes list
+  expression_table_filtered <- expression_table[as.character(expression_table$gene) %in% genes_de, ]
+  return(expression_table_filtered)
+}
+
+avg_exp_table_to_hm_table <- function(expression_table, cell_type){
+  # initialise table
+  hm_table <- NULL
+  # go through the conditions
+  for(condition in unique(expression_table$condition)){
+    # get the expression for that table
+    expression_table_cond <- expression_table[expression_table$condition == condition, c('gene', 'average')]
+    # set colnames so that we can merge these later
+    colnames(expression_table_cond) <- c('gene', condition)
+    # convert to data.table for efficient merging
+    expression_table_cond <- data.table(expression_table_cond)
+    # try to merge if necessary
+    if(is.null(hm_table)){
+      hm_table <- expression_table_cond
+    }
+    else{
+      hm_table <- merge(hm_table, expression_table_cond, by='gene')
+    }
+  }
+  # convert back to regular dataframe
+  hm_table <- data.frame(hm_table)
+  # set rownames
+  rownames(hm_table) <- hm_table$gene
+  # remove the old gene column
+  hm_table$gene <- NULL
+  return(hm_table)
+}
+
+
+pathways_to_hm_colors <- function(expression_heatmap, pathways_named_lists){
+  colors_df <- NULL
+  for(pathway_name in names(pathways_named_lists)){
+    # get the pathway genes
+    pathway.genes <- read.table(pathways_named_lists[[pathway_name]], header=F)
+    pathway.genes <- as.character(pathway.genes$V1)
+    pathway.genes <- pathway.genes[pathway.genes %in% rownames(expression_heatmap)]
+    pathway.annotation <- rep("gray97", nrow(expression_heatmap))
+    pathway.annotation[rownames(expression_heatmap) %in% pathway.genes] <- "gray55"
+    # add to colors df
+    if(is.null(colors_df)){
+      colors_df <- data.frame(pathway.annotation)
+      colnames(colors_df) <- pathway_name
+    }
+    else{
+      colors_df[[pathway_name]] <- pathway.annotation
+    }
+  }
+  # transform to matrix
+  colors_m <- as.matrix(colors_df)
+  return(colors_m)
+}
 
 transform.to.zscore <- function(x){
   if (as.numeric(x[3]) < 5e-324*2){
@@ -1254,4 +1352,38 @@ hm_monos_vary_pathogen_timepoint_250 <- heatmap.3(t(deg_meta_fc_monos_vary_patho
 hm_monos_vary_pathogen_timepoint_500 <- heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_500), labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
 monos_vary_pathogen_timepoint_250_genes_branch1212 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_250, c(1,2,1,2), use_col=T)
 monos_vary_pathogen_timepoint_500_genes_branch1112 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_500, c(1,1,1,2), use_col=T)
+
+
+
+
+# average expression matrix locations
+v2_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v2_mono_avg_exp.tsv'
+v3_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v3_mono_avg_exp.tsv'
+v2_mono_avg_exp_loc <- '/data/scRNA/pathways/v2_mono_avg_exp.tsv'
+v3_mono_avg_exp_loc <- '/data/scRNA/pathways/v3_mono_avg_exp.tsv'
+# read these matrices
+v2_mono_avg_exp <- read.table(v2_mono_avg_exp_loc, sep = '\t', header = T)
+v3_mono_avg_exp <- read.table(v3_mono_avg_exp_loc, sep = '\t', header = T)
+# norm to max expression of gene
+v2_mono_avg_exp_normed <- get_normed_to_max_expression(v2_mono_avg_exp, 'monocyte')
+v3_mono_avg_exp_normed <- get_normed_to_max_expression(v3_mono_avg_exp, 'monocyte')
+# subset to mono DE genes
+v2_mono_avg_exp_normed_de <- subset_expression_table_by_de(v2_mono_avg_exp_normed, mast_meta_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, lfc_column='metafc')
+v3_mono_avg_exp_normed_de <- subset_expression_table_by_de(v3_mono_avg_exp_normed, mast_meta_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, lfc_column='metafc')
+# convert to a heatmap compatible table
+v2_mono_avg_exp_normed_de_hmt <- avg_exp_table_to_hm_table(v2_mono_avg_exp_normed_de)
+
+# grab some pathway genes to use for annotation
+pathways_list <- list()
+pathways_list[['IFN']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
+pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
+#pathways_list[['IL2 signalling']] <- '/data/scRNA/pathways/REACTOME_Interleukin-2_signaling.txt'
+pathways_list[['IL10 signalling']] <- '/data/scRNA/pathways/REACTOME_Interleukin-10_signaling.txt'
+#pathways_list[['DAP12 signalling']] <- '/data/scRNA/pathways/REACTOME_DAP12_signaling.txt'
+
+# transform the pathways to colors
+colors_pathways <- pathways_to_hm_colors(v2_mono_avg_exp_normed_de_hmt, pathways_list)
+
+heatmap.3(t(v2_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"RdBu")), margins = c(5,10), ColSideColors = colors_pathways)
+
 
