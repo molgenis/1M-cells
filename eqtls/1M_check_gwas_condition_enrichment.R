@@ -399,14 +399,15 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
       # go to percentages instead
       ut_snp_perc <- plot_df[plot_df$labels =='ut\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='ut\neqtls', 'numbers']
       stim_snp_perc <- plot_df[plot_df$labels =='stim\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='stim\neqtls', 'numbers']
-      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
-      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      reqtl_snp_perc <- plot_df[plot_df$labels =='gwas\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
+      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='stronger\nreqtls', 'numbers']
       # check the co-eQTL gene?
       
       # create the dataframe
-      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, weaker_snp_perc, stronger_snp_perc))
+      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, reqtl_snp_perc, weaker_snp_perc, stronger_snp_perc))
       colnames(perc_df_ct_stim) <- c('numbers')
-      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', 'stim\neQTLs\nSNPs', 'weaker\nreQTLs\nSNPs', 'stronger\nreQTLs\nSNPs')
+      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', 'stim\neQTLs\nSNPs', 'reqtl\nSNPs', 'weaker\nreQTLs\nSNPs', 'stronger\nreQTLs\nSNPs')
       perc_df_ct_stim$cell_type <- cell_type
       perc_df_ct_stim$stim <- stim
       # round to two digits
@@ -426,6 +427,7 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
       }
       else{
         if(merge_reqtls){
+          perc_df_ct_stim <- perc_df_ct_stim[c(1,2,4,5), ]
           perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
           perc_df_ct_stim$type <- c('eQTL', 'eQTL', 'weaker\nreQTL', 'stronger\nreQTL')
           perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', 'stim\neQTLs\nSNPs', 'reQTLs\nSNPs', 'reQTLs\nSNPs')
@@ -438,18 +440,22 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
             scale_x_discrete(limits = perc_df_ct_stim$labels)
         }
         else{
-          perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
-          plot <- ggplot(data=perc_df_ct_stim, aes(x=labels, y=numbers)) +
-            geom_bar(stat="identity", fill=perc_df_ct_stim$color)+
+          perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'chocolate', 'green4', 'red4')
+          perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], 'navyblue', 'chocolate', 'green4', 'red4')
+          colors_list <- as.list(perc_df_ct_stim$color)
+          names(colors_list) <- perc_df_ct_stim$labels
+          plot <- ggplot(data=perc_df_ct_stim, aes(x=labels, y=numbers, fill=labels)) +
+            geom_bar(stat="identity")+
             geom_text(aes(label=numbers), vjust=-0.3, size=3.5)+
             theme_minimal() +
             ggtitle(paste('(r)eQTL SNPs in GWAS ', cell_type, stim)) +
             labs(y = 'fraction', x='') +
-            scale_x_discrete(limits = perc_df_ct_stim$labels)
+            scale_x_discrete(limits = perc_df_ct_stim$labels) +
+            scale_fill_manual(values = colors_list) +
+            theme(legend.position = "none")
         }
         
       }
-      
       # put into plot list
       plot_per_stim[[stim]] <- plot
     }
@@ -476,21 +482,23 @@ plot_gwas_enrichment_eQTL_snp_percentages_combined <- function(eqtl_table, stims
       # go to percentages instead
       ut_snp_perc <- plot_df[plot_df$labels =='ut\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='ut\neqtls', 'numbers']
       stim_snp_perc <- plot_df[plot_df$labels =='stim\ngwas\neqtls', 'numbers'] / plot_df[plot_df$labels =='stim\neqtls', 'numbers']
-      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
-      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      reqtl_snp_perc <- plot_df[plot_df$labels =='gwas\nreqtls', 'numbers'] / plot_df[plot_df$labels =='reqtls', 'numbers']
+      weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
+      stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
       # check the co-eQTL gene?
       
       # create the dataframe
-      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, weaker_snp_perc, stronger_snp_perc))
+      perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, reqtl_snp_perc, weaker_snp_perc, stronger_snp_perc))
       colnames(perc_df_ct_stim) <- c('numbers')
-      perc_df_ct_stim$type <- c('UT\neQTL', paste(stim,'\neQTL', sep=''), paste('weaker\nreQTL', sep=''), paste('stronger\nreQTL',sep=''))
-      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', paste(stim,'\neQTLs\nSNPs', sep=''), paste(stim,'\nreQTLs\nSNPs', sep=''), paste(stim,'\nreQTLs\nSNPs', sep=''))
+      perc_df_ct_stim$type <- c('UT\neQTL', paste(stim, '\neQTL', sep=''), paste(stim, '\nreQTL', sep=''), paste(stim, '\nweaker\nreQTL', sep=''), paste(stim, '\nstronger\nreQTL',sep=''))
+      perc_df_ct_stim$labels <- c('UT\neQTLs\nSNPs', paste(stim,'\neQTLs\nSNPs', sep=''), paste(stim,'\nreQTLs\nSNPs', sep=''), paste(stim,'\nweaker\nreQTLs\nSNPs', sep=''), paste(stim,'\nstronger\nreQTLs\nSNPs', sep=''))
       perc_df_ct_stim$cell_type <- cell_type
       perc_df_ct_stim$stim <- stim
       perc_df_ct_stim[1, ]$stim <- 'UT'
       # round to two digits
       perc_df_ct_stim$numbers <- round(perc_df_ct_stim$numbers, digits = 2)
-      perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'green4', 'red4')
+      perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'chocolate', 'green4', 'red4')
+      perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], 'navyblue', 'chocolate', 'green4', 'red4')
       
       if(is.null(stim_plot_df)){
         stim_plot_df <- perc_df_ct_stim
@@ -594,3 +602,5 @@ eqtl_table <- get_gwas_enrichment_reQTL_effects(eQTL_output_loc, reqtl_snps, SNP
 plots <- plot_gwas_enrichment_reQTL_snps(eqtl_table)
 plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table)
 plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table, use_ct_color = F)
+plots_percentages_combined <- plot_gwas_enrichment_eQTL_snp_percentages_combined(eqtl_table)
+
