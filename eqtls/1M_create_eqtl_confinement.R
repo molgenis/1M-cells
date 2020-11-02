@@ -1,6 +1,6 @@
-eqtl_result_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead/results/'
+eqtl_result_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201029_eqtlgenlead/results/'
 cell_types <- c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')
-cell_types <- c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK', 'hemapoietic_stem', 'megakaryocyte', 'plasma_B')
+#cell_types <- c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK', 'hemapoietic_stem', 'megakaryocyte', 'plasma_B')
 conditions <- c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')
 
 sig_eqtls <- c()
@@ -35,4 +35,4 @@ for(condition in conditions){
 sig_eqtls <- unique(sig_eqtls)
 
 confinement_table <- do.call(rbind, strsplit(sig_eqtls, ' '))
-write.table(confinement_table, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20200729.txt', sep = '\t', quote=F, row.names = F, col.names = F)
+write.table(confinement_table, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20201029.txt', sep = '\t', quote=F, row.names = F, col.names = F)
