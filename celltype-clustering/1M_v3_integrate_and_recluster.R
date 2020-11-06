@@ -142,11 +142,6 @@ rm(v3_X3hCA)
 rm(v24_X3hCA)
 # save combined file
 saveRDS(v3_CA, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_20201105.rds")
-# make the ct plot
-#DimPlot(v3_CA, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(v3_CA_dimplot_ct_loc, width = 10, height = 10)
-#DimPlot(v3_CA, reduction = 'umap', group.by = 'seurat_clusters')
-#ggsave(paste(dimplot_loc, 'v3_CA_reclus_clusts_20201105.png', sep=''), width = 10, height = 10)
 # clear memory after saving
 rm(v3_CA)
 
@@ -179,10 +174,7 @@ v3_PA <- FindClusters(v3_PA, resolution = 1.2)
 rm(v3_X3hPA)
 rm(v24_X3hPA)
 # save combined file
-saveRDS(v3_PA, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_20201029.rds")
-# make the ct plot
-#DimPlot(v3_PA, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(v3_PA_dimplot_ct_loc, width = 10, height = 10)
+saveRDS(v3_PA, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_20201105.rds")
 # clear memory after saving
 rm(v3_PA)
 
@@ -215,110 +207,12 @@ v3_MTB <- FindClusters(v3_MTB, resolution = 1.2)
 rm(v3_X3hMTB)
 rm(v24_X3hMTB)
 # save combined file
-saveRDS(v3_MTB, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_20201029.rds")
-# make the ct plot
-#DimPlot(v3_MTB, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(v3_MTB_dimplot_ct_loc, width = 10, height = 10)
+saveRDS(v3_MTB, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_20201105.rds")
 # clear memory after saving
 rm(v3_MTB)
 
-# read the CA integrated object
-#v3_CA <- readRDS("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_20201029.rds")
-# create the clusters plot
-#DimPlot(v3_CA, reduction = 'umap', group.by = 'seurat_clusters')
-#ggsave(paste(dimplot_loc, 'v3_CA_reclus_clus_20201029.png', sep = ''), width = 10, height = 10)
-# backup current cell type
-#v3_CA@meta.data$cell_type_lowerres_old <- v3_CA@meta.data$cell_type_lowerres
-#v3_CA@meta.data$cell_type_lowerres <- NULL
-# add imputed cell types
-#v3_CA <- add_imputed_meta_data(v3_CA, 'seurat_clusters', 'cell_type_lowerres_old', 'cell_type_lowerres')
-# make new plot
-#DimPlot(v3_CA, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(paste(dimplot_loc, 'v3_CA_reclus_ctnew_20201105.png', sep = ''), width = 10, height = 10)
-# save new object
-#saveRDS(v3_CA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_newct_20201029.rds")
 
-# read the MTB integrated object
-#v3_MTB <- readRDS("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_20201029.rds")
-# create the clusters plot
-#DimPlot(v3_MTB, reduction = 'umap', group.by = 'seurat_clusters')
-#ggsave(paste(dimplot_loc, 'v3_MTB_reclus_clus_20201029.png', sep = ''), width = 10, height = 10)
-# backup current cell type
-#v3_MTB@meta.data$cell_type_lowerres_old <- v3_MTB@meta.data$cell_type_lowerres
-#v3_MTB@meta.data$cell_type_lowerres <- NULL
-# add imputed cell types
-#v3_MTB <- add_imputed_meta_data(v3_MTB, 'seurat_clusters', 'cell_type_lowerres_old', 'cell_type_lowerres')
-# make new plot
-#DimPlot(v3_MTB, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(paste(dimplot_loc, 'v3_MTB_reclus_ctnew_20201105.png', sep = ''), width = 10, height = 10)
-# save new object
-#saveRDS(v3_MTB, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_newct_20201029.rds")
-
-
-# read the PA integrated object
-#v3_PA <- readRDS("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_20201029.rds")
-# create the clusters plot
-#DimPlot(v3_PA, reduction = 'umap', group.by = 'seurat_clusters')
-#ggsave(paste(dimplot_loc, 'v3_PA_reclus_clus_20201029.png', sep = ''), width = 10, height = 10)
-# backup current cell type
-#v3_PA@meta.data$cell_type_lowerres_old <- v3_PA@meta.data$cell_type_lowerres
-#v3_PA@meta.data$cell_type_lowerres <- NULL
-# add imputed cell types
-#v3_PA <- add_imputed_meta_data(v3_PA, 'seurat_clusters', 'cell_type_lowerres_old', 'cell_type_lowerres')
-# make new plot
-#DimPlot(v3_PA, reduction = 'umap', group.by = 'cell_type_lowerres')
-#ggsave(paste(dimplot_loc, 'v3_PA_reclus_ctnew_20201105.png', sep = ''), width = 10, height = 10)
-# save new object
-#saveRDS(v3_PA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_newct_20201029.rds")
-
-# create the cell type tsv
-v3_CA_cell_types <- v3_CA@meta.data['cell_type_lowerres']
-v3_MTB_cell_types <- v3_MTB@meta.data['cell_type_lowerres']
-v3_PA_cell_types <- v3_PA@meta.data['cell_type_lowerres']
-v3_cell_types <- rbind(v3_CA_cell_types, v3_MTB_cell_types)
-v3_cell_types <- rbind(v3_cell_types, v3_PA_cell_types)
-# read the v3 object to put the identitities in
-v3 <- readRDS(object_loc_v3)
-v3@meta.data$cell_type_lowerres_old <- v3@meta.data$cell_type_lowerres
-v3@meta.data$cell_type_lowerres <- NULL
-# add the cell types
-v3 <- AddMetaData(v3, v3_cell_types)
-# remove the UT samples that were incorrectly stimulated
-v3 <- v3[, !(v3@meta.data$assignment %in% c('LLDeep_1058','LLDeep_1229', 'LLDeep_1179', 'LLDeep_1247', 'LLDeep_1016', 'LLDeep_1067', 'LLDeep_0747', 'LLDeep_0906') & v3@meta.data$timepoint == 'UT')]
-# redo normalization for RNA assay, since those are gone
-DefaultAssay(v3) <- 'RNA'                                                  
-v3 <- NormalizeData(v3)
-# write the result
-saveRDS(v3, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201029.rds')
-
-
-
-# set base output loc for integration
-marker_base_plot <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/plots/'
-violin_base_plot <- paste(marker_base_plot, 'violinplots/', sep = '')
-features_base_plot <- paste(marker_base_plot, 'featureplots/', sep = '')
-# read object and normalize data together
-#v3_MTB <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_20201105.rds')
-#DefaultAsssay(v3_MTB) <- 'RNA'
-#v3_MTB <- NormalizeData(v3_MTB)
-# plot
-#plot_celltype_markers(seurat_object = v3_MTB, assay = 'RNA', slot = 'data', plot_dir = paste(features_base_plot, 'v3_MTB/RNA_data_20201105/', sep = ''))
-# read object and normalize data together
-#v3_CA <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_20201105.rds')
-#DefaultAssay(v3_CA) <- 'RNA'
-#v3_CA <- NormalizeData(v3_CA)
-# plot
-#plot_celltype_markers(seurat_object = v3_CA, assay = 'RNA', slot = 'data', plot_dir = paste(features_base_plot, 'v3_CA/RNA_data_20201105/', sep = ''))
-# read object and normalize data together
-#v3_PA <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_20201105.rds')
-#DefaultAssay(v3_PA) <- 'RNA'
-#v3_PA <- NormalizeData(v3_PA)
-# plot
-#plot_celltype_markers(seurat_object = v3_PA, assay = 'RNA', slot = 'data', plot_dir = paste(features_base_plot, 'v3_PA/RNA_data_20201105/', sep = ''))
-
-
-
-# do T reclustering
+# do T reclustering based on 20201105 1.2 resolution output
 #v3_3hMTB_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X3hMTB')
 #v3_24hMTB_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X24hMTB')
 #v3_MTB_UT_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'UT')
@@ -472,4 +366,25 @@ ggsave(paste(dimplot_loc, 'v3_PA_reclus_ctnewmega_20201106.png', sep = ''), widt
 saveRDS(v3_CA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_newctmega_20201106.rds")
 saveRDS(v3_PA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_PA_cca_integrated_classicnormscale_newctmega_20201106.rds")
 saveRDS(v3_MTB, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_MTB_cca_integrated_classicnormscale_newctmega_20201106.rds")
+
+# create the cell type tsv
+v3_CA_cell_types <- v3_CA@meta.data['cell_type_lowerres']
+v3_MTB_cell_types <- v3_MTB@meta.data['cell_type_lowerres']
+v3_PA_cell_types <- v3_PA@meta.data['cell_type_lowerres']
+v3_cell_types <- rbind(v3_CA_cell_types, v3_MTB_cell_types)
+v3_cell_types <- rbind(v3_cell_types, v3_PA_cell_types)
+# read the v3 object to put the identitities in
+v3 <- readRDS(object_loc_v3)
+v3@meta.data$cell_type_lowerres_old <- v3@meta.data$cell_type_lowerres
+v3@meta.data$cell_type_lowerres <- NULL
+# add the cell types
+v3 <- AddMetaData(v3, v3_cell_types)
+# remove the UT samples that were incorrectly stimulated
+v3 <- v3[, !(v3@meta.data$assignment %in% c('LLDeep_1058','LLDeep_1229', 'LLDeep_1179', 'LLDeep_1247', 'LLDeep_1016', 'LLDeep_1067', 'LLDeep_0747', 'LLDeep_0906') & v3@meta.data$timepoint == 'UT')]
+# redo normalization for RNA assay, since those are gone
+DefaultAssay(v3) <- 'RNA'                                                  
+v3 <- NormalizeData(v3)
+# write the result
+saveRDS(v3, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds')
+
 
