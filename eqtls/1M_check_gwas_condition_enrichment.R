@@ -551,7 +551,7 @@ get_color_coding_dict <- function(){
 GWAS_loc <- '/data/scRNA/GWAS/eQTLgen-LD-all.txt.gz'
 
 # location of the eQTL output
-eQTL_output_loc <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201029_eqtlgenlead_anycondsig_merged/results/'
+eQTL_output_loc <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/'
 # the conditions to look at
 conditions <- c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')
 #  the cell types to look at
@@ -589,7 +589,7 @@ pli_score <- read.table(pli_score_loc, sep = '\t', header = T)
 plot_gwas_enrichment_SNPs(pli_score, GWAS, traits_to_use=interested_traits, threshold=0.05, other_GWAS=GWAS_other, verbose=T)
 
 # the location of the confinement
-reqtl_confine_loc <- '/data/scRNA/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20201029.txt'
+reqtl_confine_loc <- '/data/scRNA/eQTL_mapping/confine/1m_anycond_all_cell_types_confine_20201106.txt'
 # get the confinement
 reqtl_confine <- read.table(reqtl_confine_loc, sep = '\t', header = F)
 reqtl_snps <- as.character(reqtl_confine[,1])

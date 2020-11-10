@@ -169,9 +169,9 @@ v3_object_loc <- paste(object_dir, '1M_v3_mediumQC_ctd_rnanormed_demuxids_202010
 # eqtl output dirs
 features_dir <- paste('/groups/umcg-bios/', write_partition, '/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/', sep = '')
 v2_features_demux_dir <- paste(features_dir, 'v2_sct_mqc_demux_lores_20201029/', sep = '')
-v3_features_demux_dir <- paste(features_dir, 'v3_sct_mqc_demux_lores_20201029/', sep = '')
+v3_features_demux_dir <- paste(features_dir, 'v3_sct_mqc_demux_lores_20201106/', sep = '')
 v2_features_soup_dir <- paste(features_dir, 'v2_sct_mqc_soup_lores_20201029/', sep = '')
-v3_features_soup_dir <- paste(features_dir, 'v3_sct_mqc_soup_lores_20201029/', sep = '')
+v3_features_soup_dir <- paste(features_dir, 'v3_sct_mqc_soup_lores_20201106/', sep = '')
 
 # for the inhouse eQTL-mapping pipeline, we currently have ENSG numbers instead of gene numbers
 gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"

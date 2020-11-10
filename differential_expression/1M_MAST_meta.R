@@ -1034,10 +1034,10 @@ transform.to.zscore.log10 <- function(x){
 #cell_counts <- read.table(cell_counts_loc, sep = '\t', header = T)
 
 # get the locations of the DE output
-mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201029/v'
-mast_output_append <- '_paired_lores_lfc01minpct01_20201029/rna/'
+mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/v'
+mast_output_append <- '_paired_lores_lfc01minpct01_20201106/rna/'
 # write the location of the combined output
-mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201029/meta_paired_lores_lfc01minpct01_20201029/rna/'
+mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/'
 
 # write meta output
 write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
