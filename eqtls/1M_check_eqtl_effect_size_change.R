@@ -107,17 +107,29 @@ plot_eqtl_effect_size_reqtls <- function(eqtl_output_loc , cell_types=c('B', 'CD
       reQTLs_stim <- read.table(reQTLs_stim_ct_loc, sep = '\t', header = T)
       reQTLs_stim$snp_probe <- paste(as.character(reQTLs_stim$SNPName), as.character(reQTLs_stim$ProbeName), sep = '_')
       # grab the positive and negativeZ scores
-      if(nrow(reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore > 0, ]) > 0){
-      reqtl_pos <- reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore > 0, ]$snp_probe
-      }
-      if(nrow(reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore < 0, ]) > 0){
-        reqtl_neg <- reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore < 0, ]$snp_probe
-      }
+      #reqtl_pos <- c()
+      #reqtl_neg <- c()
+      #if(nrow(reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore > 0, ]) > 0){
+      #  reqtl_pos <- reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore > 0, ]$snp_probe
+      #}
+      #if(nrow(reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore < 0, ]) > 0){
+      #  reqtl_neg <- reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05 & !is.na(reQTLs_stim$OverallZScore) & reQTLs_stim$OverallZScore < 0, ]$snp_probe
+      #}
       # add the info regarding whether the eQTLs were significant
+      sig_reqtls <- c()
+      if(nrow(reQTLs_stim[reQTLs_stim$FDR < 0.05, ]) > 0){
+        sig_reqtls <- reQTLs_stim[reQTLs_stim$FDR < 0.05, ]$snp_probe
+      }
       plot_df$reqtl <- '-'
+      if(nrow(plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% sig_reqtls & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore < plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore < plot_df$stim_zscore)), ]) > 0){
+        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% sig_reqtls & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore < plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore < plot_df$stim_zscore)), ]$reqtl <- 'stronger'
+      }
+      if(nrow(plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore)& plot_df$eqtl %in% sig_reqtls & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore > plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore > plot_df$stim_zscore)), ]) > 0){
+        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% sig_reqtls & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore > plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore > plot_df$stim_zscore)), ]$reqtl <- 'weaker'
+      }
       # overwrite postive and negative Z scores
-      plot_df[plot_df$eqtl %in% reqtl_pos, ]$reqtl <- 'reqtl Z > 0'
-      plot_df[plot_df$eqtl %in% reqtl_neg, ]$reqtl <- 'reqtl Z < 0'
+      #plot_df[plot_df$eqtl %in% reqtl_pos, ]$reqtl <- 'reqtl Z > 0'
+      #plot_df[plot_df$eqtl %in% reqtl_neg, ]$reqtl <- 'reqtl Z < 0'
       # make the plot
       ct_plot <- ggplot(plot_df, aes(x=ut_zscore, y=stim_zscore, color=reqtl)) +
         geom_point() +
