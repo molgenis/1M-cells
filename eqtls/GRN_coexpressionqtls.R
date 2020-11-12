@@ -1,3 +1,6 @@
+library(Seurat)
+
+
 # Name: create.cor.matrix
 # Function: calculate the correlations between the input gene and all other genes, for every person
 # Input:
@@ -84,6 +87,8 @@ interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
   #snp_vector <- unlist(snp[,match(colnames(cor.matrix), colnames(snp))])
   snp_vector <- as.vector(unlist(snp[match(colnames(cor.matrix), names(snp))]))
   interaction.statistics <- do.call("rbind", apply(cor.matrix, 1, interaction.regression.row, snp = snp_vector, cell.counts=cell.counts))
+  interaction.statistics$probeB <- rownames(interaction.statistics)
+  print(head(interaction.statistics))
   return(interaction.statistics)
 }
 
@@ -96,7 +101,7 @@ interaction.regression.row <- function(x, snp, cell.counts) {
   std.error.1 <- modelCoeffs.1[2, "Std. Error"]
   tval.1 <- modelCoeffs.1[2, "t value"]
   result <- list()
-  result[['n']] <- cell.counts
+  result[['n']] <- sum(cell.counts)
   result[['beta.estimate']] <- beta.estimate.1
   result[['std.error']] <- std.error.1
   result[['t']] <- tval.1
@@ -120,14 +125,7 @@ interaction.regression.row <- function(x, snp, cell.counts) {
 #   A list with two matrices. The first matrix has the R values of the interaction model for every eQTL gene with every other gene.
 #   The second matrix has the p-values for every interaction per eQTL gene and the p-value significance threshold to get an FDR of 0.05
 
-do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.counts, output.dir, cor.dir, permutations = F, n.perm = 20, fdr.thresh = 0.05, perm.type = "gene") {
-  if (permutations) {
-    perm.sample.orders <- list()
-    for (i in 1:n.perm) {
-      print(paste('permutation', i))
-      perm.sample.orders[[i]] <- sample(1:length(exp.matrices), length(exp.matrices), replace = F)
-    }
-  }
+do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.counts, output.dir, cor.dir, permutations = T, n.perm = 20, fdr.thresh = 0.05, perm.type = "gene") {
   
   #r.matrix <- NULL
   #p.value.matrix <- NULL
@@ -139,21 +137,26 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
   setTxtProgressBar(pb, 0)
   
   statistics <- NULL
-  
+  perm.statistics <- NULL
   
   for(snp_probe in snp_probes){
     
     # split snp-probe
     snp_probe_split <- strsplit(snp_probe, '_')
     snp_name <- snp_probe_split[[1]][1]
-    
-    genotype <- unlist(genotypes[snp_name,])
-    snp <- as.factor(genotype)
     eqtl.name <- snp_probe_split[[1]][2]
+    
+    
+    # get cor matrix
     cor.matrix <- read.table(paste0(cor.dir, "correlation_matrix_", eqtl.name, ".txt"), row.names=1, header=T, stringsAsFactors=F)
     
     #Remove all rows for which a correlation cannot be calculated within 1 or more individuals
     cor.matrix <- cor.matrix[apply(cor.matrix, 1, function(x){!any(is.na(x))}),]
+    
+    
+    # subset genotype data
+    genotype <- unlist(genotypes[snp_name,colnames(cor.matrix)])
+    snp <- as.factor(genotype)
     
     print(dim(cor.matrix))
     
@@ -169,18 +172,32 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
     #r.matrix <- cbind(r.matrix, interaction.statistics$statistic / sqrt(length(snp) - 2 + interaction.statistics$statistic ** 2))
     #p.value.matrix <- cbind(p.value.matrix, interaction.statistics$p.value)
     
-    interaction.statistics[['snp']] <- snp_name
-    interaction.statistics[['probe']] <- eqtl.name
-    interaction.statistics[['permuted']] <- F
+    print('interaction result')
+    print(head(interaction.statistics))
+    
+    interaction.statistics <- data.frame(interaction.statistics)
+    
+    interaction.statistics$snp <- snp_name
+    interaction.statistics$probeA <- eqtl.name
+    interaction.statistics$permuted <- F
+    
+    print('added eqtlname')
+    print(head(interaction.statistics))
+    
     # add to existing table if exists, otherwise create it
     if(is.null(statistics)){
-      statistics <- data.frame(interaction.statistics)
+      statistics <- interaction.statistics
     }
     else{
-      statistics <- rbind(statistics, data.frame(interaction.statistics))
+      statistics <- rbind(statistics,interaction.statistics)
     }
-    
+    print(head(statistics))
     if (permutations) {
+      perm.sample.orders <- list()
+      for (i in 1:n.perm) {
+        print(paste('permutation', i))
+        perm.sample.orders[[i]] <- sample(1:length(exp.matrices), length(exp.matrices), replace = F)
+      }
       for (current.perm in 1:n.perm) {
         permuted.snp <- snp[perm.sample.orders[[current.perm]]]
         perm.interaction.statistics <- interaction.regression(cor.matrix = cor.matrix, eqtl.gene = eqtl.name, snp = permuted.snp, cell.counts = cell.counts)
@@ -189,9 +206,16 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
         #} else {
         #  p.value.permuted[[i]] <- cbind(p.value.permuted[[i]], perm.interaction.statistics$p.value)
         #}
-        perm.interaction.statistics[['snp']] <- snp_name
-        perm.interaction.statistics[['probe']] <- eqtl.name
-        perm.interaction.statistics[['permuted']] <- T
+        perm.interaction.statistics$snp <- snp_name
+        perm.interaction.statistics$probeA <- eqtl.name
+        perm.interaction.statistics$permuted <- T
+        # add to existing table if exists, otherwise create it
+        if(is.null(statistics)){
+          perm.statistics <- data.frame(perm.interaction.statistics)
+        }
+        else{
+          perm.statistics <- rbind(perm.statistics, data.frame(perm.interaction.statistics))
+        }
       }
       if (perm.type == "gene"){ 
         #write.table(p.value.permuted[[i]], file=paste0(output.dir, "permutations", eqtl.name, "_permutations.txt"))
@@ -212,7 +236,7 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
       }
     }
     setTxtProgressBar(pb, i)
-    write.table(statistics, paste(output.dir, 'interactions.tsv'), sep = '\t', quote = F, col.names=T)
+    write.table(statistics, paste(output.dir, snp_probe, '_interactions.tsv', sep=''), sep = '\t', quote = F, col.names=T)
   }
   
   #print(head(r.matrix))
@@ -252,6 +276,231 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
   
   #return(interaction.list)
 }
+
+do_interaction_analysis_prepared_correlations <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=NULL, dataset_annotation_loc=NULL){
+  # read the genotype data
+  vcf <- fread(combined_genotype_location)
+  genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
+  rownames(genotypes_all) <- vcf$ID
+  # get the mapping of the probe to the cis SNP
+  snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T)
+  # read the correlations
+  prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
+  # remove the prepared correlations that we do not have genotype data for
+  prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
+  # create a regex to get the last index of the dot
+  last_dash_pos <- "\\."
+  # extract the participants from the correlation matrix column names
+  participants <- substring(colnames(prepared_correlations), 1, regexpr(last_dash_pos, colnames(prepared_correlations))-1)
+  # subset the prepared correlations to only the ones we have genotype data for
+  prepared_correlations <- prepared_correlations[, participants %in% colnames(genotypes_all)]
+  # get the participants again from the subsetted data
+  participants <- substring(colnames(prepared_correlations), 1, regexpr(last_dash_pos, colnames(prepared_correlations))-1)
+  # grab cell counts if available
+  cell_counts <- NULL
+  if(!is.null(cell_counts_location)){
+    cell_counts <- read.table(cell_counts_location, sep = '\t', col.names=T, row.names=T)
+  }
+  # create permuted participants as well
+  permuted_participants <- list()
+  permuted_results <- list()
+  # create an output dataframe
+  result_dataframe <- NULL
+  # permuted sample labels
+  for (i in 1:nr_of_permutatations) {
+    print(paste('permutation', i))
+    # for these, the participants actual order in the coexpression is no longer correct
+    permuted_participants[[i]] <- sample(participants, length(participants), replace = F)
+  }
+  # load dataset annotations if we have them, make them the same by default
+  dataset_annotation <- data.frame(dataset=rep(1, times=ncol(prepared_correlations)), row.names = colnames(prepared_correlations))
+  if(!is.null(dataset_annotation_loc)){
+    dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
+  }
+  # go through the prepared correlations
+  for(i in 1:nrow(prepared_correlations)){
+    try({# grab the pair from the row
+    gene_pair <- rownames(prepared_correlations)[i]
+    # split by separator
+    genes <- unlist(strsplit(gene_pair, '-'))
+    # get the two genes
+    geneA <- genes[1]
+    geneB <- genes[2]
+    # grab the correlation for this gene pair
+    correlations <- as.vector(unlist(prepared_correlations[gene_pair, ]))
+    # do with or without weights, depending on if data is available on cell counts
+    weights <- NULL
+    if(!is.null(cell_counts)){
+      weights <- as.vector(cell_counts[participants, 'cell_count'])
+    }
+    # grab the datasets for these participants
+    datasets <- as.vector(dataset_annotation[participants, 'dataset'])
+    # get the top SNP for each probe
+    if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneA, ]) > 0){
+      # grab the type eQTLgens snp belonging to the gene
+      cis_snp_a <- snp_probe_mapping[snp_probe_mapping$probe == geneA, ]$snp[1]
+      # grab the genotypes for these participants
+      genotypes_snp_a <- as.vector(unlist(genotypes_all[cis_snp_a, participants]))
+      result_snp_a <- do_regression(correlations, genotypes_snp_a, weights, datasets) # TODO add dataset as predictor
+      # add some extra data
+      result_snp_a[['snp']] <- cis_snp_a
+      result_snp_a[['geneA']] <- geneA
+      result_snp_a[['geneB']] <- geneB
+      result_snp_a[['permuted']] <- F
+      # turn into dataframe
+      dataframe_this_correlation <- data.frame(result_snp_a)
+    }
+    # I know, doing this twice is disgusting
+    if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneB, ]) > 0){
+      cis_snp_b <- snp_probe_mapping[snp_probe_mapping$probe == geneB, ]$snp[1]
+      genotypes_snp_b <- as.vector(unlist(genotypes_all[cis_snp_b, participants]))
+      result_snp_b <- do_regression(correlations, genotypes_snp_b, weights, datasets)
+      result_snp_b[['snp']] <- cis_snp_b
+      result_snp_b[['geneA']] <- geneA
+      result_snp_b[['geneB']] <- geneB
+      result_snp_b[['permuted']] <- F
+      # if there was no gene A SNP, we need to create the dataframe
+      if(is.null(dataframe_this_correlation)){
+        dataframe_this_correlation <- data.frame(result_snp_b)
+      }
+      else{
+        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b))
+      }
+      
+    }
+    # do permuted analysis as well
+    for (i in 1:nr_of_permutatations) {
+      if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneA, ]) > 0){
+        genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
+        # do the regression analysis
+        result_snp_a_permuted <- do_regression(correlations, genotypes_snp_a_permuted, weights, datasets)
+        # add some extra info
+        result_snp_a_permuted[['snp']] <- cis_snp_a
+        result_snp_a_permuted[['geneA']] <- geneA
+        result_snp_a_permuted[['geneB']] <- geneB
+        result_snp_a_permuted[['permuted']] <- T
+        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_a_permuted))
+      }
+      # I now, repeating just as before, very bad
+      if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneB, ]) > 0){
+        genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
+        result_snp_b_permuted <- do_regression(correlations, genotypes_snp_b_permuted, weights, datasets)
+        result_snp_b_permuted[['snp']] <- cis_snp_b
+        result_snp_b_permuted[['geneA']] <- geneA
+        result_snp_b_permuted[['geneB']] <- geneB
+        result_snp_b_permuted[['permuted']] <- T
+        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b_permuted))
+      }
+    }
+    # add to existing dataframe if it exists
+    if(is.null(result_dataframe)){
+      result_dataframe <- dataframe_this_correlation
+    }
+    else{
+      result_dataframe <- rbind(result_dataframe, dataframe_this_correlation)
+    }
+    })
+  }
+  return(result_dataframe)
+}
+
+do_regression <- function(correlations, snp, weights, datasets){
+  # do the regression analysis
+  model <- NULL
+  # if we have multiple datasets, take this into account
+  if(length(unique(datasets)) > 1){
+    model <- lm(formula = correlations~snp+datasets, weights = weights)
+  }
+  else{
+    model <- lm(formula = correlations~snp, weights = weights)
+  }
+  modelSummary <- summary(model)
+  # grab relevant values
+  modelCoeffs <- modelSummary$coefficients
+  beta.estimate <- modelCoeffs[2, "Estimate"]
+  std.error <- modelCoeffs[2, "Std. Error"]
+  tval <- modelCoeffs[2, "t value"]
+  pval <- modelCoeffs[2, 4]
+  result <- list()
+  result[['beta.estimate']] <- beta.estimate
+  result[['std.error']] <- std.error
+  result[['t']] <- tval
+  result[['p']] <- pval
+  return(result)
+}
+
+determine_significance_threshold <- function(interaction.result, fdr=0.05){
+  # paste snp and probes together to use this for uniqueness
+  snp_probes <- paste(interaction.result$snp, interaction.result$geneA, sep='_')
+  # add as convenience column
+  interaction.result$snp_probe <- snp_probes
+  # check each unique snp+geneA combination
+  for(snp_probe in unique(snp_probes)){
+    # permution by gene swapping?
+    if (perm.type == "gene"){ 
+      # grab the 'true' p values for this snp/geneA pair
+      p.values.unsorted <- interaction.result[interaction.result$snp_probe == snp_probe & interaction.result$permuted == F, ]$p
+      # significance set at zero first, if the permutations are always better, nothing can be significant
+      p.value.thresh <- 0
+      # sort the 'true' p values
+      p.values <- unique(sort(p.values.unsorted, decreasing=F))
+      # check each 'real' p value as a threshold
+      for (current.p.value.thresh in p.values){
+        # check how many 'real' p values are smaller than this threshold
+        signif.interactions <- length(which(p.values.unsorted <= current.p.value.thresh))
+        # check how many permuted p values are smaller than this threshold
+        #permuted.signif.interactions <- c()
+        # we need to check against all the permutations
+        #for (current.perm in 1:n.perm){
+        #  permuted.signif.interactions <- c(permuted.signif.interactions, length(which(p.value.permuted[[i]][,current.perm] <= current.p.value.thresh)))
+        #}
+        #if (mean(permuted.signif.interactions)/signif.interactions > fdr.thresh){
+        #  break
+        #}
+        # get the permuted p values for this snp/geneA pair
+        permuted_p_values <- interaction.result[interaction.result$snp_probe == snp_probe & interaction.result$permuted == T, ]$p
+        # get the number of permuted p values that were smaller than the threshold
+        permuted_sig_p_values_number <- length(which(permuted_p_values <= current.p.value.thresh))
+        # approach the mean permuted number of p values per snp/geneA/geneB set by dividing by the number of real snp/geneA tests
+        mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/length(p.values.unsorted)
+        # stop searching for a threshold if there are more than 5% 'real' coexqtls that have a worse P than the permuted ones
+        if (mean_permuted_sig_p_values_number/signif.interactions > fdr.thresh){
+          break
+        }
+        # otherwise this is the next threshold
+        p.value.thresh <- current.p.value.thresh
+      }
+      p.value.thresholds <- c(p.value.thresholds, p.value.thresh)
+    }
+  }
+  # TODO work further from here
+  if (permutations & perm.type == "gene"){
+    p.value.matrix <- rbind(p.value.thresholds, p.value.matrix)
+    rownames(p.value.matrix)[1] = "significance_threshold"
+    interaction.list <- list(r.matrix, p.value.matrix)
+  }
+  else if (permutations & perm.type == "all"){
+    save(p.value.permuted, file=paste0(output.dir, "_permutedPValue.Rda"))
+    p.value.thresh <- 0
+    for (current.p.value.thresh in unique(sort(p.value.matrix, decreasing=F))){
+      signif.interactions <- length(which(p.value.matrix <= current.p.value.thresh))
+      permuted.signif.interactions <- c()
+      for (current.perm in 1:n.perm){
+        current.perm.p.values <- unlist(lapply(p.value.permuted, function(x){return(x[,current.perm])}))
+        permuted.signif.interactions <- c(permuted.signif.interactions, length(which(current.perm.p.values <= current.p.value.thresh)))
+      }
+      if (mean(permuted.signif.interactions)/signif.interactions > fdr.thresh){
+        break
+      }
+      p.value.thresh <- current.p.value.thresh
+    }
+    interaction.list <- list(r.matrix, p.value.matrix, p.value.thresh)
+  }
+  else {
+    interaction.list <- list(r.matrix, p.value.matrix)
+  }
+}
+
 
 ##
 ## Read in the expression data.
