@@ -329,8 +329,16 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
   vcf <- fread(combined_genotype_location)
   genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
   rownames(genotypes_all) <- vcf$ID
+  # harmonize the way the genotypes are stored
+  genotypes_all <- sapply(genotypes_all, substring, 1, 3)
+  genotypes_all[genotypes_all == '0|0'] <- '0/0'
+  genotypes_all[genotypes_all == '1|1'] <- '1/1'
+  genotypes_all[genotypes_all == '1|0'] <- '1/0'
+  genotypes_all[genotypes_all == '0|1'] <- '1/0'
+  genotypes_all <- data.frame(genotypes_all)
+  rownames(genotypes_all) <- vcf$ID
   # get the mapping of the probe to the cis SNP
-  snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T)
+  snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
   # read the correlations
   prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
   # remove the prepared correlations that we do not have genotype data for
@@ -346,7 +354,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
   # grab cell counts if available
   cell_counts <- NULL
   if(!is.null(cell_counts_location)){
-    cell_counts <- read.table(cell_counts_location, sep = '\t', col.names=T, row.names=T)
+    cell_counts <- read.table(cell_counts_location, sep = '\t', header = T, row.names = 1)
   }
   # create permuted participants as well
   permuted_participants <- list()
@@ -378,14 +386,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
     # do with or without weights, depending on if data is available on cell counts
     weights <- NULL
     if(!is.null(cell_counts)){
-      weights <- as.vector(cell_counts[participants, 'cell_count'])
+      weights <- as.vector(cell_counts[gsub('\\.','-' , colnames(prepared_correlations)), 'cell_count'])
     }
     # grab the datasets for these participants
-    datasets <- as.vector(dataset_annotation[participants, 'dataset'])
+    datasets <- as.vector(dataset_annotation[gsub('\\.','-' , colnames(prepared_correlations)), 'dataset'])
     # get the top SNP for each probe
-    if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneA, ]) > 0){
+    if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
       # grab the type eQTLgens snp belonging to the gene
-      cis_snp_a <- snp_probe_mapping[snp_probe_mapping$probe == geneA, ]$snp[1]
+      cis_snp_a <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]$snp[1]
       # grab the genotypes for these participants
       genotypes_snp_a <- as.vector(unlist(genotypes_all[cis_snp_a, participants]))
       result_snp_a <- do_regression(correlations, genotypes_snp_a, weights, datasets) # TODO add dataset as predictor
@@ -398,8 +406,8 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
       dataframe_this_correlation <- data.frame(result_snp_a)
     }
     # I know, doing this twice is disgusting
-    if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneB, ]) > 0){
-      cis_snp_b <- snp_probe_mapping[snp_probe_mapping$probe == geneB, ]$snp[1]
+    if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
+      cis_snp_b <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]$snp[1]
       genotypes_snp_b <- as.vector(unlist(genotypes_all[cis_snp_b, participants]))
       result_snp_b <- do_regression(correlations, genotypes_snp_b, weights, datasets)
       result_snp_b[['snp']] <- cis_snp_b
@@ -417,7 +425,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
     }
     # do permuted analysis as well
     for (i in 1:nr_of_permutatations) {
-      if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneA, ]) > 0){
+      if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
         genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
         # do the regression analysis
         result_snp_a_permuted <- do_regression(correlations, genotypes_snp_a_permuted, weights, datasets)
@@ -429,7 +437,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
         dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_a_permuted))
       }
       # I now, repeating just as before, very bad
-      if(nrow(snp_probe_mapping[snp_probe_mapping$probe == geneB, ]) > 0){
+      if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
         genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
         result_snp_b_permuted <- do_regression(correlations, genotypes_snp_b_permuted, weights, datasets)
         result_snp_b_permuted[['snp']] <- cis_snp_b
@@ -565,3 +573,4 @@ combined_genotype_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAse
 
 interactions <- do_interaction_analysis_prepared_correlations(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
 
+interactions_wcutoffs <- determine_significance_threshold(interactions)
