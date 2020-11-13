@@ -277,6 +277,53 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
   #return(interaction.list)
 }
 
+##
+## Read in the expression data.
+##
+do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes){
+  DefaultAssay(seurat_object) <- 'SCT'
+  exp.matrices <- list()
+  cell.counts <- c()
+  sample.names <- vector()
+  
+  sample.names <- unique(seurat_object@meta.data$assignment)
+  i <- 1
+  #for (folder in dir) {
+  for(participant in sample.names){
+    cells_participant <- subset(seurat_object, assignment == participant)
+    print(i)
+    exp.matrices[[i]] <- t(as.matrix(cells_participant@assays$SCT@counts))
+    cell.counts <- c(cell.counts, nrow(cells_participant@meta.data))
+    
+    i <- i + 1
+  }
+  genotypes_samples <- genotypes[,match(sample.names, colnames(genotypes))]
+  
+  cor.dir = paste(output_loc,"/correlationMatrices/", sep = '')
+  output.dir = paste(output_loc, sep = '')
+  
+  
+  create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
+  do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes_samples, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=10)
+  
+}
+
+gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
+genes <- read.table(gene_to_ens_mapping, header = F, stringsAsFactors = F)
+vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
+genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
+rownames(genotypes_all) <- vcf$ID
+
+snp_probes <- c('rs1131017_RPS26')
+
+output_loc_1m_v3_mono_ut <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_recontruction/coeqtls/1M_v3/monocytes/UT/'
+v3_mono_ut <- subset(v3, subset = cell_type_lowerres == 'monocyte' & timepoint == 'UT')
+do_coexqtl(v3_mono_ut, snp_probes, output_loc_1m_v3_mono_ut, genotypes_all)
+
+
+
+#PREPARED ANALYSIS
+
 do_interaction_analysis_prepared_correlations <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=NULL, dataset_annotation_loc=NULL){
   # read the genotype data
   vcf <- fread(combined_genotype_location)
@@ -429,11 +476,13 @@ do_regression <- function(correlations, snp, weights, datasets){
   return(result)
 }
 
-determine_significance_threshold <- function(interaction.result, fdr=0.05){
+determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05, permutations=T, perm.type='all'){
   # paste snp and probes together to use this for uniqueness
   snp_probes <- paste(interaction.result$snp, interaction.result$geneA, sep='_')
   # add as convenience column
   interaction.result$snp_probe <- snp_probes
+  # add the per_gene significance threshold
+  interaction.result$gene_significance_threshold <- NA
   # check each unique snp+geneA combination
   for(snp_probe in unique(snp_probes)){
     # permution by gene swapping?
@@ -442,21 +491,14 @@ determine_significance_threshold <- function(interaction.result, fdr=0.05){
       p.values.unsorted <- interaction.result[interaction.result$snp_probe == snp_probe & interaction.result$permuted == F, ]$p
       # significance set at zero first, if the permutations are always better, nothing can be significant
       p.value.thresh <- 0
+      # set this as the significance threshold
+      interaction.result[interaction.result$snp_probe == snp_probe, ]$gene_significance_threshold <- p.value.thresh
       # sort the 'true' p values
       p.values <- unique(sort(p.values.unsorted, decreasing=F))
       # check each 'real' p value as a threshold
       for (current.p.value.thresh in p.values){
         # check how many 'real' p values are smaller than this threshold
         signif.interactions <- length(which(p.values.unsorted <= current.p.value.thresh))
-        # check how many permuted p values are smaller than this threshold
-        #permuted.signif.interactions <- c()
-        # we need to check against all the permutations
-        #for (current.perm in 1:n.perm){
-        #  permuted.signif.interactions <- c(permuted.signif.interactions, length(which(p.value.permuted[[i]][,current.perm] <= current.p.value.thresh)))
-        #}
-        #if (mean(permuted.signif.interactions)/signif.interactions > fdr.thresh){
-        #  break
-        #}
         # get the permuted p values for this snp/geneA pair
         permuted_p_values <- interaction.result[interaction.result$snp_probe == snp_probe & interaction.result$permuted == T, ]$p
         # get the number of permuted p values that were smaller than the threshold
@@ -468,79 +510,58 @@ determine_significance_threshold <- function(interaction.result, fdr=0.05){
           break
         }
         # otherwise this is the next threshold
-        p.value.thresh <- current.p.value.thresh
+        p.value.thresh <- p.value.thresh
+        # set this as the significance threshold
+        interaction.result$all_significance_threshold <- p.value.thresh
       }
       p.value.thresholds <- c(p.value.thresholds, p.value.thresh)
     }
   }
-  # TODO work further from here
-  if (permutations & perm.type == "gene"){
-    p.value.matrix <- rbind(p.value.thresholds, p.value.matrix)
-    rownames(p.value.matrix)[1] = "significance_threshold"
-    interaction.list <- list(r.matrix, p.value.matrix)
-  }
-  else if (permutations & perm.type == "all"){
-    save(p.value.permuted, file=paste0(output.dir, "_permutedPValue.Rda"))
+  if (permutations & perm.type == "all"){
+    #save(p.value.permuted, file=paste0(output.dir, "_permutedPValue.Rda"))
+    # grab the 'true' p values for this snp/geneA pair
+    p.values.unsorted <- interaction.result[interaction.result$permuted == F, ]$p
+    # significance set at zero first, if the permutations are always better, nothing can be significant
     p.value.thresh <- 0
-    for (current.p.value.thresh in unique(sort(p.value.matrix, decreasing=F))){
-      signif.interactions <- length(which(p.value.matrix <= current.p.value.thresh))
-      permuted.signif.interactions <- c()
-      for (current.perm in 1:n.perm){
-        current.perm.p.values <- unlist(lapply(p.value.permuted, function(x){return(x[,current.perm])}))
-        permuted.signif.interactions <- c(permuted.signif.interactions, length(which(current.perm.p.values <= current.p.value.thresh)))
-      }
-      if (mean(permuted.signif.interactions)/signif.interactions > fdr.thresh){
+    # set this as the significance threshold
+    interaction.result$all_significance_threshold <- p.value.thresh
+    # sort the 'true' p values
+    p.values <- unique(sort(p.values.unsorted, decreasing=F))
+    # check each 'real' p value as a threshold
+    for (current.p.value.thresh in p.values){
+      # check how many 'real' p values are smaller than this threshold
+      signif.interactions <- length(which(p.values.unsorted <= current.p.value.thresh))
+      # get the permuted p values for this snp/geneA pair
+      permuted_p_values <- interaction.result[interaction.result$permuted == T, ]$p
+      # get the number of permuted p values that were smaller than the threshold
+      permuted_sig_p_values_number <- length(which(permuted_p_values <= current.p.value.thresh))
+      # approach the mean permuted number of p values per snp/geneA/geneB set by dividing by the number of real snp/geneA tests
+      mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/length(p.values.unsorted)
+      # stop searching for a threshold if there are more than 5% 'real' coexqtls that have a worse P than the permuted ones
+      print(paste('threshold', current.p.value.thresh))
+      print(paste('mean number of sig permuted p values', mean_permuted_sig_p_values_number))
+      print(paste('sig real p values', signif.interactions))
+      if (mean_permuted_sig_p_values_number/signif.interactions > fdr.thresh){
         break
       }
       p.value.thresh <- current.p.value.thresh
+      # set this as the significance threshold
+      interaction.result$all_significance_threshold <- p.value.thresh
     }
-    interaction.list <- list(r.matrix, p.value.matrix, p.value.thresh)
+    #interaction.list <- list(r.matrix, p.value.matrix, p.value.thresh)
   }
   else {
-    interaction.list <- list(r.matrix, p.value.matrix)
+    #interaction.list <- list(r.matrix, p.value.matrix)
   }
+  return(interaction.result)
 }
 
 
-##
-## Read in the expression data.
-##
-do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes){
-  DefaultAssay(seurat_object) <- 'SCT'
-  exp.matrices <- list()
-  cell.counts <- c()
-  sample.names <- vector()
-      
-  sample.names <- unique(seurat_object@meta.data$assignment)
-  i <- 1
-  #for (folder in dir) {
-  for(participant in sample.names){
-    cells_participant <- subset(seurat_object, assignment == participant)
-    print(i)
-    exp.matrices[[i]] <- t(as.matrix(cells_participant@assays$SCT@counts))
-    cell.counts <- c(cell.counts, nrow(cells_participant@meta.data))
-    
-    i <- i + 1
-  }
-  genotypes_samples <- genotypes[,match(sample.names, colnames(genotypes))]
+snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
+prepared_correlations_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/correlation_files/Top500DiffCoexpressedGenePairs_corrected.txt'
+cell_counts_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/cell_counts_cmono.tsv'
+dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets.tsv'
+combined_genotype_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/genotype_files/eqtlgensnps.vcf.gz'
 
-  cor.dir = paste(output_loc,"/correlationMatrices/", sep = '')
-  output.dir = paste(output_loc, sep = '')
+interactions <- do_interaction_analysis_prepared_correlations(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
 
-      
-  create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
-  do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes_samples, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=10)
-  
-}
-
-gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
-genes <- read.table(gene_to_ens_mapping, header = F, stringsAsFactors = F)
-vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
-genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
-rownames(genotypes_all) <- vcf$ID
-
-snp_probes <- c('rs1131017_RPS26')
-
-output_loc_1m_v3_mono_ut <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_recontruction/coeqtls/1M_v3/monocytes/UT/'
-v3_mono_ut <- subset(v3, subset = cell_type_lowerres == 'monocyte' & timepoint == 'UT')
-do_coexqtl(v3_mono_ut, snp_probes, output_loc_1m_v3_mono_ut, genotypes_all)
