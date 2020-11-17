@@ -1,4 +1,5 @@
 library(Seurat)
+library(meta)
 
 
 # Name: create.cor.matrix
@@ -379,7 +380,10 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   }
   # go through the prepared correlations
   for(i in 1:nrow(prepared_correlations)){
-    try({# grab the pair from the row
+    try({
+    # create df
+    dataframe_this_correlation <- NULL
+    # grab the pair from the row
     gene_pair <- rownames(prepared_correlations)[i]
     # split by separator
     genes <- unlist(strsplit(gene_pair, '-'))
@@ -597,22 +601,27 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
   # check each dataset
   for(dataset in datasets_to_use){
     # grab the correlations that are relevant for this dataset
-    relevant_correlation_colnames <- rownames(dataset_annotation[dataset_annotation$dataset == dataset, ])
+    relevant_correlation_colnames <- rownames(dataset_annotation[dataset_annotation$dataset == dataset, , drop = F])
     # subset the prepared correlations to only contain the samples of this dataset
-    relevant_prepared_correlations <- prepared_correlations[colnames(prepared_correlations) %in% relevant_correlation_colnames, ]
+    relevant_prepared_correlations <- prepared_correlations[, colnames(prepared_correlations) %in% relevant_correlation_colnames, drop = F]
     # do the interaction analysis with just this correlation
     interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations)
-    # set the dataset as a column
-    interaction_analysis_dataset$dataset <- as.character(dataset)
-    # append to the results
-    if(is.null(results_all)){
-      results_all <-interaction_analysis_dataset
+    if(!is.null(interaction_analysis_dataset)){
+      # set the dataset as a column
+      interaction_analysis_dataset$dataset <- as.character(dataset)
+      # append to the results
+      if(is.null(results_all)){
+        results_all <-interaction_analysis_dataset
+      }
+      else{
+        results_all <- rbind(results_all, interaction_analysis_dataset)
+      }
     }
     else{
-      results_all <- rbind(results_all, interaction_analysis_dataset)
+      print(paste('null result for', str(dataset)))
     }
   }
-  return(interaction_analysis_dataset)
+  return(results_all)
 }
 
 meta_analyse_interaction_analysis <- function(interaction_analysis){
@@ -622,11 +631,55 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
   interaction_analysis$snpprobes <- paste(interaction_analysis$snp, interaction_analysis$geneA, interaction_analysis$geneB, sep = '_')
   # check each unique combination
   for(snpprobes in unique(interaction_analysis$snpprobes)){
+    # we need to store the P values
+    pvals <- c()
+    # we need to store whether or not it was a permutation
+    permutations <- c()
     # subset to just this snp geneA, geneB combination
-    interaction_result_combination <- interaction_analysis[interaction_analysis$snpprobes == snpprobes, ]
-    
+    interaction_result_combination <- interaction_analysis[interaction_analysis$snpprobes == snpprobes, , drop = F]
+    # then subset to the actual ones
+    interaction_result_combination_true <- interaction_result_combination[interaction_result_combination$permuted == F, , drop = F]
+    # get that p value
+    interaction_result_true <- meta_analyse_interaction(interaction_result_combination_true)
+    # add the p value
+    pvals <- c(pvals, interaction_result_true)
+    # add the fact that this one was a permutation
+    permutations <- c(permutations, F)
+    # grab the permuted combinations
+    interaction_result_combination_permuted <- interaction_result_combination[interaction_result_combination$permuted == F, , drop = F]
+    # get the number of datasets
+    nr_of_datasets <- length(unique(interaction_result_combination_permuted$dataset))
+    # calculate the number of permutations
+    nr_of_permutations <- nrow(interaction_result_combination_permuted) / nr_of_datasets
+    for(i in 1:nr_of_permutations){
+      # get the indexes to use
+      end_index <- i * nr_of_permutations
+      start_index <- i-1 * nr_of_permutations + 1
+      # get this subset of permutations
+      interaction_result_combination_permuted_i <- interaction_result_combination_permuted[start_index:end_index, , drop = F]
+      # do the interaction
+      interaction_result_permuted <- meta_analyse_interaction(interaction_result_combination_permuted_i)
+      # add the p value
+      pvals <- c(pvals, interaction_result_permuted)
+      # add the fact that this one was a permutation
+      permutations <- c(permutations, T)
+    }
+    # turn it into a df
+    meta_interactions <- data.frame(p = pvals, permuted = permutations)
+    # get the info from the snpprobes
+    snp_and_probes <- unlist(strsplit(snpprobes, '_'))
+    meta_interactions$snp <- snp_and_probes[1]
+    meta_interactions$geneA <- snp_and_probes[2]
+    meta_interactions$geneB <- snp_and_probes[3]
+    # add to results
+    if(is.null(interaction_results_meta)){
+      interaction_results_meta <- meta_interactions
+    }
+    else{
+      interaction_results_meta <- rbind(interaction_results_meta, meta_interactions)
+    }
   }
-  
+  return(interaction_results_meta)
 }
 
 meta_analyse_interaction <- function(interaction){
@@ -707,6 +760,9 @@ interactions <- do_interaction_analysis_prepared_correlations_use_loc(prepared_c
 interactions$p.bonferroni <- interactions$p*nrow(interactions[interactions$permuted == F, ])
 
 interactions_wcutoffs <- determine_significance_threshold(interactions)
+
+interactions_per_dataset <- do_interaction_analysis_prepared_correlations_per_dataset(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, datasets=NULL, cell_counts_location=cell_counts_location, nr_of_permutations=20)
+interactions_meta <- meta_analyse_interaction_analysis(interactions_per_dataset)
 
 plot_correlation_per_genotype(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp='rs2229094', gene_pair = 'S100A8-LST1', dataset_annotation_loc=dataset_annotation_loc, condition_to_plot='1M_v3_UT')
 ggsave('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/plots/boxplot_coeqtl_rs2229094_S100A8-LST1_v3_UT.png')
