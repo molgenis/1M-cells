@@ -324,7 +324,7 @@ do_coexqtl(v3_mono_ut, snp_probes, output_loc_1m_v3_mono_ut, genotypes_all)
 
 #PREPARED ANALYSIS
 
-do_interaction_analysis_prepared_correlations <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=NULL, dataset_annotation_loc=NULL){
+do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20){
   # read the genotype data
   vcf <- fread(combined_genotype_location)
   genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
@@ -335,12 +335,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
   genotypes_all[genotypes_all == '1|1'] <- '1/1'
   genotypes_all[genotypes_all == '1|0'] <- '1/0'
   genotypes_all[genotypes_all == '0|1'] <- '1/0'
+  genotypes_all[genotypes_all == './.'] <- NA
+  genotypes_all[genotypes_all == '.|.'] <- NA
   genotypes_all <- data.frame(genotypes_all)
   rownames(genotypes_all) <- vcf$ID
   # get the mapping of the probe to the cis SNP
   snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
   # read the correlations
-  prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
+  #prepared_correlations <- read.table(prepared_correlations, sep = '\t', header = T, row.names = 1)
   # remove the prepared correlations that we do not have genotype data for
   prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
   # create a regex to get the last index of the dot
@@ -362,7 +364,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
   # create an output dataframe
   result_dataframe <- NULL
   # permuted sample labels
-  for (i in 1:nr_of_permutatations) {
+  for (i in 1:nr_of_permutations) {
     print(paste('permutation', i))
     # for these, the participants actual order in the coexpression is no longer correct
     permuted_participants[[i]] <- sample(participants, length(participants), replace = F)
@@ -370,7 +372,10 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
   # load dataset annotations if we have them, make them the same by default
   dataset_annotation <- data.frame(dataset=rep(1, times=ncol(prepared_correlations)), row.names = colnames(prepared_correlations))
   if(!is.null(dataset_annotation_loc)){
+    # read the dataset annotation
     dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
+    # the vdwijst 2018 genotype data has a 1_ prepend which is turned into X1_, so do that for the dataset annotation as well
+    rownames(dataset_annotation) <- gsub('1_', 'X1_', rownames(dataset_annotation))
   }
   # go through the prepared correlations
   for(i in 1:nrow(prepared_correlations)){
@@ -424,7 +429,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations_
       
     }
     # do permuted analysis as well
-    for (i in 1:nr_of_permutatations) {
+    for (i in 1:nr_of_permutations) {
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
         genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
         # do the regression analysis
@@ -544,7 +549,7 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
       # get the number of permuted p values that were smaller than the threshold
       permuted_sig_p_values_number <- length(which(permuted_p_values <= current.p.value.thresh))
       # approach the mean permuted number of p values per snp/geneA/geneB set by dividing by the number of real snp/geneA tests
-      mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/length(p.values.unsorted)
+      mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/(permuted_p_values/length(p.values.unsorted))
       # stop searching for a threshold if there are more than 5% 'real' coexqtls that have a worse P than the permuted ones
       print(paste('threshold', current.p.value.thresh))
       print(paste('mean number of sig permuted p values', mean_permuted_sig_p_values_number))
@@ -564,6 +569,133 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
   return(interaction.result)
 }
 
+do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20){
+  # read the correlations
+  prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
+  # do the actual work
+  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations)
+  return(interaction.result)
+}
+
+do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20){
+  # read the datasets annotation file
+  dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
+  # replace the dash with a dot, as the colnames in the dataset annotation are auto-replace
+  rownames(dataset_annotation) <- gsub('\\-', '\\.', rownames(dataset_annotation))
+  # the vdwijst 2018 genotype data has a 1_ prepend which is turned into X1_, so do that for the dataset annotation as well
+  rownames(dataset_annotation) <- gsub('1_', 'X1_', rownames(dataset_annotation))
+  # set the datasets to use, from what the user supplied
+  datasets_to_use <- datasets
+  # however if the user did not supply any datasets, we will just do each dataset
+  if(is.null(datasets_to_use)){
+    datasets_to_use <- unique(dataset_annotation$dataset)
+  }
+  # read the correlations
+  prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
+  # will store all the results together
+  results_all <- NULL
+  # check each dataset
+  for(dataset in datasets_to_use){
+    # grab the correlations that are relevant for this dataset
+    relevant_correlation_colnames <- rownames(dataset_annotation[dataset_annotation$dataset == dataset, ])
+    # subset the prepared correlations to only contain the samples of this dataset
+    relevant_prepared_correlations <- prepared_correlations[colnames(prepared_correlations) %in% relevant_correlation_colnames, ]
+    # do the interaction analysis with just this correlation
+    interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations)
+    # set the dataset as a column
+    interaction_analysis_dataset$dataset <- as.character(dataset)
+    # append to the results
+    if(is.null(results_all)){
+      results_all <-interaction_analysis_dataset
+    }
+    else{
+      results_all <- rbind(results_all, interaction_analysis_dataset)
+    }
+  }
+  return(interaction_analysis_dataset)
+}
+
+meta_analyse_interaction_analysis <- function(interaction_analysis){
+  # create somewhere to store the results
+  interaction_results_meta <- NULL
+  # create a unique combination of snp probe1 probe2
+  interaction_analysis$snpprobes <- paste(interaction_analysis$snp, interaction_analysis$geneA, interaction_analysis$geneB, sep = '_')
+  # check each unique combination
+  for(snpprobes in unique(interaction_analysis$snpprobes)){
+    # subset to just this snp geneA, geneB combination
+    interaction_result_combination <- interaction_analysis[interaction_analysis$snpprobes == snpprobes, ]
+    
+  }
+  
+}
+
+meta_analyse_interaction <- function(interaction){
+  # grab betas
+  betas <- interaction$beta.estimate
+  # grab standard errors
+  stdEs <- interaction$std.error
+  # grab datasets
+  datasets <- interaction$dataset
+  # do the metaanalysis
+  metaAnalysis <- metagen(TE=c(betas), seTE = c(stdEs), studlab = datasets)
+  pval <- metaAnalysis$pval.random
+  return(pval)
+}
+
+
+plot_correlation_per_genotype <- function(prepared_correlations_location, combined_genotype_location, snp, gene_pair, dataset_annotation_loc=NULL, condition_to_plot=NULL){
+  # read the genotype data
+  vcf <- fread(combined_genotype_location)
+  genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
+  rownames(genotypes_all) <- vcf$ID
+  # harmonize the way the genotypes are stored
+  genotypes_all <- sapply(genotypes_all, substring, 1, 3)
+  genotypes_all[genotypes_all == '0|0'] <- '0/0'
+  genotypes_all[genotypes_all == '1|1'] <- '1/1'
+  genotypes_all[genotypes_all == '1|0'] <- '1/0'
+  genotypes_all[genotypes_all == '0|1'] <- '1/0'
+  genotypes_all[genotypes_all == '0/1'] <- '1/0'
+  genotypes_all[genotypes_all == './.'] <- NA
+  genotypes_all[genotypes_all == '.|.'] <- NA
+  genotypes_all <- data.frame(genotypes_all)
+  rownames(genotypes_all) <- vcf$ID
+  # read the correlations
+  prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
+  # remove the prepared correlations that we do not have genotype data for
+  prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
+  # create a regex to get the last index of the dot
+  last_dash_pos <- "\\."
+  # extract the participants from the correlation matrix column names
+  participants <- substring(colnames(prepared_correlations), 1, regexpr(last_dash_pos, colnames(prepared_correlations))-1)
+  # subset the prepared correlations to only the ones we have genotype data for
+  prepared_correlations <- prepared_correlations[, participants %in% colnames(genotypes_all)]
+  # subset to a condition if asked
+  if(!is.null(dataset_annotation_loc) & !is.null(condition_to_plot)){
+    # read the dataset file
+    dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
+    # get the column names of the prepared correlations for that condition
+    columns_condition <- rownames(dataset_annotation[as.character(dataset_annotation$dataset) == condition_to_plot, , drop=F])
+    # replace the dash with dots
+    columns_condition <- gsub('\\-', '.', columns_condition)
+    # subset the correlations
+    prepared_correlations <- prepared_correlations[, colnames(prepared_correlations) %in% columns_condition]
+  }
+  # get the participants again from the subsetted data
+  participants <- substring(colnames(prepared_correlations), 1, regexpr(last_dash_pos, colnames(prepared_correlations))-1)
+  # get the correlations for the gene pair
+  correlations <- as.vector(unlist(prepared_correlations[gene_pair, ]))
+  # get the genotypes for the participants
+  genotypes_snp <- as.vector(unlist(genotypes_all[snp, participants]))
+  # turn into plot df
+  plot_df <- data.frame(snp=genotypes_snp, correlation=correlations)
+  # plot
+  plotted <- ggplot(plot_df, aes(x=snp, y=correlation, color=snp)) +
+    geom_boxplot()
+  return(plotted)
+}
+
+
+
 
 snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
 prepared_correlations_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/correlation_files/Top500DiffCoexpressedGenePairs_corrected.txt'
@@ -571,6 +703,10 @@ cell_counts_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongo
 dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets.tsv'
 combined_genotype_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/genotype_files/eqtlgensnps.vcf.gz'
 
-interactions <- do_interaction_analysis_prepared_correlations(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, nr_of_permutatations=20, fdr=0.05, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
+interactions <- do_interaction_analysis_prepared_correlations_use_loc(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
+interactions$p.bonferroni <- interactions$p*nrow(interactions[interactions$permuted == F, ])
 
 interactions_wcutoffs <- determine_significance_threshold(interactions)
+
+plot_correlation_per_genotype(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp='rs2229094', gene_pair = 'S100A8-LST1', dataset_annotation_loc=dataset_annotation_loc, condition_to_plot='1M_v3_UT')
+ggsave('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/plots/boxplot_coeqtl_rs2229094_S100A8-LST1_v3_UT.png')
