@@ -336,6 +336,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   genotypes_all[genotypes_all == '1|1'] <- '1/1'
   genotypes_all[genotypes_all == '1|0'] <- '1/0'
   genotypes_all[genotypes_all == '0|1'] <- '1/0'
+  genotypes_all[genotypes_all == '1/.'] <- NA
+  genotypes_all[genotypes_all == '0/.'] <- NA
+  genotypes_all[genotypes_all == '1|.'] <- NA
+  genotypes_all[genotypes_all == '0|.'] <- NA
+  genotypes_all[genotypes_all == './1'] <- NA
+  genotypes_all[genotypes_all == './0'] <- NA
+  genotypes_all[genotypes_all == '.|1'] <- NA
+  genotypes_all[genotypes_all == '.|0'] <- NA
   genotypes_all[genotypes_all == './.'] <- NA
   genotypes_all[genotypes_all == '.|.'] <- NA
   genotypes_all <- data.frame(genotypes_all)
@@ -380,7 +388,6 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   }
   # go through the prepared correlations
   for(i in 1:nrow(prepared_correlations)){
-    try({
     # create df
     dataframe_this_correlation <- NULL
     # grab the pair from the row
@@ -401,6 +408,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
     datasets <- as.vector(dataset_annotation[gsub('\\.','-' , colnames(prepared_correlations)), 'dataset'])
     # get the top SNP for each probe
     if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
+      tryCatch({
       # grab the type eQTLgens snp belonging to the gene
       cis_snp_a <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]$snp[1]
       # grab the genotypes for these participants
@@ -413,9 +421,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
       result_snp_a[['permuted']] <- F
       # turn into dataframe
       dataframe_this_correlation <- data.frame(result_snp_a)
+      },
+      error=function(cond){
+        print(paste('model not run for :', cis_snp_a, geneA, geneB))
+      })
     }
     # I know, doing this twice is disgusting
     if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
+      tryCatch({
       cis_snp_b <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]$snp[1]
       genotypes_snp_b <- as.vector(unlist(genotypes_all[cis_snp_b, participants]))
       result_snp_b <- do_regression(correlations, genotypes_snp_b, weights, datasets)
@@ -430,11 +443,15 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
       else{
         dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b))
       }
-      
+      },
+      error=function(cond){
+        print(paste('model not run for :', cis_snp_b, geneA, geneB))
+      })
     }
     # do permuted analysis as well
     for (i in 1:nr_of_permutations) {
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
+        tryCatch({
         genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
         # do the regression analysis
         result_snp_a_permuted <- do_regression(correlations, genotypes_snp_a_permuted, weights, datasets)
@@ -444,9 +461,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
         result_snp_a_permuted[['geneB']] <- geneB
         result_snp_a_permuted[['permuted']] <- T
         dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_a_permuted))
+        },
+        error=function(cond){
+          print(paste('model not run for :', cis_snp_a, geneA, geneB))
+        })
       }
       # I now, repeating just as before, very bad
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
+        tryCatch({
         genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
         result_snp_b_permuted <- do_regression(correlations, genotypes_snp_b_permuted, weights, datasets)
         result_snp_b_permuted[['snp']] <- cis_snp_b
@@ -454,6 +476,10 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
         result_snp_b_permuted[['geneB']] <- geneB
         result_snp_b_permuted[['permuted']] <- T
         dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b_permuted))
+        },
+        error=function(cond){
+          print(paste('model not run for :', cis_snp_b, geneA, geneB))
+        })
       }
     }
     # add to existing dataframe if it exists
@@ -463,20 +489,63 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
     else{
       result_dataframe <- rbind(result_dataframe, dataframe_this_correlation)
     }
-    })
   }
   return(result_dataframe)
 }
 
 do_regression <- function(correlations, snp, weights, datasets){
+  # create dataframe to house data
+  lm_data <- data.frame(correlations=correlations, snp=snp)
+  # add weights in df if not null. When null, it will not be in the df, grabbed from outside the df and still be null. that works for lm
+  if(!is.null(weights)){
+    lm_data$weights <- weights
+  }
   # do the regression analysis
   model <- NULL
   # if we have multiple datasets, take this into account
   if(length(unique(datasets)) > 1){
-    model <- lm(formula = correlations~snp+datasets, weights = weights)
+    # add datasets info
+    lm_data$datasets <- datasets
+    # manually remove NA rows
+    lm_data <- lm_data[!is.na(lm_data$correlations) & !is.na(lm_data$snp), ]
+    # TODO make this prettier
+    if(nrow(lm_data) == 0){
+      print('no data left')
+    }
+    else if(length(unique(lm_data$correlations)) == 1){
+      print('correlations are all the same')
+    }
+    else if(length(unique(lm_data$snp)) == 1){
+      print('snps are all the same')
+    }
+    else if(length(unique(weights)) == 1){
+      print('weights are all the same')
+    }
+    else{
+      # model
+      model <- lm(formula = correlations~snp+datasets, weights = weights, data = lm_data)
+    }
   }
   else{
-    model <- lm(formula = correlations~snp, weights = weights)
+    # manually remove NA rows
+    lm_data <- lm_data[!is.na(lm_data$correlations) & !is.na(lm_data$snp), ]
+    # TODO make this prettier
+    if(nrow(lm_data) == 0){
+      print('no data left')
+    }
+    else if(length(unique(lm_data$correlations)) == 1){
+      print('correlations are all the same')
+    }
+    else if(length(unique(lm_data$snp)) == 1){
+      print('snps are all the same')
+    }
+    else if(length(unique(weights)) == 1){
+      print('weights are all the same')
+    }
+    else{
+      # model
+      model <- lm(formula = correlations~snp, weights = weights, data = lm_data)
+    }
   }
   modelSummary <- summary(model)
   # grab relevant values
