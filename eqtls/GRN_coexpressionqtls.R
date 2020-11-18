@@ -754,6 +754,7 @@ snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAse
 prepared_correlations_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/correlation_files/Top500DiffCoexpressedGenePairs_corrected.txt'
 cell_counts_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/cell_counts_cmono.tsv'
 dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets.tsv'
+dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets_wutp3.tsv'
 combined_genotype_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/genotype_files/eqtlgensnps.vcf.gz'
 
 interactions <- do_interaction_analysis_prepared_correlations_use_loc(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
