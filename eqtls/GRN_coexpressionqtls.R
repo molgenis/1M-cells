@@ -621,8 +621,10 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
       permuted_p_values <- interaction.result[interaction.result$permuted == T, ]$p
       # get the number of permuted p values that were smaller than the threshold
       permuted_sig_p_values_number <- length(which(permuted_p_values <= current.p.value.thresh))
+      # get the number of permutations
+      nr_of_permutations <- length(permuted_p_values)/length(p.values.unsorted)
       # approach the mean permuted number of p values per snp/geneA/geneB set by dividing by the number of real snp/geneA tests
-      mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/(permuted_p_values/length(p.values.unsorted))
+      mean_permuted_sig_p_values_number <- permuted_sig_p_values_number/nr_of_permutations
       # stop searching for a threshold if there are more than 5% 'real' coexqtls that have a worse P than the permuted ones
       print(paste('threshold', current.p.value.thresh))
       print(paste('mean number of sig permuted p values', mean_permuted_sig_p_values_number))
@@ -700,6 +702,7 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
   interaction_analysis$snpprobes <- paste(interaction_analysis$snp, interaction_analysis$geneA, interaction_analysis$geneB, sep = '_')
   # check each unique combination
   for(snpprobes in unique(interaction_analysis$snpprobes)){
+    tryCatch({
     # we need to store the P values
     pvals <- c()
     # we need to store whether or not it was a permutation
@@ -715,17 +718,16 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
     # add the fact that this one was a permutation
     permutations <- c(permutations, F)
     # grab the permuted combinations
-    interaction_result_combination_permuted <- interaction_result_combination[interaction_result_combination$permuted == F, , drop = F]
+    interaction_result_combination_permuted <- interaction_result_combination[interaction_result_combination$permuted == T, , drop = F]
     # get the number of datasets
     nr_of_datasets <- length(unique(interaction_result_combination_permuted$dataset))
     # calculate the number of permutations
     nr_of_permutations <- nrow(interaction_result_combination_permuted) / nr_of_datasets
     for(i in 1:nr_of_permutations){
-      # get the indexes to use
-      end_index <- i * nr_of_permutations
-      start_index <- i-1 * nr_of_permutations + 1
+      # get the indices of what we need to get, if no resorted, all permutatations of a dataset should be sorted together, which means we need to make steps by the size of the number of datasets
+      indices <- (c(1:nr_of_datasets) * nr_of_permutations) - nr_of_permutations + i
       # get this subset of permutations
-      interaction_result_combination_permuted_i <- interaction_result_combination_permuted[start_index:end_index, , drop = F]
+      interaction_result_combination_permuted_i <- interaction_result_combination_permuted[indices, , drop = F]
       # do the interaction
       interaction_result_permuted <- meta_analyse_interaction(interaction_result_combination_permuted_i)
       # add the p value
@@ -747,6 +749,9 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
     else{
       interaction_results_meta <- rbind(interaction_results_meta, meta_interactions)
     }
+  }, error=function(cond){
+    print('meta-analysis skipped')
+  })
   }
   return(interaction_results_meta)
 }
@@ -833,6 +838,7 @@ interactions_wcutoffs <- determine_significance_threshold(interactions)
 
 interactions_per_dataset <- do_interaction_analysis_prepared_correlations_per_dataset(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, datasets=NULL, cell_counts_location=cell_counts_location, nr_of_permutations=20)
 interactions_meta <- meta_analyse_interaction_analysis(interactions_per_dataset)
+interactions_meta_wcutoffs <- determine_significance_threshold(interactions_meta)
 
-plot_correlation_per_genotype(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp='rs2229094', gene_pair = 'S100A8-LST1', dataset_annotation_loc=dataset_annotation_loc, condition_to_plot='1M_v3_UT')
-ggsave('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/plots/boxplot_coeqtl_rs2229094_S100A8-LST1_v3_UT.png')
+plot_correlation_per_genotype(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp='rs4761234', gene_pair = 'TNFRSF1B-LYZ', dataset_annotation_loc=dataset_annotation_loc, condition_to_plot='1M_v2_UT')
+ggsave('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/plots/boxplot_coeqtl_rs4761234_TNFRSF1B-LYZ_v2_UT.png')
