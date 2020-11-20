@@ -1043,76 +1043,76 @@ mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/
 write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
 
 # do the same for the 3h vs 24h stuff
-mast_meta_output_3h24h_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+mast_meta_output_3h24h_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
 write_meta_mast_3hvs24h(NULL, mast_output_prepend, mast_output_append, mast_meta_output_3h24h_loc)
 
 
 # we can go from gene symbols to ensemble IDs with this file
 gene_to_ens_mapping <- "/data/scRNA/differential_expression/genesymbol_to_ensid.tsv"
 # set the location to write the significant genes
-sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20201029_ensid/rna/'
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20201106_ensid/rna/'
 # write the significant genes
 get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20201029_ensid/rna/'
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20201106_ensid/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201029_ensid/rna/'
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201106_ensid/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 # set the location to write the significant genes
-sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20201029/rna/'
+sig_output_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20201106/rna/'
 # write the significant genes
 get_significant_genes(mast_meta_output_loc, sig_output_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20201029/rna/'
+sig_up_output_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20201106/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_up_output_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 # set the location for the significant genes that were upregulated
-sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201029/rna/'
+sig_down_output_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201106/rna/'
 # write the significantly upregulated genes
 get_significant_genes(mast_meta_output_loc, sig_down_output_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 # do all this stuff for the 3h vs 24h as well
-sig_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+sig_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs/meta_paired_lores_lfc01minpct01_20201106_3h24h/rna/'
 get_significant_genes(mast_meta_output_3h24h_loc, sig_output_3h24h_loc, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
-sig_up_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+sig_up_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_lores_lfc01minpct01_20201106_3h24h/rna/'
 get_significant_genes(mast_meta_output_3h24h_loc, sig_up_output_3h24h_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
-sig_down_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+sig_down_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201106_3h24h/rna/'
 get_significant_genes(mast_meta_output_3h24h_loc, sig_down_output_3h24h_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 
 # check unique DE genes per timepoint for the different pathogens
-sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
-sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
-sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
 
 # check unique DE genes per timepoint for the same pathogen
-sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
-sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
-sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
 
 # check shared DE genes per timepoint for the different pathogens
-sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
-sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
-sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
 
 # check shared DE genes per timepoint for the same pathogen
-sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
-sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
-sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20200713/rna/'
+sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20201106/rna/'
 get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
 
 # get the location of the pathways
@@ -1121,14 +1121,14 @@ pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01
 # write the combined pathway file
 pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
 pathway_df[pathway_df==0] <- 600
-write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20201106/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the locaiton of the pathways of only upregulated genes
-pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
+pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/'
 # write the combined pathway file
 pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
 pathway_up_df[pathway_up_df==0] <- 600
-write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
+write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
 
 # get the df limited by top pathways
 pathway_df_top_3 <- get_top_pathways(pathway_df, 3, T)
@@ -1140,7 +1140,7 @@ pathway_up_df_top_3 <- get_top_pathways(pathway_up_df, 3, T)
 pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5, T)
 
 # show clustering based on DE genes
-deg_path <- "/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/"
+deg_path <- "/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/"
 
 
 
@@ -1357,6 +1357,10 @@ monos_vary_pathogen_timepoint_500_genes_branch1112 <- get_gene_list_from_hm_bran
 
 
 # average expression matrix locations
+v3_avg_exp_loc <- '/data/scRNA/pathways/avg_expression_v3_20201106_rna.tsv'
+v3_avg_exp <- read.table(v3_avg_exp_loc, sep = '\t', header = T)
+v3_mono_avg_exp <- v3_avg_exp[v3_avg_exp$cell_type == 'monocyte', ]
+
 v2_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v2_mono_avg_exp.tsv'
 v3_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v3_mono_avg_exp.tsv'
 v2_mono_avg_exp_loc <- '/data/scRNA/pathways/v2_mono_avg_exp.tsv'
@@ -1372,6 +1376,7 @@ v2_mono_avg_exp_normed_de <- subset_expression_table_by_de(v2_mono_avg_exp_norme
 v3_mono_avg_exp_normed_de <- subset_expression_table_by_de(v3_mono_avg_exp_normed, mast_meta_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, lfc_column='metafc')
 # convert to a heatmap compatible table
 v2_mono_avg_exp_normed_de_hmt <- avg_exp_table_to_hm_table(v2_mono_avg_exp_normed_de)
+v3_mono_avg_exp_normed_de_hmt <- avg_exp_table_to_hm_table(v3_mono_avg_exp_normed_de)
 
 # grab some pathway genes to use for annotation
 pathways_list <- list()
@@ -1381,9 +1386,22 @@ pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_
 pathways_list[['IL10 signalling']] <- '/data/scRNA/pathways/REACTOME_Interleukin-10_signaling.txt'
 #pathways_list[['DAP12 signalling']] <- '/data/scRNA/pathways/REACTOME_DAP12_signaling.txt'
 
-# transform the pathways to colors
-colors_pathways <- pathways_to_hm_colors(v2_mono_avg_exp_normed_de_hmt, pathways_list)
+# add all the genes from the pathways togeter
+pathway_genes <- c()
+for(pathway in names(pathways_list)){
+  genes_pathway_loc <- pathways_list[[pathway]]
+  genes_pathway <- read.table(genes_pathway_loc, header=F, stringsAsFactors = F)$V1
+  pathway_genes <- c(pathway_genes, genes_pathway)
+}
+pathway_genes <- unique(pathway_genes)
+# subset to the pathway genes
+v3_mono_avg_exp_normed_de_hmt_only_pathways <- v3_mono_avg_exp_normed_de_hmt[rownames(v3_mono_avg_exp_normed_de_hmt) %in% pathway_genes, ]
 
-heatmap.3(t(v2_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"RdBu")), margins = c(5,10), ColSideColors = colors_pathways)
+# transform the pathways to colors
+colors_pathways <- pathways_to_hm_colors(v3_mono_avg_exp_normed_de_hmt, pathways_list)
+colors_pathways_only_pathways <- pathways_to_hm_colors(v3_mono_avg_exp_normed_de_hmt_only_pathways, pathways_list)
+
+heatmap.3(t(v3_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"RdBu")), margins = c(5,10), ColSideColors = colors_pathways)
+heatmap.3(t(v3_mono_avg_exp_normed_de_hmt_only_pathways), labCol = NA, col=(brewer.pal(10,"YlOrRd")), margins = c(5,10), ColSideColors = colors_pathways_only_pathways)
 
 
