@@ -10,6 +10,7 @@ require(broom)
 library(Seurat)
 library(ggplot2)
 library(data.table)
+library(meta)
 
 ###########################################################################################################################
 #
@@ -766,6 +767,16 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
   
 }
 
+create_module_score_cor_matrices <- function(seurat_object, gene, modulescore.name, output_loc, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+  DefaultAssay(seurat_object) <- 'SCT'
+  for(condition in conditions){
+    cells_condition <- subset(seurat_object, subset = timepoint == condition)
+    for(cell_type_to_check in cell_types){
+      
+    }
+  }
+}
+
 
 ###########################################################################################################################
 #
@@ -783,10 +794,10 @@ rownames(genotypes_all) <- vcf$ID
 
 # object locations
 object_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/'
-object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
-object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
+object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds', sep = '')
+object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
 
-conditions=c('UT', 'X3hCA', 'X24hCA')
+conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')
 cell_types=c('CD8T')
 
 snp_probes <- c('rs1131017_RPS26')
@@ -820,7 +831,7 @@ do_coexqtl(v2, snp_probes, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/o
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_TNFAIP6_coexpression_pos_allcond.txt'
 mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
-v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
+v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds')
 v2 <- v2[,!is.na(v2@meta.data$timepoint)]
 v2 <- v2[,!is.na(v2@meta.data$assignment)]
 v2_mono <- subset(v2, subset = cell_type_lowerres == 'monocyte')
@@ -833,7 +844,7 @@ do_coexqtl(v2_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_ce
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_tnfaip6_cor_genes.txt'
 mono_cors_tnfaip6_cor_genes_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/mono_TNFAIP6_coexpression_pos_allcond.txt'
 mono_cors_tnfaip6_cor_genes_confine <- read.table(mono_cors_tnfaip6_cor_genes_loc)
-v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds')
+v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds')
 v3 <- v3[,!is.na(v3@meta.data$timepoint)]
 v3 <- v3[,!is.na(v3@meta.data$assignment)]
 v3_mono <- subset(v3, subset = cell_type_lowerres == 'monocyte')
@@ -858,4 +869,40 @@ do_coexqtl(v3_cd8t_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_ce
 
 
 # try to do a meta analysis
-do_coexqtl.meta(v2_mono_confined, v3_mono_confined, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_TNFAIP6_confine_meta/', genotypes_all, cell_types = c('monocyte'))
+for(condition in conditions){
+  do_coexqtl.meta(v2_mono, v3_mono, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confine_meta_20201124/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+}
+for(condition in conditions){
+  do_coexqtl(v3_mono, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confine_v3_20201124/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confine_v2_20201124/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+}
+
+# need to do for each condition
+conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')
+for(condition in conditions){
+  # get the participants in both conditions
+  parts_v2 <- intersect(v2_mono@meta.data[v2_mono@meta.data$timepoint == 'UT', ]$assignment, v2_mono@meta.data[v2_mono@meta.data$timepoint == condition, ]$assignment)
+  parts_v3 <- intersect(v3_mono@meta.data[v3_mono@meta.data$timepoint == 'UT', ]$assignment, v3_mono@meta.data[v3_mono@meta.data$timepoint == condition, ]$assignment)
+  # subset to those participants
+  v2_mono_matched <- v2_mono[, v2_mono@meta.data$assignment %in% parts_v2]
+  v3_mono_matched <- v3_mono[, v3_mono@meta.data$assignment %in% parts_v3]
+  # do the actual coexpression
+  do_coexqtl.meta(v2_mono_matched, v3_mono_matched, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_meta_20201124/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono_matched, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_v3_20201124/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono_matched, snp_probes, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_v2_20201124/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  # also need to do UT multiple times
+  do_coexqtl.meta(v2_mono_matched, v3_mono_matched, snp_probes, paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_meta_20201124/', condition, 'confine/', sep = '_'), genotypes_all, cell_types = c('monocyte'), conditions = c('UT'))
+  do_coexqtl(v3_mono_matched, snp_probes, paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_v3_20201124/UT', condition, 'confine/', sep = '_'), genotypes_all, conditions = c('UT'), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono_matched, snp_probes, paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_confinematch_v2_20201124/UT', condition, 'confine/', sep = '_'), genotypes_all, conditions = c('UT'), cell_types = c('monocyte'))
+}
+
+# get module scores
+il10_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/IL10_genes.txt'
+tnf_genes_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/gene_confinements/TNF_genes.txt'
+il10_genes <- read.table(il10_genes_loc)
+tnf_genes <- read.table(tnf_genes_loc)
+v2_mono <- AddModuleScore(v2_mono, il10_genes, name='IL10.module')
+v2_mono <- AddModuleScore(v2_mono, tnf_genes, name='TNF.module')
+v3_mono <- AddModuleScore(v3_mono, il10_genes, name='IL10.module')
+v3_mono <- AddModuleScore(v3_mono, tnf_genes, name='TNF.module')
+

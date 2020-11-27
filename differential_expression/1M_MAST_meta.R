@@ -370,7 +370,7 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
       # read the mast output
       mast <- read.table(paste(mast_output_loc, file, sep = ''), header=T)
       # filter to only include the significant results
-      mast <- mast[mast[[pval_column]] <= 0.05, ]
+      mast <- mast[mast[[pval_column]] <= sig_pval, ]
       # filter for only the positive lfc if required
       if(only_positive){
         mast <- mast[mast[[lfc_column]] < 0, ]
