@@ -767,6 +767,67 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
   
 }
 
+create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+  # check the different cell types
+  for(cell_type in cell_types){
+    # subset to this cell type
+    seurat_cell_type <- seurat_object[, !is.na(seurat_object@meta.data[[cell_type_column]]) & seurat_object@meta.data[[cell_type_column]] == cell_type]
+    print(paste('subset cell type:', cell_type))
+    # init the table
+    cell_type_correlations <- NULL
+    # check each cell condition
+    for(condition in conditions){
+      # subsetting to the condition
+      seurat_cell_type_condition <- seurat_cell_type[, !is.na(seurat_cell_type@meta.data[[condition_column]]) & seurat_cell_type@meta.data[[condition_column]] == condition]
+      print(paste('subset condition:', condition))
+      # create the correlation table for this cell type and condition
+      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column)
+      # add the condition to the column names
+      colnames(cor_cell_type_condition) <- paste(colnames(cor_cell_type_condition), condition, sep = '-')
+      # add to exising correlations if possible
+      if(is.null(cell_type_correlations)){
+        cell_type_correlations <- cor_cell_type_condition
+      }
+      else{
+        cell_type_correlations <- cbind(cell_type_correlations, cor_cell_type_condition)
+      }
+    }
+    # paste together an output location
+    output_loc_full <- paste(output_loc, cell_type, '.tsv', sep = '')
+    # write the table
+    write.table(cell_type_correlations, output_loc_full, sep = '\t', row.names=T, col.names=T, quote=F)
+  }
+}
+
+create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment'){
+  # get every gene combination
+  gene_combinations <- expand.grid(A=geneAs, B=geneBs)
+  # turn into vector
+  gene_combinations <- paste(gene_combinations$A, gene_combinations$B, sep='-')
+  # init table
+  correlation_table <- matrix(, nrow=length(gene_combinations), ncol=length(unique(seurat_object@meta.data[[assignment_column]])))
+  rownames(correlation_table) <- gene_combinations
+  colnames(correlation_table) <- unique(seurat_object@meta.data[[assignment_column]])
+  # check each participant
+  for(participant in unique(seurat_object@meta.data[[assignment_column]])){
+    # subset to thtat participant
+    seurat_participant <- seurat_object[, seurat_object@meta.data[[assignment_column]] == participant]
+    # check each gene
+    for(geneA in geneAs){
+      # against each other gene
+      for(geneB in geneBs){
+        # calculate the correlation
+        correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
+        # set this correlation
+        genepair <- paste(geneA, geneB, sep = '-')
+        correlation_table[genepair, participant] <- correlation
+      }
+    }
+  }
+  return(correlation_table)
+}
+
+
 create_module_score_cor_matrices <- function(seurat_object, gene, modulescore.name, output_loc, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
   DefaultAssay(seurat_object) <- 'SCT'
   for(condition in conditions){
