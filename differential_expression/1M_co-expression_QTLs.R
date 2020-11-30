@@ -816,11 +816,14 @@ create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assign
     for(geneA in geneAs){
       # against each other gene
       for(geneB in geneBs){
-        # calculate the correlation
-        correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
-        # set this correlation
-        genepair <- paste(geneA, geneB, sep = '-')
-        correlation_table[genepair, participant] <- correlation
+        # we need to try, because sometimes a gene might not be present. Failing is okay, because it will just leave the default NA
+        try({
+          # calculate the correlation
+          correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
+          # set this correlation
+          genepair <- paste(geneA, geneB, sep = '-')
+          correlation_table[genepair, participant] <- correlation
+        })
       }
     }
   }
