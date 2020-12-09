@@ -74,6 +74,20 @@ create_cor_boxplot <- function(cor_data, cor_column='cor', snp_column='snp', ass
   return(plot_per_condition)
 }
 
+save_ggarranged_boxplots <- function(data, output_loc_prepend, cor_pairs){
+  for(item in cor_pairs){
+    # create a correlation of the two genes per participant and condition
+    correlations <- create_cor_df(data, item[1], item[2], item[3])
+    # create the boxplots per condition
+    bxplt <- create_cor_boxplot(correlations, cor_column='cor', snp_column='snp', assignment_column='participant', condition_column='condition')
+    # paste together the plot
+    ggarrange(bxplt[['X3hCA']], bxplt[['X24hCA']], bxplt[['X3hMTB']], bxplt[['X24hMTB']], bxplt[['X3hPA']], bxplt[['X24hPA']], bxplt[['UT']], ncol=2, nrow=4)
+    # save the plot
+    ggsave(paste(output_loc_prepend, item[1], item[2],'_bxplt.png', sep=''), width=10, height=10)
+  }
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -127,6 +141,24 @@ gts <- t(gts)
 gts <- data.frame(gts)
 # add the genotype data
 v3_comb$snp <- gts$rs1131017[match(v3_comb$assignment, rownames(gts))]
+# add a dummy column for instances where we don't want to split by snp
+v3_comb$dummy <- 'dummy'
+# create a list of correlations to look at
+cors_to_check <- list(c('RPS26', 'RPL28', 'snp'), c('RPS26', 'YE_interferon_type1', 'snp'), c('RPS26', 'YE_interferon_type2', 'snp'), c('RPL28', 'YE_interferon_type1', 'dummy'), c('RPL28', 'YE_interferon_type2', 'dummy'), c('RPL28', 'YE_interferon_shared', 'dummy'))
+# set the output location of the plots
+cors_output_v3 <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/v3_'
+# create these plots
+save_ggarranged_boxplots(v3_comb, cors_output_v3, cors_to_check)
+# set the output location of the plots
+cors_output_v3_mono <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/v3_mono_'
+# create these plots
+save_ggarranged_boxplots(v3_comb[v3_comb$cell_type == 'monocyte', ], cors_output_v3_mono, cors_to_check)
+
+
+
+
+
+
 
 # create a correlation of the two genes per participant and condition
 v3_cor_rps26_rpl28 <- create_cor_df(v3_comb, 'RPS26', 'RPL28', 'snp')
