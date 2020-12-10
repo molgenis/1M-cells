@@ -147,12 +147,18 @@ get_overlapping_DE_reQTL_genes_overlap_per_cell_type_ggplot <- function(eQTL_out
   return(plot_per_stim)
 }
 
-plot_DE_zscores_per_condition <- function(eQTL_output_loc, MAST_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=F, only_negative=F, reqtl=T, symbols.to.ensg.mapping.loc=NULL, sig_in='either'){
+plot_DE_zscores_per_condition <- function(eQTL_output_loc, MAST_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', lfc_column='metafc', sig_pval=0.05, only_positive=F, only_negative=F, reqtl=T, symbols.to.ensg.mapping.loc=NULL, sig_in='either', combine_plots=F){
   # store per cell type
   plots_ct <- list()
   for(cell_type in cell_types){
     # store per stim
     plots_stim <- list()
+    if(combine_plots){
+      par(mfrow=c(3,2))
+    }
+    else{
+      par(mfrow=c(1,1))
+    }
     for(stim in stim_conditions){
       # get the df
       z_df <- get_z_scores_conditions(condition1=unstim_condition, condition2=stim, cell_type=cell_type, eQTL_output_loc=eQTL_output_loc, MAST_output_loc=MAST_output_loc, pval_column=pval_column, lfc_column=lfc_column, sig_pval=sig_pval, only_positive=only_positive, only_negative=only_negative, sig_in=sig_in, symbols.to.ensg.mapping.loc=symbols.to.ensg.mapping.loc)
@@ -181,18 +187,29 @@ plot_DE_zscores_per_condition <- function(eQTL_output_loc, MAST_output_loc, unst
       # plot the points with the Z scores from the different sets being x and y
       points(z_df[(z_df$UT_ZScore > 2.774223 & z_df$stim_ZScore > 2.774223) | (z_df$UT_ZScore < -2.774223 & z_df$stim_ZScore < -2.774223), ]$UT_ZScore, z_df[(z_df$UT_ZScore > 2.774223 & z_df$stim_ZScore > 2.774223) | (z_df$UT_ZScore < -2.774223 & z_df$stim_ZScore < -2.774223), ]$stim_ZScore,
              pch=19, cex=0.3)
-      
       # add titles
       title(main = paste(cell_type), xlab='UT', ylab=stim)
       # add regression line
-      abline(lm(z_df$UT_ZScore ~ z_df$stim_ZScore))
+      abline(lm(z_df[(z_df$UT_ZScore > 2.774223 & z_df$stim_ZScore > 2.774223) | (z_df$UT_ZScore < -2.774223 & z_df$stim_ZScore < -2.774223), ]$UT_ZScore ~ z_df[(z_df$UT_ZScore > 2.774223 & z_df$stim_ZScore > 2.774223) | (z_df$UT_ZScore < -2.774223 & z_df$stim_ZScore < -2.774223), ]$stim_ZScore))
       # store the plot
+      if(combine_plots){
+        
+      }
+      else{
+        p <- recordPlot()
+        plot.new()
+        plots_stim[[stim]] <- p
+      }
+    }
+    # store the plot
+    if(combine_plots){
       p <- recordPlot()
       plot.new()
-      plots_stim[[stim]] <- p
+      plots_ct[[cell_type]] <- p
     }
-    # store the plots
-    plots_ct[[cell_type]] <- plots_stim 
+    else{
+      plots_ct[[cell_type]] <- plots_stim
+    }
   }
   return(plots_ct)
 }
@@ -262,13 +279,15 @@ get_z_scores_conditions <- function(condition1, condition2, cell_type, eQTL_outp
       eQTL_cond2 <- eQTL_cond2[eQTL_cond2$gene %in% sig_de_genes, ]
     }
     # subset to the columns we care about
-    eQTL_cond1 <- eQTL_cond1[, c('SNP_Probe', 'OverallZScore')]
-    eQTL_cond2 <- eQTL_cond2[, c('SNP_Probe', 'OverallZScore')]
+    eQTL_cond1 <- eQTL_cond1[, c('SNP_Probe', 'OverallZScore', 'AlleleAssessed')]
+    eQTL_cond2 <- eQTL_cond2[, c('SNP_Probe', 'OverallZScore', 'AlleleAssessed')]
     # change column names so we know which is which
-    colnames(eQTL_cond1) <- c('SNP_Probe', 'UT_ZScore')
-    colnames(eQTL_cond2) <- c('SNP_Probe', 'stim_ZScore')
+    colnames(eQTL_cond1) <- c('SNP_Probe', 'UT_ZScore', 'UT_allele')
+    colnames(eQTL_cond2) <- c('SNP_Probe', 'stim_ZScore', 'stim_allele')
     # merge these two
     eQTLs <- merge(eQTL_cond1, eQTL_cond2, by='SNP_Probe')
+    # switch the alleles
+    eQTLs[eQTLs$UT_allele != eQTLs$UT_allele, ]$UT_Zscore <- eQTLs[eQTLs$UT_allele != eQTLs$UT_allele, ]$UT_Zscore*-1
     # order by the UT Z score
     eQTLs <- eQTLs[order(eQTLs$UT_ZScore), ]
   })
@@ -340,4 +359,7 @@ annotate_figure(ggarrange(de_eqtl_overlap_plot_neg[['3hCA']], de_eqtl_overlap_pl
 
 
 z_stim_unstim_plots <- plot_DE_zscores_per_condition(eQTL_output_loc=eQTL_output_loc, MAST_output_loc=mast_meta_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=F, only_negative=F, reqtl=T, symbols.to.ensg.mapping.loc=symbols.to.ensg.mapping.loc, sig_in='either')
-z_stim_unstim_plots[['monocyte']][['24hCA']]
+z_stim_unstim_plots_up <- plot_DE_zscores_per_condition(eQTL_output_loc=eQTL_output_loc, MAST_output_loc=mast_meta_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, reqtl=T, symbols.to.ensg.mapping.loc=symbols.to.ensg.mapping.loc, sig_in='either', combine_plots=T)
+z_stim_unstim_plots_down <- plot_DE_zscores_per_condition(eQTL_output_loc=eQTL_output_loc, MAST_output_loc=mast_meta_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=F, only_negative=T, reqtl=T, symbols.to.ensg.mapping.loc=symbols.to.ensg.mapping.loc, sig_in='either', combine_plots=T)
+
+
