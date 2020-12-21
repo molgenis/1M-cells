@@ -710,6 +710,106 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
   
 }
 
+do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), dataset=''){
+  DefaultAssay(seurat_object) <- 'SCT'
+  for(cell_type_to_check in cell_types){
+    # grab the cells of the cell type
+    cells_cell_type_allcond <- subset(seurat_object, subset = cell_type_lowerres == cell_type_to_check)
+    # first do the whole thing for UT
+    cells_cell_type_ut <- subset(cells_cell_type_allcond, subset = timepoint == 'UT')
+    # write that correlation matrix
+    create_cor_matrix_condition(cells_cell_type_ut, genotypes, output_loc, 'UT', cell_type_to_check)
+    # get the cell counts
+    ut_cell_counts_loc <- paste(output_loc, 'UT', '_', cell_type_to_check, '_cells.tsv', sep = '')
+    ut_cell_counts <- read.table(ut_cell_counts_loc, sep='\t', header=T)
+    # check the stim conditions
+    for(condition in conditions){
+      cells_cell_type <- subset(cells_cell_type_allcond, subset = timepoint == condition)
+      # write that correlation matrix
+      create_cor_matrix_condition(cells_cell_type, genotypes, output_loc, condition, cell_type_to_check)
+      # get the cell counts
+      stim_cell_counts_loc <- paste(output_loc, condition, '_', cell_type_to_check, '_cells.tsv', sep = '')
+      stim_cell_counts <- read.table(stim_cell_counts_loc, sep='\t', header=T)
+      # join the cell counts
+      cell_counts_both <- merge(ut_cell_counts, stim_cell_counts, by='participant')
+      rownames(cell_counts_both) <- cell_counts_both$participant
+      cell_counts_both$cell_count <- cell_counts_both$cell_count.x+cell_counts_both$cell_count.y
+      # now now go through the created matrices
+      for (i in 1:length(snp_probes)) {
+        snp_probe <- snp_probes[[i]]
+        print(snp_probe)
+        # split snp-probe
+        snp_probe_split <- strsplit(snp_probe, '_')
+        snp_name <- snp_probe_split[[1]][1]
+        eqtl.name <- snp_probe_split[[1]][2]
+        # read both of the matrices for the snp-probe
+        ut_cors_loc <- paste0(output_loc, "/correlationMatrices/", 'UT', '_', cell_type_to_check, '_', "correlation_matrix_", eqtl.name, dataset, ".txt")
+        stim_cors_loc <- paste0(output_loc, "/correlationMatrices/", condition, '_', cell_type_to_check, '_', "correlation_matrix_", eqtl.name, dataset, ".txt")
+        # read the tables
+        ut_cors <- read.table(ut_cors_loc,  header=T, row.names=1)
+        stim_cors <- read.table(stim_cors_loc, header=T, row.names=1)
+        # remove NA rows
+        ut_cors <- ut_cors[apply(ut_cors, 1, function(x){!any(is.na(x))}),]
+        stim_cors[apply(stim_cors, 1, function(x){!any(is.na(x))}),]
+        # get the common genes and samples
+        common_genes <- intersect(rownames(ut_cors), rownames(stim_cors))
+        #common_samples <- intersect(colnames(ut_cors), colnames(stim_cors))
+        # subset to what is in both
+        #ut_cors <- ut_cors[common_genes, common_samples]
+        #stim_cors <- stim_cors[common_genes, common_samples]
+        ut_cors <- ut_cors[common_genes, as.character(cell_counts_both$participant)]
+        stim_cors <- stim_cors[common_genes, as.character(cell_counts_both$participant)]
+        # substract the ut from the stim
+        #ut_cors_log <- log(ut_cors)
+        #stim_cors_common_log <- log(stim_cors)
+        #cors_a_vs_b <- ut_cors_log/stim_cors_common_log
+        # compensate for double 0 that gets log transformed to 1
+        #cors_a_vs_b[ut_cors_log == 0 & stim_cors_common_log == 0] <- 0
+        cors_a_vs_b <- stim_cors - ut_cors
+        # set up the correlations output
+        cors_a_vs_b_loc <- paste0(output_loc, "/correlationMatrices/", 'UT', '_', condition, '_', cell_type_to_check, '_', "correlation_matrix_", eqtl.name, dataset, ".txt")
+        write.table(cors_a_vs_b, cors_a_vs_b_loc, row.names=T, col.names=T, quote=F)
+      }
+      # exp.matrices is only used for the permutations, so supplying the participants has the same effect
+      interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = as.character(cell_counts_both$participant), genotypes = genotypes[, as.character(cell_counts_both$participant)], cell.counts = as.vector(cell_counts_both$cell_count), output.dir = output_loc, cor.dir = paste(output_loc, "/correlationMatrices/", 'UT', '_', condition, '_', cell_type_to_check, '_', sep=''), permutations = T, n.perm=10)
+      
+      saveRDS(interaction.output, paste(output_loc, 'UT', '_', condition, '_', cell_type_to_check, '.rds', sep = ''))
+    }
+  }
+  
+}
+
+create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, condition, cell_type_to_check){
+  
+  exp.matrices <- list()
+  cell.counts <- c()
+  sample.names <- vector()
+  
+  sample.names <- unique(cells_cell_type@meta.data$assignment)
+  i <- 1
+  
+  for(participant in sample.names){
+    cells_participant <- subset(cells_cell_type, assignment == participant)
+    print(i)
+    exp.matrices[[i]] <- t(as.matrix(cells_participant@assays$SCT@counts))
+    cell.counts <- c(cell.counts, nrow(cells_participant@meta.data))
+    i <- i + 1
+  }
+  
+  genotypes <- genotypes[,match(sample.names, colnames(genotypes))]
+  
+  cor.dir = paste(output_loc,"/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
+  
+  output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
+  
+  create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
+  
+  # create the cell_counts
+  cell_counts_df <- data.frame(participant=sample.names, cell_count=cell.counts)
+  write.table(cell_counts_df, paste(output_loc, condition, '_', cell_type_to_check, '_cells.tsv', sep = ''), sep='\t', row.names=F, col.names=T, quote=F)
+}
+
+
 do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
   DefaultAssay(seurat_object.1) <- 'SCT'
   DefaultAssay(seurat_object.2) <- 'SCT'
@@ -970,3 +1070,55 @@ v2_mono <- AddModuleScore(v2_mono, tnf_genes, name='TNF.module')
 v3_mono <- AddModuleScore(v3_mono, il10_genes, name='IL10.module')
 v3_mono <- AddModuleScore(v3_mono, tnf_genes, name='TNF.module')
 
+for(cond in conditions){
+  do_coeqtl_response_style(seurat_object=v3_mono, snp_probes=snp_probes, output_loc='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_v3_mono_response/', genotypes=genotypes_all, conditions=c(cond), cell_types=c('monocyte'))
+  do_coeqtl_response_style(seurat_object=v2_mono, snp_probes=snp_probes, output_loc='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_v2_mono_response/', genotypes=genotypes_all, conditions=c(cond), cell_types=c('monocyte'))
+}
+
+
+for(condition in conditions){
+  #'rs17305311_RPS9'
+  # do the actual coexpression
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs17305311_RPS9'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS9_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs17305311_RPS9'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS9_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs17305311_RPS9'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS9_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs731835_RPS5'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS5_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS5_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS5_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs251856_RPS16'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS16_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS16_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs731835_RPS5'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS16_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs11217125_RPS25'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs11217125_RPS25'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS25_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs11217125_RPS25'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS25_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs11217125_RPS25'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS25_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs2954654_RPL8'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs2954654_RPL8'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL8_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs2954654_RPL8'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL8_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs2954654_RPL8'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL8_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs4504745_RPL12'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs4504745_RPL12'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL12_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs4504745_RPL12'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL12_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs4504745_RPL12'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL12_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs17700376_RPL28'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs17700376_RPL28'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL28_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs17700376_RPL28'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL28_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs17700376_RPL28'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL28_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs12886130_RPL36AL'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs12886130_RPL36AL'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL36AL_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs12886130_RPL36AL'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL36AL_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs12886130_RPL36AL'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL36AL_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  #'rs2076172_RPL10A'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs2076172_RPL10A'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL10A_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs2076172_RPL10A'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL10A_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs2076172_RPL10A'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPL10A_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  'rs28710291_RPLP2'
+  do_coexqtl.meta(v2_mono, v3_mono, c('rs28710291_RPLP2'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPLP2_meta_mono/', genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+  do_coexqtl(v3_mono, c('rs28710291_RPLP2'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPLP2_v2_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  do_coexqtl(v2_mono, c('rs28710291_RPLP2'), '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPLP2_v3_mono/', genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  
+}
+
+create_correlation_matrix_files(v3_mono, geneAs=c('RPS26'), geneBs=NULL, output_loc='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpression_spearman/v3_RPS26_monocyte.tsv', cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))

@@ -74,7 +74,7 @@ get_overlapping_DE_reQTL_genes_overlap_per_condition <- function(eQTL_output_loc
   }
 }
 
-plot_DE_rscores_per_condition_coeqtl <- function(coeQTL_ut_p_output_loc, coeQTL_ut_r_output_loc, coeQTL_stim_p_output_loc, coeQTL_stim_r_output_loc, MAST_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('monocyte'), pval_column='metap_bonferroni', lfc_column='metafc', sig_pval=0.05, only_positive=F, only_negative=F, sig_in='either', combine_plots=F){
+plot_DE_rscores_per_condition_coeqtl <- function(coeQTL_ut_p_output_loc, coeQTL_ut_r_output_loc, coeQTL_stim_p_output_loc, coeQTL_stim_r_output_loc, MAST_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('monocyte'), pval_column='metap_bonferroni', lfc_column='metafc', sig_pval=0.05, only_positive=F, only_negative=F, sig_in='either', combine_plots=F, coeQTL_resp_p_output_loc=NULL, use_nominal=F, nominal_significance=0.05, only_ribosomal=F){
   # store per cell type
   plots_ct <- list()
   for(cell_type in cell_types){
@@ -89,16 +89,41 @@ plot_DE_rscores_per_condition_coeqtl <- function(coeQTL_ut_p_output_loc, coeQTL_
     for(stim in stim_conditions){
       # get the df
       r_df <- get_r_scores_conditions_coeQTL(condition=stim, cell_type=cell_type, coeQTL_ut_p_output_loc=coeQTL_ut_p_output_loc, coeQTL_ut_r_output_loc=coeQTL_ut_r_output_loc, coeQTL_stim_p_output_loc=coeQTL_stim_p_output_loc, coeQTL_stim_r_output_loc=coeQTL_stim_r_output_loc, MAST_output_loc=MAST_output_loc, pval_column=pval_column, lfc_column=lfc_column, sig_pval=sig_pval, only_positive=only_positive, only_negative=only_negative, sig_in=sig_in)
+      if(only_ribosomal){
+        r_df <- r_df[startsWith(rownames(r_df), 'RPS') | startsWith(rownames(r_df), 'RPL'), ]
+      }
+      try({
+        print(paste(stim, cell_type))
+        test_df <- wilcox.test(r_df$ut, r_df$stim, alternative=c('greater'), paired = T)
+      })
+      print(test_df)
       # regresion line
       #reg <- lm(r_df$stim ~ r_df$ut)
       #coeff=coef(reg)[['ut']]
       #intercept=coef(reg)[['Intercept']]
       # plot
-      p <- ggplot(r_df, aes(x=ut, y=stim)) + geom_point() + 
+      p <- NULL
+      if(!is.null(coeQTL_resp_p_output_loc)){
+        recoqtl_genes <- get_significant_coeqtl_response_genes(coeQTL_resp_p_output_loc, paste('X', stim, sep=''), use_nominal, nominal_significance)
+        print(head(recoqtl_genes))
+        print(head(r_df))
+        r_df$sig <- 'no'
+        if(nrow(r_df[rownames(r_df) %in% recoqtl_genes, ]) > 0){
+          r_df[rownames(r_df) %in% recoqtl_genes, ]$sig <- 'yes'
+        }
+        p <- ggplot(r_df, aes(x=ut, y=stim, color=sig)) + geom_point() + 
+          geom_smooth(method='lm', formula= y~x) + 
+          ggtitle(paste('UT vs', stim, cell_type)) +
+          ylim(-0.1,1) + 
+          xlim(-0.1,1)
+      }
+      else{
+        p <- ggplot(r_df, aes(x=ut, y=stim)) + geom_point() + 
         geom_smooth(method='lm', formula= y~x) + 
         ggtitle(paste('UT vs', stim, cell_type)) +
         ylim(-0.1,1) + 
         xlim(-0.1,1)
+      }
       # store the plot
       if(combine_plots){
         plots_stim[[stim]] <- p
@@ -165,14 +190,36 @@ get_r_scores_conditions_coeQTL <- function(condition, cell_type, coeQTL_ut_p_out
     }
     sig_de_genes <- rownames(mast)
     # intersect with the coeqtl genes
-    joined_genes <- intersect(coeqtl_genes, sig_de_genes)
-    print(head(joined_genes))
+    #joined_genes <- intersect(coeqtl_genes, sig_de_genes)
+    joined_genes <- coeqtl_genes # change back <-
+    
+    print(length(coeqtl_genes))
+    print(length(intersect(coeqtl_genes, sig_de_genes)))
+    
     # create the df
     r_df <- data.frame(ut=ut_coeqtl_rs[joined_genes, paste('UT', condition, sep = '_X')], stim=stim_coeqtl_rs[joined_genes, paste('X', condition, sep='')])
+    rownames(r_df) <- joined_genes
   })
   return(r_df)
 }
 
+get_significant_coeqtl_response_genes <- function(output_loc, condition, use_nominal=F, nominal_significance=0.05){
+  # read the file
+  responses <- read.table(output_loc, sep='\t', header=T, row.names=1)
+  sig_genes <- c()
+  print(head(responses))
+  # maybe we want to use the nominal significance
+  if(use_nominal){
+    # subset 
+    table_subset <- responses[!is.na(responses[[condition]]) & responses[[condition]] < nominal_significance, ]
+    sig_genes <- rownames(table_subset)
+  }
+  else{
+    table_subset <- responses[responses[[condition]] < responses['significance_threshold', condition], ]
+    sig_genes <- rownames(table_subset)
+  }
+  return(sig_genes)
+}
 
 get_overlapping_DE_reQTL_genes_overlap_per_condition_ggplot <- function(eQTL_output_loc, MAST_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=F, only_negative=F, reqtl=T, symbols.to.ensg.mapping.loc=NULL){
   plot_per_stim <- list()
@@ -481,3 +528,22 @@ annotate_figure(ggarrange(coeqtl_score_plots_v2_up[['monocyte']][['3hCA']], coeq
                           coeqtl_score_plots_v2_up[['monocyte']][['24hCA']], coeqtl_score_plots_v2_up[['monocyte']][['24hMTB']], coeqtl_score_plots_v2_up[['monocyte']][['24hPA']],ncol=3, nrow=2), top = 'coeQTLs that have negative DE genes')
 annotate_figure(ggarrange(coeqtl_score_plots_v2_down[['monocyte']][['3hCA']], coeqtl_score_plots_v2_down[['monocyte']][['3hMTB']],coeqtl_score_plots_v2_down[['monocyte']][['3hPA']],
                           coeqtl_score_plots_v2_down[['monocyte']][['24hCA']], coeqtl_score_plots_v2_down[['monocyte']][['24hMTB']], coeqtl_score_plots_v2_down[['monocyte']][['24hPA']],ncol=3, nrow=2), top = 'coeQTLs that have negative DE genes')
+
+coeqtl_score_plots_v3_down <- plot_DE_rscores_per_condition_coeqtl(coeQTL_ut_p_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monout_v3_p.tsv', 
+                                                                   coeQTL_ut_r_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monout_v3_r.tsv', 
+                                                                   coeQTL_stim_p_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monostim_v3_p.tsv', 
+                                                                   coeQTL_stim_r_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monostim_v3_r.tsv', 
+                                                                   MAST_output_loc=mast_meta_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('monocyte'), pval_column='metap_bonferroni', lfc_column='metafc', sig_pval=0.05, only_positive=F, only_negative=T, sig_in='both', combine_plots=F)
+annotate_figure(ggarrange(coeqtl_score_plots_v3_down[['monocyte']][['3hCA']], coeqtl_score_plots_v3_down[['monocyte']][['3hMTB']],coeqtl_score_plots_v3_down[['monocyte']][['3hPA']],
+                          coeqtl_score_plots_v3_down[['monocyte']][['24hCA']], coeqtl_score_plots_v3_down[['monocyte']][['24hMTB']], coeqtl_score_plots_v3_down[['monocyte']][['24hPA']],ncol=3, nrow=2), top = 'coeQTLs that have negative DE genes')
+
+coeqtl_score_plots_v2_down_wresp <- plot_DE_rscores_per_condition_coeqtl(coeQTL_ut_p_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monout_v2_p.tsv', 
+                                                                   coeQTL_ut_r_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monout_v2_r.tsv', 
+                                                                   coeQTL_stim_p_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monostim_v2_p.tsv', 
+                                                                   coeQTL_stim_r_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_monostim_v2_r.tsv',
+                                                                   coeQTL_resp_p_output_loc='/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_response_v2_p.tsv',
+                                                                   MAST_output_loc=mast_meta_output_loc, unstim_condition='UT', stim_conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('monocyte'), pval_column='metap_bonferroni', lfc_column='metafc', sig_pval=0.05, only_positive=F, only_negative=T, sig_in='both', combine_plots=F, use_nominal=T, only_ribosomal=F)
+annotate_figure(ggarrange(coeqtl_score_plots_v2_down_wresp[['monocyte']][['3hCA']], coeqtl_score_plots_v2_down_wresp[['monocyte']][['3hMTB']],coeqtl_score_plots_v2_down_wresp[['monocyte']][['3hPA']],
+                          coeqtl_score_plots_v2_down_wresp[['monocyte']][['24hCA']], coeqtl_score_plots_v2_down_wresp[['monocyte']][['24hMTB']], coeqtl_score_plots_v2_down_wresp[['monocyte']][['24hPA']],ncol=3, nrow=2), top = 'coeQTLs that have negative DE genes')
+
+
