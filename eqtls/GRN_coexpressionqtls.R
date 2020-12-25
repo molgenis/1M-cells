@@ -1,6 +1,6 @@
 library(Seurat)
 library(meta)
-
+library(data.table)
 
 # Name: create.cor.matrix
 # Function: calculate the correlations between the input gene and all other genes, for every person
@@ -325,7 +325,7 @@ do_coexqtl(v3_mono_ut, snp_probes, output_loc_1m_v3_mono_ut, genotypes_all)
 
 #PREPARED ANALYSIS
 
-do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20){
+do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='-'){
   # read the genotype data
   vcf <- fread(combined_genotype_location)
   genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
@@ -393,7 +393,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
     # grab the pair from the row
     gene_pair <- rownames(prepared_correlations)[i]
     # split by separator
-    genes <- unlist(strsplit(gene_pair, '-'))
+    genes <- unlist(strsplit(gene_pair, gene_split_character))
     # get the two genes
     geneA <- genes[1]
     geneB <- genes[2]
@@ -644,15 +644,15 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
   return(interaction.result)
 }
 
-do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20){
+do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='-'){
   # read the correlations
   prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
   # do the actual work
-  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations)
+  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations, gene_split_character = gene_split_character)
   return(interaction.result)
 }
 
-do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20){
+do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='-'){
   # read the datasets annotation file
   dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
   # replace the dash with a dot, as the colnames in the dataset annotation are auto-replace
@@ -676,7 +676,7 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
     # subset the prepared correlations to only contain the samples of this dataset
     relevant_prepared_correlations <- prepared_correlations[, colnames(prepared_correlations) %in% relevant_correlation_colnames, drop = F]
     # do the interaction analysis with just this correlation
-    interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations)
+    interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations, gene_split_character=gene_split_character)
     if(!is.null(interaction_analysis_dataset)){
       # set the dataset as a column
       interaction_analysis_dataset$dataset <- as.character(dataset)

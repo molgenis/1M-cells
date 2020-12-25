@@ -148,7 +148,7 @@ plot_eqtl_effect_size_reqtls <- function(eqtl_output_loc , cell_types=c('B', 'CD
   return(plots)
 }
 
-plot_eqtl_stronger_vs_weaker <- function(eqtl_output_loc , cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_in_ut=T, sig_in_stim=F, de_up=F, de_down=F, de_output_loc=NULL, pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', symbols.to.ensg.mapping='genes.tsv'){
+plot_eqtl_stronger_vs_weaker <- function(eqtl_output_loc , cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_in_ut=T, sig_in_stim=F, de_up=F, de_down=F, de_output_loc=NULL, pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', symbols.to.ensg.mapping='genes.tsv', only_ribo=F, mark_reqtls=F){
   # store the plots somewhere
   plots <- list()
   # create a combined plot for each condition
@@ -156,12 +156,18 @@ plot_eqtl_stronger_vs_weaker <- function(eqtl_output_loc , cell_types=c('B', 'CD
     plot_per_stim <- list()
     # for each cell type
     for(stim in stims){
+      try({
       # grab the UT one
       eQTLs_ut_ct_loc <- paste(eqtl_output_loc, 'UT/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
       eQTLs_ut <- read.table(eQTLs_ut_ct_loc, sep = '\t', header = T)
       # grab the stim one
       eQTLs_stim_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
       eQTLs_stim <- read.table(eQTLs_stim_ct_loc, sep = '\t', header = T)
+      # only check RPS/RPL if requested
+      if(only_ribo){
+        eQTLs_ut <- eQTLs_ut[startsWith(as.character(eQTLs_ut$HGNCName), 'RPS') | startsWith(as.character(eQTLs_ut$HGNCName), 'RPL'), ]
+        eQTLs_stim <- eQTLs_stim[startsWith(as.character(eQTLs_stim$HGNCName), 'RPS') | startsWith(as.character(eQTLs_stim$HGNCName), 'RPL'), ]
+      }
       # grab the significant ones in either condition
       eQTLs_ut$snp_probe <- paste(as.character(eQTLs_ut$SNPName), as.character(eQTLs_ut$ProbeName), sep = '_')
       eQTLs_stim$snp_probe <- paste(as.character(eQTLs_stim$SNPName), as.character(eQTLs_stim$ProbeName), sep = '_')
@@ -206,24 +212,42 @@ plot_eqtl_stronger_vs_weaker <- function(eqtl_output_loc , cell_types=c('B', 'CD
       # create a plot dataframe
       plot_df <- data.frame(eQTLs_either_sig, ut_zscore, stim_zscore, ut_fdr, stim_fdr)
       colnames(plot_df) <- c('eqtl', 'ut_zscore', 'stim_zscore', 'ut_fdr', 'stim_fdr')
-      plot_df$reqtl <- '-'
+      plot_df$effect <- '-'
       if(nrow(plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore < plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore < plot_df$stim_zscore)), ]) > 0){
-        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore < plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore < plot_df$stim_zscore)), ]$reqtl <- 'stronger'
+        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore < plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore < plot_df$stim_zscore)), ]$effect <- 'stronger'
       }
       if(nrow(plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore)& plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore > plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore > plot_df$stim_zscore)), ]) > 0){
-        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore > plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore > plot_df$stim_zscore)), ]$reqtl <- 'weaker'
+        plot_df[!is.na(plot_df$ut_zscore) & !is.na(plot_df$stim_zscore) & plot_df$eqtl %in% eQTLs_either_sig & ((plot_df$ut_zscore > 0 & plot_df$ut_zscore > plot_df$stim_zscore) | (plot_df$ut_zscore < 0 & plot_df$ut_zscore > plot_df$stim_zscore)), ]$effect <- 'weaker'
       }
-      # overwrite postive and negative Z scores
-      #plot_df[plot_df$eqtl %in% reqtl_pos, ]$reqtl <- 'reqtl Z > 0'
-      #plot_df[plot_df$eqtl %in% reqtl_neg, ]$reqtl <- 'reqtl Z < 0'
-      # make the plot
-      ct_plot <- ggplot(plot_df, aes(x=ut_zscore, y=stim_zscore, color=reqtl)) +
-        geom_point() +
-        ggtitle(paste('UT vs', stim, cell_type, 'Z-scores')) +
-        labs(y = 'stim z-score', x='ut z-score') +
-        scale_color_manual(values=c('gray','red', 'green'))
+      ct_plot <- NULL
+      # mark the reQTLs
+      if(mark_reqtls){
+        reQTLs_ct_loc <- paste(eqtl_output_loc, 'UT_vs_', stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+        reQTLs_stim <- read.table(reQTLs_ct_loc, sep = '\t', header = T)
+        reQTLs_stim$snp_probe <- paste(as.character(reQTLs_stim$SNPName), as.character(reQTLs_stim$ProbeName), sep = '_')
+        reQTLs_stim <- reQTLs_stim[!is.na(reQTLs_stim$FDR) & reQTLs_stim$FDR < 0.05, ]
+        plot_df$is_reqtl <- F
+        if(nrow(plot_df[as.character(plot_df$eqtl) %in% as.character(reQTLs_stim$snp_probe), ]) > 0){
+          plot_df[as.character(plot_df$eqtl) %in% as.character(reQTLs_stim$snp_probe), ]$is_reqtl <- T
+        }
+        # make the plot
+        ct_plot <- ggplot(plot_df, aes(x=ut_zscore, y=stim_zscore, color=effect, shape=is_reqtl)) +
+          geom_point() +
+          ggtitle(paste('UT vs', stim, cell_type, 'Z-scores')) +
+          labs(y = 'stim z-score', x='ut z-score') +
+          scale_color_manual(values=c('gray','red', 'green'))
+      }
+      else{
+        # make the plot
+        ct_plot <- ggplot(plot_df, aes(x=ut_zscore, y=stim_zscore, color=effect)) +
+          geom_point() +
+          ggtitle(paste('UT vs', stim, cell_type, 'Z-scores')) +
+          labs(y = 'stim z-score', x='ut z-score') +
+          scale_color_manual(values=c('gray','red', 'green'))
+      }
       # store the plot
       plot_per_stim[[stim]] <- ct_plot
+      })
     }
     # create the arranged plot
     condition_plot <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hCA']], plot_per_stim[['24hMTB']], plot_per_stim[['24hPA']], 
@@ -284,7 +308,7 @@ eqtl_plots_de_up <- plot_eqtl_stronger_vs_weaker(eqtl_output_loc=eQTL_output_loc
                              pval_column='metap_bonferroni',
                              sig_pval=0.05,
                              lfc_column='metafc',
-                             symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc)
+                             symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc, mark_reqtls = T)
 eqtl_plots_de_down <- plot_eqtl_stronger_vs_weaker(eqtl_output_loc=eQTL_output_loc ,
                                                  cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'),
                                                  stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'),
@@ -296,5 +320,30 @@ eqtl_plots_de_down <- plot_eqtl_stronger_vs_weaker(eqtl_output_loc=eQTL_output_l
                                                  pval_column='metap_bonferroni',
                                                  sig_pval=0.05,
                                                  lfc_column='metafc',
-                                                 symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc)
-  
+                                                 symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc, mark_reqtls = T)
+eqtl_plots_de_down_ribo <- plot_eqtl_stronger_vs_weaker(eqtl_output_loc=eQTL_output_loc ,
+                                                   cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'),
+                                                   stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'),
+                                                   sig_in_ut=T,
+                                                   sig_in_stim=F,
+                                                   de_up=F,
+                                                   de_down=T,
+                                                   de_output_loc='/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201029/meta_paired_lores_lfc01minpct01_20201029/rna/',
+                                                   pval_column='metap_bonferroni',
+                                                   sig_pval=0.05,
+                                                   lfc_column='metafc',
+                                                   symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc,
+                                                   only_ribo=T, mark_reqtls = T)
+eqtl_plots_de_up_ribo <- plot_eqtl_stronger_vs_weaker(eqtl_output_loc=eQTL_output_loc ,
+                                                        cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'),
+                                                        stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'),
+                                                        sig_in_ut=T,
+                                                        sig_in_stim=F,
+                                                        de_up=T,
+                                                        de_down=F,
+                                                        de_output_loc='/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201029/meta_paired_lores_lfc01minpct01_20201029/rna/',
+                                                        pval_column='metap_bonferroni',
+                                                        sig_pval=0.05,
+                                                        lfc_column='metafc',
+                                                        symbols.to.ensg.mapping=symbols.to.ensg.mapping.loc,
+                                                        only_ribo=T, mark_reqtls = T)
