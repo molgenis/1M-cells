@@ -1122,3 +1122,35 @@ for(condition in conditions){
 }
 
 create_correlation_matrix_files(v3_mono, geneAs=c('RPS26'), geneBs=NULL, output_loc='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpression_spearman/v3_RPS26_monocyte.tsv', cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+
+
+# we'll try this in parallel
+library(foreach)
+library(doMC)
+registerDoMC(6)
+# the new genes to do co-eqtl mapping for
+ff_coeqtl_genes <- c('SSU72','NDUFA12','NMB','PLGRKT','SEPHS2','BTN3A2','PGD','TNFAIP6','HLA-B','ZFAND2A','HEBP1','CTSC','TMEM109','NUCB2','HIP1','AP2S1','CD52','PPID','RPS26','TMEM176B','ERAP2','HLA-DQA2','TMEM176A','CLEC12A','MAP3K7CL','BATF3','MRPL54','LILRA3','NAAA','PRKCB','SMDT1','LGALS9','KIAA1598','UBE2D1','SCO2','DNAJC15','NDUFA10','NAA38','HLA-DQA1','ROGDI','RBP7','SDCCAG8','CFD','GPX1','PRDX2','C6orf48','RBBP8','IQGAP2','PTK2B','SMAP1')
+# mapping for the probes that belong to the genes
+snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
+# get the mapping of the probe to the cis SNP
+snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
+# check each gene
+foreach(i=1:length(ff_coeqtl_genes)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes[i]
+  # create the output dirs
+  v2_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_v2_mono/', sep = '')
+  v3_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_v3_mono/', sep = '')
+  meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono/', sep = '')
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  # do mapping for each condition
+  for(condition in conditions){
+    print(paste('starting', cis_snp, coeqtl_gene, condition))
+    do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+    do_coexqtl(v3_mono, snp_genes, v3_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+    do_coexqtl(v2_mono, snp_genes, v2_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+  }
+}
+
