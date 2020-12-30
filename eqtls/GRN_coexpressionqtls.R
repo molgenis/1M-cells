@@ -352,6 +352,10 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
   # read the correlations
   #prepared_correlations <- read.table(prepared_correlations, sep = '\t', header = T, row.names = 1)
+  print(paste('genes before filtering: ', str(nrow(prepared_correlations))))
+  # remove the correlations of genes that did not have complete correlations calculated
+  prepared_correlations <- prepared_correlations[apply(prepared_correlations, 1, function(x){!any(is.na(x))}),]
+  print(paste('genes after filtering: ', str(nrow(prepared_correlations))))
   # remove the prepared correlations that we do not have genotype data for
   prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
   # create a regex to get the last index of the dot
@@ -409,76 +413,84 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
     # get the top SNP for each probe
     if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
       tryCatch({
-      # grab the type eQTLgens snp belonging to the gene
-      cis_snp_a <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]$snp[1]
-      # grab the genotypes for these participants
-      genotypes_snp_a <- as.vector(unlist(genotypes_all[cis_snp_a, participants]))
-      result_snp_a <- do_regression(correlations, genotypes_snp_a, weights, datasets) # TODO add dataset as predictor
-      # add some extra data
-      result_snp_a[['snp']] <- cis_snp_a
-      result_snp_a[['geneA']] <- geneA
-      result_snp_a[['geneB']] <- geneB
-      result_snp_a[['permuted']] <- F
-      # turn into dataframe
-      dataframe_this_correlation <- data.frame(result_snp_a)
+        # grab the type eQTLgens snp belonging to the gene
+        cis_snp_a <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]$snp[1]
+        # grab the genotypes for these participants
+        genotypes_snp_a <- as.vector(unlist(genotypes_all[cis_snp_a, participants]))
+        result_snp_a <- do_regression(correlations, genotypes_snp_a, weights, datasets) # TODO add dataset as predictor
+        if(!is.null(result_snp_a)){
+          # add some extra data
+          result_snp_a[['snp']] <- cis_snp_a
+          result_snp_a[['geneA']] <- geneA
+          result_snp_a[['geneB']] <- geneB
+          result_snp_a[['permuted']] <- F
+          # turn into dataframe
+          dataframe_this_correlation <- data.frame(result_snp_a)
+        }
       },
       error=function(cond){
-        print(paste('model not run for :', cis_snp_a, geneA, geneB))
+        print(paste('model not run for :', cis_snp_a, geneA, geneB, str(cond[['message']])))
       })
     }
     # I know, doing this twice is disgusting
     if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
       tryCatch({
-      cis_snp_b <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]$snp[1]
-      genotypes_snp_b <- as.vector(unlist(genotypes_all[cis_snp_b, participants]))
-      result_snp_b <- do_regression(correlations, genotypes_snp_b, weights, datasets)
-      result_snp_b[['snp']] <- cis_snp_b
-      result_snp_b[['geneA']] <- geneA
-      result_snp_b[['geneB']] <- geneB
-      result_snp_b[['permuted']] <- F
-      # if there was no gene A SNP, we need to create the dataframe
-      if(is.null(dataframe_this_correlation)){
-        dataframe_this_correlation <- data.frame(result_snp_b)
-      }
-      else{
-        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b))
-      }
+        cis_snp_b <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]$snp[1]
+        genotypes_snp_b <- as.vector(unlist(genotypes_all[cis_snp_b, participants]))
+        result_snp_b <- do_regression(correlations, genotypes_snp_b, weights, datasets)
+        if(!is.null(result_snp_b)){
+          result_snp_b[['snp']] <- cis_snp_b
+          result_snp_b[['geneA']] <- geneA
+          result_snp_b[['geneB']] <- geneB
+          result_snp_b[['permuted']] <- F
+          # if there was no gene A SNP, we need to create the dataframe
+          if(is.null(dataframe_this_correlation)){
+            dataframe_this_correlation <- data.frame(result_snp_b)
+          }
+          else{
+            dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b))
+          }
+        }
       },
       error=function(cond){
-        print(paste('model not run for :', cis_snp_b, geneA, geneB))
+        print(paste('model not run for :', cis_snp_b, geneA, geneB, str(cond[['message']])))
       })
     }
     # do permuted analysis as well
     for (i in 1:nr_of_permutations) {
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneA, ]) > 0){
         tryCatch({
-        genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
-        # do the regression analysis
-        result_snp_a_permuted <- do_regression(correlations, genotypes_snp_a_permuted, weights, datasets)
-        # add some extra info
-        result_snp_a_permuted[['snp']] <- cis_snp_a
-        result_snp_a_permuted[['geneA']] <- geneA
-        result_snp_a_permuted[['geneB']] <- geneB
-        result_snp_a_permuted[['permuted']] <- T
-        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_a_permuted))
+          genotypes_snp_a_permuted <- as.vector(unlist(genotypes_all[cis_snp_a, permuted_participants[[i]]]))
+          # do the regression analysis
+          result_snp_a_permuted <- do_regression(correlations, genotypes_snp_a_permuted, weights, datasets)
+          if(!is.null(result_snp_a_permuted)){
+            # add some extra info
+            result_snp_a_permuted[['snp']] <- cis_snp_a
+            result_snp_a_permuted[['geneA']] <- geneA
+            result_snp_a_permuted[['geneB']] <- geneB
+            result_snp_a_permuted[['permuted']] <- T
+            dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_a_permuted))
+          }
         },
         error=function(cond){
-          print(paste('model not run for :', cis_snp_a, geneA, geneB))
+          print(paste('model not run for :', cis_snp_a, geneA, geneB, str(cond[['message']])))
         })
       }
       # I now, repeating just as before, very bad
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
         tryCatch({
-        genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
-        result_snp_b_permuted <- do_regression(correlations, genotypes_snp_b_permuted, weights, datasets)
-        result_snp_b_permuted[['snp']] <- cis_snp_b
-        result_snp_b_permuted[['geneA']] <- geneA
-        result_snp_b_permuted[['geneB']] <- geneB
-        result_snp_b_permuted[['permuted']] <- T
-        dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b_permuted))
+          genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
+          result_snp_b_permuted <- do_regression(correlations, genotypes_snp_b_permuted, weights, datasets)
+          if(!is.null(result_snp_b_permuted)){
+            result_snp_b_permuted[['snp']] <- cis_snp_b
+            result_snp_b_permuted[['geneA']] <- geneA
+            result_snp_b_permuted[['geneB']] <- geneB
+            result_snp_b_permuted[['permuted']] <- T
+            dataframe_this_correlation <- rbind(dataframe_this_correlation, data.frame(result_snp_b_permuted))
+          }
         },
         error=function(cond){
-          print(paste('model not run for :', cis_snp_b, geneA, geneB))
+          print(paste('model not run for :', cis_snp_b, geneA, geneB, str(cond[['message']])))
         })
       }
     }
@@ -511,15 +523,19 @@ do_regression <- function(correlations, snp, weights, datasets){
     # TODO make this prettier
     if(nrow(lm_data) == 0){
       print('no data left')
+      return(NULL)
     }
     else if(length(unique(lm_data$correlations)) == 1){
       print('correlations are all the same')
+      return(NULL)
     }
     else if(length(unique(lm_data$snp)) == 1){
       print('snps are all the same')
+      return(NULL)
     }
     else if(length(unique(weights)) == 1){
       print('weights are all the same')
+      return(NULL)
     }
     else{
       # model
@@ -528,19 +544,23 @@ do_regression <- function(correlations, snp, weights, datasets){
   }
   else{
     # manually remove NA rows
-    lm_data <- lm_data[!is.na(lm_data$correlations) & !is.na(lm_data$snp), ]
+    lm_data <- lm_data[!is.na(lm_data$correlations) & !is.na(lm_data$snp), , drop=F]
     # TODO make this prettier
     if(nrow(lm_data) == 0){
       print('no data left')
+      return(NULL)
     }
     else if(length(unique(lm_data$correlations)) == 1){
       print('correlations are all the same')
+      return(NULL)
     }
     else if(length(unique(lm_data$snp)) == 1){
       print('snps are all the same')
+      return(NULL)
     }
     else if(length(unique(weights)) == 1){
       print('weights are all the same')
+      return(NULL)
     }
     else{
       # model
@@ -675,21 +695,26 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
     relevant_correlation_colnames <- rownames(dataset_annotation[dataset_annotation$dataset == dataset, , drop = F])
     # subset the prepared correlations to only contain the samples of this dataset
     relevant_prepared_correlations <- prepared_correlations[, colnames(prepared_correlations) %in% relevant_correlation_colnames, drop = F]
-    # do the interaction analysis with just this correlation
-    interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations, gene_split_character=gene_split_character)
-    if(!is.null(interaction_analysis_dataset)){
-      # set the dataset as a column
-      interaction_analysis_dataset$dataset <- as.character(dataset)
-      # append to the results
-      if(is.null(results_all)){
-        results_all <-interaction_analysis_dataset
+    if(nrow(relevant_prepared_correlations) > 0){
+      # do the interaction analysis with just this correlation
+      interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations, gene_split_character=gene_split_character)
+      if(!is.null(interaction_analysis_dataset)){
+        # set the dataset as a column
+        interaction_analysis_dataset$dataset <- as.character(dataset)
+        # append to the results
+        if(is.null(results_all)){
+          results_all <-interaction_analysis_dataset
+        }
+        else{
+          results_all <- rbind(results_all, interaction_analysis_dataset)
+        }
       }
       else{
-        results_all <- rbind(results_all, interaction_analysis_dataset)
+        print(paste('null result for', str(dataset)))
       }
     }
     else{
-      print(paste('null result for', str(dataset)))
+      print(paste('nothing for dataset:', dataset))
     }
   }
   return(results_all)
