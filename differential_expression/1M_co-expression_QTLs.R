@@ -941,6 +941,58 @@ create_module_score_cor_matrices <- function(seurat_object, gene, modulescore.na
   }
 }
 
+output_rds_to_tsv <- function(output_loc, tsv_output_prepend, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+  # check each cell type
+  for(cell_type in cell_types){
+    combined_ct_p <- NULL
+    combined_ct_r <- NULL
+    # check each condition
+    for(condition in conditions){
+      tryCatch({
+      # read the RDS
+      rds <- readRDS(paste(output_loc, condition, '_', cell_type, '.rds', sep=''))
+      # grab the P values
+      p_df <- data.frame(rds[[2]])
+      # set the condition as colname of the single column df
+      colnames(p_df) <- c(condition)
+      # add to existing df possible
+      if(is.null(combined_ct_p)){
+        combined_ct_p <- p_df
+      }
+      else{
+        # merge if not the first condition
+        combined_ct_p <- merge(combined_ct_p, p_df, by=0, all=T)
+        # merge does this thing with rownames we need to correct
+        rownames(combined_ct_p) <- combined_ct_p$Row.names
+        combined_ct_p$Row.names <- NULL
+      }
+      # check if there are r values
+      if(!is.null(rds[[1]])){
+        r_df <- data.frame(rds[[1]])
+        # set the condition as colname of the single column df
+        colnames(r_df) <- c(condition)
+        # add to existing df possible
+        if(is.null(combined_ct_r)){
+          combined_ct_r <- r_df
+        }
+        else{
+          # merge if not the first condition
+          combined_ct_r <- merge(combined_ct_r, r_df, by=0, all=T)
+          # merge does this thing with rownames we need to correct
+          rownames(combined_ct_r) <- combined_ct_r$Row.names
+          combined_ct_r$Row.names <- NULL
+        }
+      }
+      }, error=function(cond) {
+        message(cond)
+      })
+    }
+    write.table(combined_ct_p, paste(tsv_output_prepend, cell_type, '_p.tsv', sep=''), row.names=T, col.names=T, sep='\t')
+    if(!is.null(combined_ct_r)){
+      write.table(combined_ct_r, paste(tsv_output_prepend, cell_type, '_r.tsv', sep=''), row.names=T, col.names=T, sep='\t')
+    }
+  }
+}
 
 ###########################################################################################################################
 #
@@ -1127,7 +1179,7 @@ create_correlation_matrix_files(v3_mono, geneAs=c('RPS26'), geneBs=NULL, output_
 # we'll try this in parallel
 library(foreach)
 library(doMC)
-registerDoMC(6)
+registerDoMC(9)
 # the new genes to do co-eqtl mapping for
 ff_coeqtl_genes <- c('SSU72','NDUFA12','NMB','PLGRKT','SEPHS2','BTN3A2','PGD','TNFAIP6','HLA-B','ZFAND2A','HEBP1','CTSC','TMEM109','NUCB2','HIP1','AP2S1','CD52','PPID','RPS26','TMEM176B','ERAP2','HLA-DQA2','TMEM176A','CLEC12A','MAP3K7CL','BATF3','MRPL54','LILRA3','NAAA','PRKCB','SMDT1','LGALS9','KIAA1598','UBE2D1','SCO2','DNAJC15','NDUFA10','NAA38','HLA-DQA1','ROGDI','RBP7','SDCCAG8','CFD','GPX1','PRDX2','C6orf48','RBBP8','IQGAP2','PTK2B','SMAP1')
 # mapping for the probes that belong to the genes
@@ -1148,9 +1200,27 @@ foreach(i=1:length(ff_coeqtl_genes)) %dopar% {
   # do mapping for each condition
   for(condition in conditions){
     print(paste('starting', cis_snp, coeqtl_gene, condition))
-    do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
-    do_coexqtl(v3_mono, snp_genes, v3_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
-    do_coexqtl(v2_mono, snp_genes, v2_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+    try({
+      do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+    })
+    try({
+      do_coexqtl(v3_mono, snp_genes, v3_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+    })
+    try({
+      do_coexqtl(v2_mono, snp_genes, v2_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+    })
   }
 }
+
+for(gene in ff_coeqtl_genes){
+  # create the output dirs
+  v2_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', gene,'_v2_mono/', sep = '')
+  v3_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', gene,'_v3_mono/', sep = '')
+  meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', gene,'_meta_mono/', sep = '')
+  
+  output_rds_to_tsv(output_loc=v2_mono_out, tsv_output_prepend=paste(v2_mono_out, gene, '_v2_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  output_rds_to_tsv(output_loc=v2_mono_out, tsv_output_prepend=paste(v3_mono_out, gene, '_v3_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(v2_mono_out, gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+}
+
 
