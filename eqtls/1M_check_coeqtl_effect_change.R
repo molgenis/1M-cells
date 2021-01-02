@@ -382,6 +382,29 @@ get_coeqtl_differences <- function(r_v2_stim, r_v3_stim, r_v2_ut, r_v3_ut, p_met
   return(stim_results)
 }
 
+plot_timepoint_overlap <- function(meta_all_loc, p_cond_loc, snp, geneA, conditions){
+  # read the meta of all analysis
+  meta_all <- read.table(meta_all_loc, sep = '\t', header = T)
+  meta_threshold <- meta_3h[meta_3h$geneA == geneA, 'all_significance_threshold'][1]
+  meta_all_sig <- meta_all[meta_all$p < meta_threshold & meta_all$permuted == F & meta_all$snp == snp, ]
+  # create the list
+  sigs <- list()
+  # add the meta significants
+  sigs[['all']] <- as.character(meta_all_sig$geneB)
+  # moving on to the separate conditions
+  p_cond <- read.table(p_cond_loc, sep = '\t', header=T, row.names=1)
+  # now check the conditions we want to plot as well
+  for(condition in conditions){
+    # grab what was significant in this condition
+    cond_sig_genes <- rownames(p_cond[!is.na(p_cond[[condition]]) &
+                                        p_cond[[condition]] < p_cond['significance_threshold', condition], ])
+    # add to the list
+    sigs[[condition]] <- cond_sig_genes
+  }
+  # create the plot
+  upset(fromList(sigs), nsets = length(names(sigs)), order.by = 'freq')
+}
+
 
 # locations of the files
 p_meta_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/output_RPS26_confine_meta_20201124/RPS26_mono_meta_p.tsv'
@@ -471,3 +494,10 @@ condition_concordance_v2 <- ggarrange(concordances_plots_ribo_per_chem[['v2_X3hC
 
 condition_concordance_v3 <- ggarrange(concordances_plots_ribo_per_chem[['v3_X3hCA_X3hMTB']], concordances_plots_ribo_per_chem[['v3_X3hCA_X3hPA']], concordances_plots_ribo_per_chem[['v3_X3hMTB_X3hPA']], concordances_plots_ribo_per_chem[['v3_X24hCA_X24hPA']], concordances_plots_ribo_per_chem[['v3_X24hCA_X24hMTB']], concordances_plots_ribo_per_chem[['v3_X24hMTB_X24hPA']])
 
+# meta interactions
+meta_3h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_3h_meta_allcutoff_interactions_filtered.tsv'
+meta_24h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_24h_meta_allcutoff_interactions_filtered.tsv'
+meta_3h <- read.table(meta_3h_loc, sep = '\t', header = T)
+meta_24h <- read.table(meta_24h_loc, sep = '\t', header = T)
+
+plot_timepoint_overlap(meta_3h_loc, p_meta_loc, 'rs1131017', 'RPS26', c('UT', 'X3hCA', 'X3hMTB', 'X3hPA'))
