@@ -984,15 +984,197 @@ output_rds_to_tsv <- function(output_loc, tsv_output_prepend, conditions=c('UT',
         }
       }
       }, error=function(cond) {
+        print(paste('issue with', condition, cell_type))
         message(cond)
       })
     }
+    print(paste(tsv_output_prepend, cell_type, '_p.tsv', sep=''))
+    print(head(combined_ct_p))
     write.table(combined_ct_p, paste(tsv_output_prepend, cell_type, '_p.tsv', sep=''), row.names=T, col.names=T, sep='\t')
     if(!is.null(combined_ct_r)){
       write.table(combined_ct_r, paste(tsv_output_prepend, cell_type, '_r.tsv', sep=''), row.names=T, col.names=T, sep='\t')
     }
   }
 }
+
+summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # we will have multiple summary matrices, one for each cell type
+  summary_matrices <- list()
+  # check for each cell type
+  for(cell_type in cell_types){
+    # create an empty matrix
+    summary_matrix <- matrix(, ncol = length(conditions), nrow = length(genes), dimnames = list(genes, conditions))
+    # check the output of each gene
+    for(gene in genes){
+      # get the general output directories
+      v2_out <- paste(parent_output_dir_prepend, gene,'_v2', parent_output_dir_append, gene, '_v2_', cell_type, sep = '')
+      v3_out <- paste(parent_output_dir_prepend, gene,'_v3', parent_output_dir_append, gene, '_v3_', cell_type, sep = '')
+      meta_out <- paste(parent_output_dir_prepend, gene,'_meta', parent_output_dir_append, gene, '_meta_', cell_type, sep = '')
+      # get specifically the meta p value, and the Rs
+      meta_p_loc <- paste(meta_out, '_p.tsv', sep = '')
+      v2_r_loc <- paste(v2_out, '_r.tsv', sep = '')
+      v3_r_loc <- paste(v3_out, '_r.tsv', sep = '')
+      # we need to check if output was created for these genes at all
+      tryCatch({
+        meta_p <- read.table(meta_p_loc, sep = '\t', header = T, row.names = 1)
+        v2_r <- read.table(v2_r_loc, sep = '\t', header = T, row.names = 1)
+        v3_r <- read.table(v3_r_loc, sep = '\t', header = T, row.names = 1)
+        # check each condition for this gene
+        for(condition in conditions){
+          # we can only do something if we have data for this condition
+          if(condition %in% colnames(meta_p)){
+            # check the significance threshold for this condition
+            significance_threshold <- meta_p['significance_threshold', condition]
+            # check how many are equal to or smaller than the significance threshold (substracting one for the significance threshold row itself)
+            nr_significant <- nrow(meta_p[!is.na(meta_p[[condition]]) & meta_p[[condition]] <= significance_threshold, ]) - 1
+            # add this to the matrix
+            summary_matrix[gene, condition] <- nr_significant
+          }
+        }
+      }, error=function(cond) {
+        print(paste('cant do', gene, cell_type))
+        message(cond)
+      })
+      
+    }
+    # add this 'complete' summary to the list
+    summary_matrices[[cell_type]] <- summary_matrix
+  }
+  # return the result
+  return(summary_matrices)
+}
+
+
+read_tsv_results <- function(parent_output_dir_prepend, parent_output_dir_append, genes, cell_types=c('monocyte')){
+  # will store it all in a list
+  results_per_ct_per_gene <- list()
+  # check for each cell type
+  for(cell_type in cell_types){
+    # make a new list for this cell type
+    results_per_ct_per_gene[[cell_type]] <- list()
+    # check the output of each gene
+    for(gene in genes){
+      # get the general output directories
+      meta_out <- paste(parent_output_dir_prepend, gene,'_meta', parent_output_dir_append, gene, '_meta_', cell_type, sep = '')
+      # get specifically the meta p value, and the Rs
+      meta_p_loc <- paste(meta_out, '_p.tsv', sep = '')
+      # we need to check if output was created for these genes at all
+      tryCatch({
+        # read the table
+        meta_p <- read.table(meta_p_loc, sep = '\t', header = T, row.names = 1)
+        # put it in the list
+        results_per_ct_per_gene[[cell_type]][[gene]] <- meta_p
+      }, error=function(cond) {
+        print(paste('cant do', gene, cell_type))
+        message(cond)
+      })
+    }
+  }
+  return(results_per_ct_per_gene)
+}
+
+read_tsv_results_r <- function(parent_output_dir_prepend, parent_output_dir_append, genes, version, cell_types=c('monocyte')){
+  # will store it all in a list
+  results_per_ct_per_gene <- list()
+  # check for each cell type
+  for(cell_type in cell_types){
+    # make a new list for this cell type
+    results_per_ct_per_gene[[cell_type]] <- list()
+    # check the output of each gene
+    for(gene in genes){
+      # get the general output directories
+      r_out <- paste(parent_output_dir_prepend, gene,'_', version, parent_output_dir_append, gene, '_', version, '_', cell_type, sep = '')
+      # get specifically the meta p value, and the Rs
+      r_loc <- paste(r_out, '_r.tsv', sep = '')
+      # we need to check if output was created for these genes at all
+      tryCatch({
+        # read the table
+        r <- read.table(r_loc, sep = '\t', header = T, row.names = 1)
+        # put it in the list
+        results_per_ct_per_gene[[cell_type]][[gene]] <- r
+      }, error=function(cond) {
+        print(paste('cant do', gene, cell_type))
+        message(cond)
+      })
+    }
+  }
+  return(results_per_ct_per_gene)
+}
+
+check_ut_overlaps <- function(parent_output_dir_prepend, parent_output_dir_append, genes, version, cell_types=c('monocyte'), stim_conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # we will have multiple summary matrices, one for each cell type
+  summary_matrices <- list()
+  # first get the results
+  results_p <- read_tsv_results(parent_output_dir_prepend, parent_output_dir_append, genes, cell_types)
+  # check for each cell type
+  for(cell_type in cell_types){
+    # create an empty matrix
+    summary_matrix <- matrix(, ncol = length(stim_conditions), nrow = length(genes), dimnames = list(genes, stim_conditions))
+    # check the output of each gene
+    for(gene in genes){
+      # grab from the list
+      p_table <- results_p[[cell_type]][[gene]]
+      # check each condition against UT
+      for(stim_condition in stim_conditions){
+        # check if both UT and that stim condition are in there
+        if('UT' %in% colnames(p_table) & stim_condition %in% colnames(p_table)){
+          # get the significance thresholds
+          sig_ut_threshold <- p_table['significance_threshold', 'UT']
+          sig_stim_threshold <- p_table['significance_threshold', stim_condition]
+          # get genes significant for each condition
+          sig_ut <- rownames(p_table[!is.na(p_table[['UT']]) & p_table[['UT']] <= sig_ut_threshold, ])
+          sig_stim <- rownames(p_table[!is.na(p_table[[stim_condition]]) & p_table[[stim_condition]] <= sig_stim_threshold, ])
+          # check which are in both
+          sig_both <- intersect(sig_ut, sig_stim)
+          # check how many, doing -1, because 'significance_threshold' is always in there
+          sig_both_number <- length(sig_both) - 1
+          # put that as a result in the matrix
+          summary_matrix[gene, stim_condition] <- sig_both_number
+        }
+      }
+    }
+    # add this 'complete' overlap summary to the list
+    summary_matrices[[cell_type]] <- summary_matrix
+  }
+  # return the result
+  return(summary_matrices)
+}
+
+
+write_significant_genes <- function(parent_output_dir_prepend, parent_output_dir_append, sig_gene_output_loc, genes, version, cell_types=c('monocyte'), conditions=c('UT','X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  for(cell_type in cell_types){
+  # check the output of each gene
+  for(gene in genes){
+    # get the general output directories
+    meta_out <- paste(parent_output_dir_prepend, gene,'_', version, parent_output_dir_append, gene, '_', version, '_', cell_type, sep = '')
+    # get specifically the meta p value, and the Rs
+    meta_p_loc <- paste(meta_out, '_p.tsv', sep = '')
+    # we need to check if output was created for these genes at all
+    tryCatch({
+      meta_p <- read.table(meta_p_loc, sep = '\t', header = T, row.names = 1)
+      # check each condition for this gene
+      for(condition in conditions){
+        # we can only do something if we have data for this condition
+        if(condition %in% colnames(meta_p)){
+          # check the significance threshold for this condition
+          significance_threshold <- meta_p['significance_threshold', condition]
+          # check how many are equal to or smaller than the significance threshold (substracting one for the significance threshold row itself)
+          significant_genes <- rownames(meta_p[!is.na(meta_p[[condition]]) & meta_p[[condition]] <= significance_threshold, ])
+          # set output loc
+          sig_output_loc <- paste(sig_gene_output_loc, gene, '_', version, '_', cell_type, '_', condition, '_sig_genes.txt', sep = '')
+          # write the table
+          write.table(significant_genes, sig_output_loc, quote = F, col.names=F, row.names=F)
+        }
+      }
+    }, error=function(cond) {
+      print(paste('cant do', gene, cell_type))
+      message(cond)
+    })
+    
+  }
+  }
+}
+
 
 ###########################################################################################################################
 #
@@ -1219,8 +1401,8 @@ for(gene in ff_coeqtl_genes){
   meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', gene,'_meta_mono/', sep = '')
   
   output_rds_to_tsv(output_loc=v2_mono_out, tsv_output_prepend=paste(v2_mono_out, gene, '_v2_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
-  output_rds_to_tsv(output_loc=v2_mono_out, tsv_output_prepend=paste(v3_mono_out, gene, '_v3_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
-  output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(v2_mono_out, gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  output_rds_to_tsv(output_loc=v3_mono_out, tsv_output_prepend=paste(v3_mono_out, gene, '_v3_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
 }
 
 
