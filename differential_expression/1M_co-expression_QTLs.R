@@ -317,7 +317,7 @@ interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
 }
 
 
-interaction.regression.meta <- function(cor.matrix.1, cor.matrix.2, eqtl.gene, snp, cell.counts.1, cell.counts.2){
+interaction.regression.meta <- function(cor.matrix.1, cor.matrix.2, eqtl.gene, snp, cell.counts.1, cell.counts.2, replace_na=F){
   # we can only do the meta analysis if we have genes in both matrices
   genes_both <- intersect(rownames(cor.matrix.1), rownames(cor.matrix.2))
   # subset to only the shared genes
@@ -327,8 +327,8 @@ interaction.regression.meta <- function(cor.matrix.1, cor.matrix.2, eqtl.gene, s
   cell.counts.1 <- as.vector(unlist(cell.counts.1[as.character(colnames(cor.matrix.1))]))
   cell.counts.2 <- as.vector(unlist(cell.counts.2[as.character(colnames(cor.matrix.2))]))
   # perform the interaction analysis, where we calculate the betas and ses
-  interaction.statistics.1 <- do.call("rbind", apply(cor.matrix.1, 1, interaction.regression.row, snp = unlist(snp[,match(colnames(cor.matrix.1), colnames(snp))]), cell.counts=cell.counts.1))
-  interaction.statistics.2 <- do.call("rbind", apply(cor.matrix.2, 1, interaction.regression.row, snp = unlist(snp[,match(colnames(cor.matrix.2), colnames(snp))]), cell.counts=cell.counts.2))
+  interaction.statistics.1 <- do.call("rbind", apply(cor.matrix.1, 1, interaction.regression.row, snp = unlist(snp[,match(colnames(cor.matrix.1), colnames(snp))]), cell.counts=cell.counts.1, replace_na=replace_na))
+  interaction.statistics.2 <- do.call("rbind", apply(cor.matrix.2, 1, interaction.regression.row, snp = unlist(snp[,match(colnames(cor.matrix.2), colnames(snp))]), cell.counts=cell.counts.2, replace_na=replace_na))
   # create table to store result
   res_table <- NULL
   # calculate the new P values
@@ -357,7 +357,10 @@ interaction.regression.meta <- function(cor.matrix.1, cor.matrix.2, eqtl.gene, s
 }
 
 
-interaction.regression.row <- function(x, snp, cell.counts) {
+interaction.regression.row <- function(x, snp, cell.counts, replace_na=F) {
+  if(replace_na){
+    x[is.na(x)] <- 0
+  }
   model.1 <- lm(formula = x~snp, weights = sqrt(cell.counts))
   modelSummary.1 <- summary(model.1)
   modelCoeffs.1 <- modelSummary.1$coefficients
@@ -512,7 +515,7 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
 }
 
 
-do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrices.2, genotypes, cell.counts.1, cell.counts.2, output.dir, cor.dir, permutations = F, n.perm = 20, fdr.thresh = 0.05, perm.type = "gene") {
+do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrices.2, genotypes, cell.counts.1, cell.counts.2, output.dir, cor.dir, permutations = F, n.perm = 20, fdr.thresh = 0.05, perm.type = "gene", replace_na=F, allowed_missingness=0) {
   if (permutations) {
     #dir.create(paste0(output.dir, "/permutations"))
     perm.sample.orders.1 <- list()
@@ -552,8 +555,15 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
     cor.matrix.1 <- read.table(paste0(cor.dir, "correlation_matrix_", eqtl.name, ".1.txt"), row.names=1, header=T, stringsAsFactors=F)
     cor.matrix.2 <- read.table(paste0(cor.dir, "correlation_matrix_", eqtl.name, ".2.txt"), row.names=1, header=T, stringsAsFactors=F)
     #Remove all rows for which a correlation cannot be calculated within 1 or more individuals
-    cor.matrix.1 <- cor.matrix.1[apply(cor.matrix.1, 1, function(x){!any(is.na(x))}),]
-    cor.matrix.2 <- cor.matrix.2[apply(cor.matrix.2, 1, function(x){!any(is.na(x))}),]
+    if(allowed_missingness <= 0){
+      cor.matrix.1 <- cor.matrix.1[apply(cor.matrix.1, 1, function(x){!any(is.na(x))}),]
+      cor.matrix.2 <- cor.matrix.2[apply(cor.matrix.2, 1, function(x){!any(is.na(x))}),]
+    }
+    # or if a number was given, then subset to the genes that have correlation
+    else{
+      cor.matrix.1 <- cor.matrix.1[apply(cor.matrix.1, 1, function(x){sum(is.na(x))/length(x) <= allowed_missingness}),]
+      cor.matrix.2 <- cor.matrix.2[apply(cor.matrix.2, 1, function(x){sum(is.na(x))/length(x) <= allowed_missingness}),]
+    }
     
     print(dim(cor.matrix.1))
     print(dim(cor.matrix.2))
@@ -565,7 +575,7 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
       eqtl.genes <- c(eqtl.genes, eqtl.name)
     }
     
-    interaction.statistics <- interaction.regression.meta(cor.matrix.1 = cor.matrix.1, cor.matrix.2 = cor.matrix.2, eqtl.gene = eqtl.name, snp = snp, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2)
+    interaction.statistics <- interaction.regression.meta(cor.matrix.1 = cor.matrix.1, cor.matrix.2 = cor.matrix.2, eqtl.gene = eqtl.name, snp = snp, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, replace_na = replace_na)
     #Calculate the R value from the T statistic
     # FIXTHIS >> r.matrix <- cbind(r.matrix, interaction.statistics$statistic / sqrt(length(snp) - 2 + interaction.statistics$statistic ** 2))
     print(head(interaction.statistics))
@@ -576,7 +586,7 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
         permuted.snp <- snp
         # set different colnames, switching the genotypes
         colnames(permuted.snp) <- c(colnames(cor.matrix.1)[perm.sample.orders.1[[current.perm]]], colnames(cor.matrix.2)[perm.sample.orders.2[[current.perm]]])
-        perm.interaction.statistics <- interaction.regression.meta(cor.matrix.1 = cor.matrix.1, cor.matrix.2 = cor.matrix.2, eqtl.gene = eqtl.name, snp = permuted.snp, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2)
+        perm.interaction.statistics <- interaction.regression.meta(cor.matrix.1 = cor.matrix.1, cor.matrix.2 = cor.matrix.2, eqtl.gene = eqtl.name, snp = permuted.snp, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, replace_na = replace_na)
         if (current.perm == 1){
           p.value.permuted[[i]] <- perm.interaction.statistics$p.value
         } else {
@@ -810,7 +820,7 @@ create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, 
 }
 
 
-do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), n.perm=20, replace_na = F, allowed_missingness=0){
   DefaultAssay(seurat_object.1) <- 'SCT'
   DefaultAssay(seurat_object.2) <- 'SCT'
   for(condition in conditions){
@@ -859,7 +869,7 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
       create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.2, sample.names = sample.names.2,  output.dir = cor.dir, dataset='.2')
       create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.1, sample.names = sample.names.1,  output.dir = cor.dir, dataset='.1')
       # do interaction
-      interaction.output <- do.interaction.analysis.meta(snp_probes = snp_probes, exp.matrices.1 = exp.matrices.1, exp.matrices.2 = exp.matrices.2, genotypes = genotypes, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=10)
+      interaction.output <- do.interaction.analysis.meta(snp_probes = snp_probes, exp.matrices.1 = exp.matrices.1, exp.matrices.2 = exp.matrices.2, genotypes = genotypes, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=n.perm, replace_na = replace_na, allowed_missingness = allowed_missingness)
       # save the result
       saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
@@ -1017,8 +1027,8 @@ summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_a
       # we need to check if output was created for these genes at all
       tryCatch({
         meta_p <- read.table(meta_p_loc, sep = '\t', header = T, row.names = 1)
-        v2_r <- read.table(v2_r_loc, sep = '\t', header = T, row.names = 1)
-        v3_r <- read.table(v3_r_loc, sep = '\t', header = T, row.names = 1)
+        #v2_r <- read.table(v2_r_loc, sep = '\t', header = T, row.names = 1)
+        #v3_r <- read.table(v3_r_loc, sep = '\t', header = T, row.names = 1)
         # check each condition for this gene
         for(condition in conditions){
           # we can only do something if we have data for this condition
@@ -1405,4 +1415,85 @@ for(gene in ff_coeqtl_genes){
   output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
 }
 
+ff_coeqtl_genes_less <- c('HLA-DQA1', 'TMEM176B', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')
+# check each gene
+foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes_less[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:5){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition))
+      })
+    }
+  }
+}
+for(i in 1:5){
+  for(coeqtl_gene in ff_coeqtl_genes_less){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_', i, '/', sep = '')
+  
+    output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, coeqtl_gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  }
+}
+
+meta_comb_is <- list()
+for(i in 1:5){
+  meta_comb <- NULL
+  conditions <- c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')
+  for(coeqtl_gene in ff_coeqtl_genes_less){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_', i, '/', sep = '')
+    tryCatch({
+      meta_mono <- read.table(paste(meta_mono_out, coeqtl_gene, '_meta_monocyte_p.tsv', sep=''), sep='\t', row.names=1, header = 1)
+      meta_mono_sig_thresh <- meta_mono['significance_threshold', ]
+      rownames(meta_mono_sig_thresh) <- c(coeqtl_gene)
+      meta_mono_sig_thresh[, setdiff(conditions, colnames(meta_mono_sig_thresh))] <- 0
+      if(is.null(meta_comb)){
+        meta_comb <- meta_mono_sig_thresh
+      }
+      else{
+        meta_comb <- rbind(meta_comb, meta_mono_sig_thresh)
+      }
+    }, error=function(cond){
+      #message(cond)
+    })
+  }
+  meta_comb_is[[i]] <- meta_comb
+}
+
+summary_list <- list()
+for(i in 1:5){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_', i, '/', sep = ''), ff_coeqtl_genes_less, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list[[i]] <- coeqtl_summary_i
+}
+
+
+ff_coeqtl_genes_less <- c('HLA-DQA1', 'TMEM176B', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')
+# check each gene
+foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes_less[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:5){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition), replace_na = T, allowed_missingness = 0.5)
+      })
+    }
+  }
+}
 
