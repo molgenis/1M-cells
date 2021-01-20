@@ -309,20 +309,6 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes){
   
 }
 
-gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
-genes <- read.table(gene_to_ens_mapping, header = F, stringsAsFactors = F)
-vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
-genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
-rownames(genotypes_all) <- vcf$ID
-
-snp_probes <- c('rs1131017_RPS26')
-
-output_loc_1m_v3_mono_ut <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GRN_recontruction/coeqtls/1M_v3/monocytes/UT/'
-v3_mono_ut <- subset(v3, subset = cell_type_lowerres == 'monocyte' & timepoint == 'UT')
-do_coexqtl(v3_mono_ut, snp_probes, output_loc_1m_v3_mono_ut, genotypes_all)
-
-
-
 #PREPARED ANALYSIS
 
 do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='-'){
@@ -476,7 +462,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
           print(paste('model not run for :', cis_snp_a, geneA, geneB, str(cond[['message']])))
         })
       }
-      # I now, repeating just as before, very bad
+      # I know, repeating just as before, very bad
       if(nrow(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == geneB, ]) > 0){
         tryCatch({
           genotypes_snp_b_permuted <- as.vector(unlist(genotypes_all[cis_snp_b, permuted_participants[[i]]]))
@@ -846,23 +832,96 @@ plot_correlation_per_genotype <- function(prepared_correlations_location, combin
   return(plotted)
 }
 
+create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+  # check the different cell types
+  for(cell_type in cell_types){
+    # subset to this cell type
+    seurat_cell_type <- seurat_object[, !is.na(seurat_object@meta.data[[cell_type_column]]) & seurat_object@meta.data[[cell_type_column]] == cell_type]
+    print(paste('subset cell type:', cell_type))
+    # init the table
+    cell_type_correlations <- NULL
+    # check each cell condition
+    for(condition in conditions){
+      # subsetting to the condition
+      seurat_cell_type_condition <- seurat_cell_type[, !is.na(seurat_cell_type@meta.data[[condition_column]]) & seurat_cell_type@meta.data[[condition_column]] == condition]
+      print(paste('subset condition:', condition))
+      # create the correlation table for this cell type and condition
+      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column)
+      # add the condition to the column names
+      colnames(cor_cell_type_condition) <- paste(colnames(cor_cell_type_condition), condition, sep = '-')
+      # add to exising correlations if possible
+      if(is.null(cell_type_correlations)){
+        cell_type_correlations <- cor_cell_type_condition
+      }
+      else{
+        cell_type_correlations <- cbind(cell_type_correlations, cor_cell_type_condition)
+      }
+    }
+    # paste together an output location
+    output_loc_full <- paste(output_loc, cell_type, '.tsv', sep = '')
+    # write the table
+    write.table(cell_type_correlations, output_loc_full, sep = '\t', row.names=T, col.names=T, quote=F)
+  }
+}
 
+create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment'){
+  # get every gene combination
+  gene_combinations <- expand.grid(A=geneAs, B=geneBs)
+  # turn into vector
+  gene_combinations <- paste(gene_combinations$A, gene_combinations$B, sep='-')
+  # init table
+  correlation_table <- matrix(, nrow=length(gene_combinations), ncol=length(unique(seurat_object@meta.data[[assignment_column]])))
+  rownames(correlation_table) <- gene_combinations
+  colnames(correlation_table) <- unique(seurat_object@meta.data[[assignment_column]])
+  # check each participant
+  for(participant in unique(seurat_object@meta.data[[assignment_column]])){
+    # subset to thtat participant
+    seurat_participant <- seurat_object[, seurat_object@meta.data[[assignment_column]] == participant]
+    # check each gene
+    for(geneA in geneAs){
+      # against each other gene
+      for(geneB in geneBs){
+        # we need to try, because sometimes a gene might not be present. Failing is okay, because it will just leave the default NA
+        try({
+          # calculate the correlation
+          correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
+          # set this correlation
+          genepair <- paste(geneA, geneB, sep = '-')
+          correlation_table[genepair, participant] <- correlation
+        })
+      }
+    }
+  }
+  return(correlation_table)
+}
 
-
+# location of which SNP to use for each probe (gene)
 snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
+# the correlations of the gene pairs file location
 prepared_correlations_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/correlation_files/Top500DiffCoexpressedGenePairs_corrected.txt'
+# the location of the cell counts file, with the number of cells per participant and condition
 cell_counts_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/cell_counts_cmono.tsv'
+# the dataset annotation file location, for each sample the dataset where it is from
 dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets.tsv'
 dataset_annotation_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/annotation_files/datasets_wutp3.tsv'
+# the genotype file which contains all of the genotypes of the participants
 combined_genotype_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/genotype_files/eqtlgensnps.vcf.gz'
 
-interactions <- do_interaction_analysis_prepared_correlations_use_loc(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
-interactions$p.bonferroni <- interactions$p*nrow(interactions[interactions$permuted == F, ])
+# TODO add documentation for preparing these files
+# the input files mentioned above were not created by this script (though you can prepare the correlations), this should at some point be added here
 
+# perform the interaction analyses with the prepared files
+interactions <- do_interaction_analysis_prepared_correlations_use_loc(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=dataset_annotation_loc)
+# bonferroni correction for each snp>geneA+geneB combination (non-permuted only once of course)
+interactions$p.bonferroni <- interactions$p*nrow(interactions[interactions$permuted == F, ])
+# use the permutations approach to determine what the significance cutoff should be
 interactions_wcutoffs <- determine_significance_threshold(interactions)
 
+# do the interaction analyses per dataset (replaces block above)
 interactions_per_dataset <- do_interaction_analysis_prepared_correlations_per_dataset(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp_probe_mapping_location=snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, datasets=NULL, cell_counts_location=cell_counts_location, nr_of_permutations=20)
+# do a meta-analysis for each snp>geneA+geneB across datasets, this will meta-analyse the real test, and each permutation
 interactions_meta <- meta_analyse_interaction_analysis(interactions_per_dataset)
+# use the permutations that we did to determine the significance cutoff
 interactions_meta_wcutoffs <- determine_significance_threshold(interactions_meta)
 
 plot_correlation_per_genotype(prepared_correlations_location=prepared_correlations_location, combined_genotype_location=combined_genotype_location, snp='rs4761234', gene_pair = 'TNFRSF1B-LYZ', dataset_annotation_loc=dataset_annotation_loc, condition_to_plot='1M_v2_UT')
