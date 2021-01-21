@@ -235,12 +235,19 @@ get.snp <- function(snp.id) {
 # Output:
 #   A correlation matrix with the correlation value between all genes and the input gene, for every person
 
-create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method = "spearman") {
+create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method = "spearman", remove_any_zero_expressions=F) {
   cor.vectors <- list()
+  genes_with_zeroes <- c()
   for (i in 1:length(exp.matrices)) {
     #Check if the gene is in the expression matrix, since MAGIC does not include genes in its output that have no expression
     if (eqtl.gene %in% colnames(exp.matrices[[i]])) {
       samp.var <- apply(exp.matrices[[i]], 2, var)
+      # genes that have no expression
+      samp.zero <- apply(exp.matrices[[i]], 2, function(x){sum(x)==0})
+      samp.zero.genes <- colnames(exp.matrices[[i]][,samp.zero == T])
+      # add to list of zero-expression genes
+      genes_with_zeroes <- c(genes_with_zeroes, samp.zero.genes)
+      # calculate the correlation for the genes we can (the rest is still NA)
       samp.cor <- cor(exp.matrices[[i]][,eqtl.gene], exp.matrices[[i]][,samp.var != 0], method = cor.method)
       cor.vectors[[i]] <- t(samp.cor)
     } else {
@@ -254,6 +261,10 @@ create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method 
                        dimnames = list(genes, sample.names))
   for (i in seq_along(cor.vectors)) {
     cor.matrix[rownames(cor.vectors[[i]]), i] <- cor.vectors[[i]]
+  }
+  # if requested, remove the zero-expression genes
+  if(remove_any_zero_expressions){
+    cor.matrix <- cor.matrix[-which(rownames(cor.matrix) == eqtl.gene & rownames(cor.matrix) %in% genes_with_zeroes),]
   }
   # #Remove the target gene itself
   # cor.matrix <- cor.matrix[-which(rownames(cor.matrix) == eqtl.gene),]
@@ -273,7 +284,7 @@ create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method 
 #   A file with the correlation matrix, for every eQTL separately
 
 #create.cor.matrices <- function(eqtl.data, exp.matrices, output.dir, cor.method = "spearman"){
-create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.dir, cor.method = "spearman", verbose = T, dataset=''){
+create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.dir, cor.method = "spearman", verbose = T, dataset='', remove_any_zero_expressions=F){
   if(verbose){
     print('creating correlation matrices')
   }
@@ -290,7 +301,7 @@ create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.d
     snp_name <- snp_probe_split[[1]][1]
     #eqtl.name <- eqtl["ProbeName"]
     eqtl.name <- snp_probe_split[[1]][2]
-    cor.matrix <- create.cor.matrix(exp.matrices = exp.matrices, sample.names = sample.names, eqtl.gene = eqtl.name)
+    cor.matrix <- create.cor.matrix(exp.matrices = exp.matrices, sample.names = sample.names, eqtl.gene = eqtl.name, remove_any_zero_expressions=remove_any_zero_expressions)
     write.table(cor.matrix, file=paste0(output.dir, "correlation_matrix_", eqtl.name, dataset, ".txt"), row.names=T, col.names=T, quote=F)
     setTxtProgressBar(pb, i)
   }
@@ -662,7 +673,7 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
 ##
 ## Read in the expression data.
 ##
-do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte', n.perm=20)){
+do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte', n.perm=20, remove_any_zero_expressions=F)){
   DefaultAssay(seurat_object) <- 'SCT'
   for(condition in conditions){
     cells_condition <- subset(seurat_object, subset = timepoint == condition)
@@ -710,7 +721,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
       #  dir.create(cor.dir)
       #}
       
-      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
+      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir, remove_any_zero_expressions=remove_any_zero_expressions)
       interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=n.perm)
       
       saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
@@ -789,7 +800,7 @@ do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, geno
   
 }
 
-create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, condition, cell_type_to_check){
+create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, condition, cell_type_to_check, remove_any_zero_expressions=F){
   
   exp.matrices <- list()
   cell.counts <- c()
@@ -812,7 +823,7 @@ create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, 
   
   output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
   
-  create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
+  create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir, remove_any_zero_expressions=remove_any_zero_expressions)
   
   # create the cell_counts
   cell_counts_df <- data.frame(participant=sample.names, cell_count=cell.counts)
@@ -820,7 +831,7 @@ create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, 
 }
 
 
-do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), n.perm=20, replace_na = F, allowed_missingness=0){
+do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), n.perm=20, replace_na = F, allowed_missingness=0, remove_any_zero_expressions=F){
   DefaultAssay(seurat_object.1) <- 'SCT'
   DefaultAssay(seurat_object.2) <- 'SCT'
   for(condition in conditions){
@@ -866,8 +877,8 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
       output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
 
       # create correlation matrices for both conditions
-      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.2, sample.names = sample.names.2,  output.dir = cor.dir, dataset='.2')
-      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.1, sample.names = sample.names.1,  output.dir = cor.dir, dataset='.1')
+      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.2, sample.names = sample.names.2,  output.dir = cor.dir, dataset='.2', remove_any_zero_expressions=remove_any_zero_expressions)
+      create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices.1, sample.names = sample.names.1,  output.dir = cor.dir, dataset='.1', remove_any_zero_expressions=remove_any_zero_expressions)
       # do interaction
       interaction.output <- do.interaction.analysis.meta(snp_probes = snp_probes, exp.matrices.1 = exp.matrices.1, exp.matrices.2 = exp.matrices.2, genotypes = genotypes, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=n.perm, replace_na = replace_na, allowed_missingness = allowed_missingness)
       # save the result
@@ -877,7 +888,7 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
   
 }
 
-create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), filter_geneB_zeroes=F){
   # check the different cell types
   for(cell_type in cell_types){
     # subset to this cell type
@@ -891,7 +902,7 @@ create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, outpu
       seurat_cell_type_condition <- seurat_cell_type[, !is.na(seurat_cell_type@meta.data[[condition_column]]) & seurat_cell_type@meta.data[[condition_column]] == condition]
       print(paste('subset condition:', condition))
       # create the correlation table for this cell type and condition
-      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column)
+      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column, filter_geneB_zeroes=filter_geneB_zeroes)
       # add the condition to the column names
       colnames(cor_cell_type_condition) <- paste(colnames(cor_cell_type_condition), condition, sep = '-')
       # add to exising correlations if possible
@@ -909,7 +920,7 @@ create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, outpu
   }
 }
 
-create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment'){
+create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment', filter_geneB_zeroes=F){
   # get every gene combination
   gene_combinations <- expand.grid(A=geneAs, B=geneBs)
   # turn into vector
@@ -927,13 +938,22 @@ create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assign
       # against each other gene
       for(geneB in geneBs){
         # we need to try, because sometimes a gene might not be present. Failing is okay, because it will just leave the default NA
+        b_zero_expression_encountered <- F
         try({
+          # check for total zero expression on gene B
+          if(sum(as.vector(unlist(seurat_participant$SCT@counts[geneB, ]))) == 0){
+            b_zero_expression_encountered <- T
+          }
           # calculate the correlation
           correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
           # set this correlation
           genepair <- paste(geneA, geneB, sep = '-')
           correlation_table[genepair, participant] <- correlation
         })
+        # remove zero B expression if requested
+        if(filter_geneB_zeroes & b_zero_expression_encountered){
+          correlation_table <- correlation_table[rownames(correlation_table) != genepair, ]
+        }
       }
     }
   }
