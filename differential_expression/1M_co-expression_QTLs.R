@@ -1593,3 +1593,24 @@ foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
     }
   }
 }
+
+
+foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes_less[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:5){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena100permzerogeneb', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition), replace_na = T, allowed_missingness = 0.5, n.perm = 100, remove_any_zero_expressions = T)
+      })
+    }
+  }
+}
+
