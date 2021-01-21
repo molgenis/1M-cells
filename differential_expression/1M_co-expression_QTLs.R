@@ -662,7 +662,7 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
 ##
 ## Read in the expression data.
 ##
-do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte', n.perm=20)){
   DefaultAssay(seurat_object) <- 'SCT'
   for(condition in conditions){
     cells_condition <- subset(seurat_object, subset = timepoint == condition)
@@ -711,7 +711,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
       #}
       
       create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir)
-      interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=10)
+      interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=n.perm)
       
       saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
       #saveRDS(interaction.output, paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '.rds', sep = ''))
@@ -720,7 +720,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
   
 }
 
-do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), dataset=''){
+do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), dataset='', n.perm=n.perm){
   DefaultAssay(seurat_object) <- 'SCT'
   for(cell_type_to_check in cell_types){
     # grab the cells of the cell type
@@ -781,7 +781,7 @@ do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, geno
         write.table(cors_a_vs_b, cors_a_vs_b_loc, row.names=T, col.names=T, quote=F)
       }
       # exp.matrices is only used for the permutations, so supplying the participants has the same effect
-      interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = as.character(cell_counts_both$participant), genotypes = genotypes[, as.character(cell_counts_both$participant)], cell.counts = as.vector(cell_counts_both$cell_count), output.dir = output_loc, cor.dir = paste(output_loc, "/correlationMatrices/", 'UT', '_', condition, '_', cell_type_to_check, '_', sep=''), permutations = T, n.perm=10)
+      interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = as.character(cell_counts_both$participant), genotypes = genotypes[, as.character(cell_counts_both$participant)], cell.counts = as.vector(cell_counts_both$cell_count), output.dir = output_loc, cor.dir = paste(output_loc, "/correlationMatrices/", 'UT', '_', condition, '_', cell_type_to_check, '_', sep=''), permutations = T, n.perm=n.perm)
       
       saveRDS(interaction.output, paste(output_loc, 'UT', '_', condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
@@ -1026,6 +1026,7 @@ summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_a
       v3_r_loc <- paste(v3_out, '_r.tsv', sep = '')
       # we need to check if output was created for these genes at all
       tryCatch({
+        print(meta_p_loc)
         meta_p <- read.table(meta_p_loc, sep = '\t', header = T, row.names = 1)
         #v2_r <- read.table(v2_r_loc, sep = '\t', header = T, row.names = 1)
         #v3_r <- read.table(v3_r_loc, sep = '\t', header = T, row.names = 1)
@@ -1185,6 +1186,40 @@ write_significant_genes <- function(parent_output_dir_prepend, parent_output_dir
   }
 }
 
+
+get_percentage_participants_with_zeroes <- function(base_mean_expression_loc, interested_genes, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('monocyte')){
+  # save the data for each cell type
+  pct_0_exp_participants_per_ct <- list()
+  # go trough the cell types
+  for(cell_type in cell_types){
+    # create an empty matrix
+    summary_matrix <- matrix(, ncol = length(conditions), nrow = length(interested_genes), dimnames = list(interested_genes, conditions))
+    # go through each timepoint
+    for(timepoint in conditions){
+      # set the full path to the mean expression file
+      full_path <- paste(base_mean_expression_loc, timepoint, '/', cell_type, '_expression.tsv', sep = '')
+      # read the file
+      mean_exp <- read.table(full_path, sep = '\t', header = T, row.names=1)
+      # get each genes 0 expression percentage
+      for(gene in interested_genes){
+        # get the expressions
+        expressions <- unlist(mean_exp[gene, ])
+        print(expressions)
+        # get the number of zeroes
+        zeroes <- sum(expressions == 0)
+        # get the number of participants here
+        nr_of_parts <- length(expressions)
+        # calculate the zero percentage
+        zero_percentage <- zeroes / nr_of_parts
+        # add to the matrix
+        summary_matrix[gene, timepoint] <- zero_percentage
+      }
+    }
+    # add cell type to the list
+    pct_0_exp_participants_per_ct[[cell_type]] <- summary_matrix
+  }
+  return(pct_0_exp_participants_per_ct)
+}
 
 ###########################################################################################################################
 #
@@ -1497,3 +1532,44 @@ foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
   }
 }
 
+for(i in 1:5){
+  for(coeqtl_gene in ff_coeqtl_genes_less){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena_', i, '/', sep = '')
+    
+    output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, coeqtl_gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  }
+}
+
+summary_list <- list()
+for(i in 1:4){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_missingness05replacena_', i, '/', sep = ''), ff_coeqtl_genes_less, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list[[i]] <- coeqtl_summary_i
+}
+
+
+c('ENSG00000196735', 'ENSG00000106565', 'ENSG00000109861', 'ENSG00000172322', 'ENSG00000197728', 'ENSG00000184752', 'ENSG00000120675')
+
+foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes_less[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:5){
+    # create the output dirs
+    # create the output dirs
+    v2_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_v2_mono_', i2, '/', sep = '')
+    v3_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_v3_mono_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl(v3_mono, snp_genes, v3_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+      })
+      try({
+        do_coexqtl(v2_mono, snp_genes, v2_mono_out, genotypes_all, conditions = c(condition), cell_types = c('monocyte'))
+      })
+    }
+  }
+}
