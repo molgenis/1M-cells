@@ -19,7 +19,7 @@ write_meta_mast <- function(condition_info, mast_output_loc_prepend, mast_output
   # go through the conditions
   for(condition in c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
     # check for each cell type
-    for(cell_type in c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'hemapoietic stem', 'megakaryocyte', 'monocyte', 'plasma B')){
+    for(cell_type in c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'NK', 'hemapoietic stem', 'megakaryocyte', 'monocyte', 'plasma B')){
       # get the number of cells
       #cond1_v2_cells <- condition_info[condition_info$cell_type == cell_type & condition_info$condition1 == 'UT' & condition_info$chem == 'V2', ]$nr_of_cells_condition1[1]
       #cond1_v3_cells <- condition_info[condition_info$cell_type == cell_type & condition_info$condition1 == 'UT' & condition_info$chem == 'V3', ]$nr_of_cells_condition1[1]
@@ -1299,11 +1299,11 @@ cell_type_numbers_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_con
 
 
 # get the specific monocyte sharing pathways
-sigs_pos_shared_across_pathogens_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_shared_across_pathogens_same_timepoint/'
-sigs_pos_shared_across_timepoints_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_shared_across_timepoints_same_pathogen/'
-sigs_pos_unique_to_timepoint_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_unique_to_timepoint_same_pathogen/'
-sigs_pos_unique_to_pathogen_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos_unique_to_pathogen_same_timepoint/'
-sigs_pos_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs_pos/'
+sigs_pos_shared_across_pathogens_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_shared_across_pathogens_same_timepoint/'
+sigs_pos_shared_across_timepoints_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_shared_across_timepoints_same_pathogen/'
+sigs_pos_unique_to_timepoint_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_unique_to_timepoint_same_pathogen/'
+sigs_pos_unique_to_pathogen_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_unique_to_pathogen_same_timepoint/'
+sigs_pos_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/'
 mono_pathway_locs <- c(sigs_pos_shared_across_pathogens_same_timepoint_loc, sigs_pos_shared_across_timepoints_same_pathogen_loc, sigs_pos_unique_to_timepoint_same_pathogen_loc, sigs_pos_unique_to_pathogen_same_timepoint_loc, sigs_pos_output_loc)
 # get the pathway df
 mono_pathways_df <- create_overlap_pathway_df_cell_type('monocyte', mono_pathway_locs)
@@ -1324,11 +1324,15 @@ colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_fil
 # get the top ten per column
 mono_pathways_df_filtered_top_10 <- get_top_pathways(mono_pathways_df_filtered, 10, T)
 # create the heatmap
+pdf('~/Desktop/unique_shared_mono_pathways_top10.pdf', width = 20, height=20)
 heatmap.3(t(mono_pathways_df_filtered_top_10), dendrogram = 'none', margins=c(28,10))
+dev.off()
 # now for the top 5
 mono_pathways_df_filtered_top_5 <- get_top_pathways(mono_pathways_df_filtered, 5, T)
 # create the heatmap
+pdf('~/Desktop/unique_shared_mono_pathways_top5.pdf', width = 20, height=20)
 heatmap.3(t(mono_pathways_df_filtered_top_5), dendrogram = 'none', margins=c(30,10))
+dev.off()
 
 # check DE genes for monocytes
 deg_meta_fc_monos <- get_combined_meta_de_table(mast_meta_output_loc, must_be_positive_once = T, convert_insignificant_p_to_lfc0 = T, cell_types_to_use = c('monocyte'), pval_significance_threshold = 0.05)
