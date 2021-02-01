@@ -493,6 +493,32 @@ get_top_pathways <- function(pathway_table, nr_of_top_genes, is_ranked=F){
   return(pathway_table_smaller)
 }
 
+
+get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F){
+  most_shared <- c()
+  # there are different methods to get the most shared pathways
+  if(use_sd_method){
+    # the SD methods just gets the pathways with the lowest standard deviation
+    most_shared <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many, dont_get_least_varying = F)
+  }
+  else{
+    # first get the sum of the rankings over the rows, lower overall ranking means more shared
+    summed_rank <- apply(pathway_table, 1, sum)
+    # get the top X so many from the pathway table, ordered by this sum of rankings
+    most_shared <- rownames(pathway_table[order(summed_rank), ])[1:top_so_many]
+    
+    # get the sum of the 3h conditions
+    timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
+    pathway_table$summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
+    # get the sum of the 24h conditions
+    timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
+    pathway_table$summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
+    
+  }
+  return(most_shared)
+}
+
+
 get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2, venn_output_loc='./', only_significant=T, pval_column = 'metap_bonferroni', group1name='group 1', group2name='group 2'){
   # list the files in directory 1
   files <- list.files(mast_meta_output_1)
@@ -703,13 +729,13 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
   return(top_vary_de)
 }
 
-get_most_varying_from_df <- function(dataframe, top_so_many=10){
+get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_varying=T){
   # now calculate the sd over this set of columns
   sds <- apply(dataframe, 1, sd, na.rm=T)
   # add the sds as a column
   dataframe$sds <- sds
   # order by the sd
-  dataframe <- dataframe[order(dataframe$sds, decreasing = T), ]
+  dataframe <- dataframe[order(dataframe$sds, decreasing = dont_get_least_varying), ]
   # we will return the rownames
   most_varied <- NULL
   # we need to make sure we can return as many rownames as requested
@@ -1116,7 +1142,7 @@ sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_ne
 get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
 
 # get the location of the pathways
-pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20200713/rna/sigs/'
+pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs/'
 #pathway_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/mast/meta_paired_lores_unconfined_20200624/'
 # write the combined pathway file
 pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
@@ -1409,3 +1435,4 @@ heatmap.3(t(v3_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"
 heatmap.3(t(v3_mono_avg_exp_normed_de_hmt_only_pathways), labCol = NA, col=(brewer.pal(10,"YlOrRd")), margins = c(5,10), ColSideColors = colors_pathways_only_pathways)
 
 
+get_most_shared_pathways(pathway_table = pathway_up_df[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]], top_so_many = 20)
