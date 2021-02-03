@@ -509,15 +509,60 @@ get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
     
     # get the sum of the 3h conditions
     timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
-    pathway_table$summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
+    summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
+    most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_3h), ])[1:top_so_many])
+    
     # get the sum of the 24h conditions
     timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
-    pathway_table$summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
+    summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
+    most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_24h), ])[1:top_so_many])
+    
+    # make unique of course
+    most_shared <- unique(most_shared)
     
   }
   return(most_shared)
 }
 
+get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F){
+  most_varied <- c()
+  # most varied in 3h condition
+  timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
+  # most varied in 24h condition
+  timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_pa <- colnames(pathway_table)[grep('hPA', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_ca <- colnames(pathway_table)[grep('hCA', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_mtb <- colnames(pathway_table)[grep('hMTB', colnames(pathway_table))]
+  if(use_sd_method){
+    # first overall most variation
+    most_varied <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many)
+    most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_3h], top_so_many = top_so_many))
+    most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_24h], top_so_many = top_so_many))
+  }
+  else{
+    # large difference between 3h and 24h
+    mean_3h_ranks <- apply(pathway_table[, timepoints_3h], 1, mean)
+    mean_24h_ranks <- apply(pathway_table[, timepoints_24h], 1, mean)
+    # absolute difference
+    mean_rank_diff <- abs(mean_3h_ranks - mean_24h_ranks)
+    # grab by varied over abs mean difference
+    most_varied <- rownames(pathway_table[order(mean_rank_diff, decreasing = T), ])[1:top_so_many]
+    # get pathogen mean ranks
+    mean_pa_ranks <- apply(pathway_table[, timepoints_pa], 1, mean)
+    mean_ca_ranks <- apply(pathway_table[, timepoints_ca], 1, mean)
+    mean_mtb_ranks <- apply(pathway_table[, timepoints_mtb], 1, mean)
+    # turn into separate df
+    path_df <- data.frame(pa=mean_pa_ranks, ca=mean_ca_ranks, mtb=mean_mtb_ranks)
+    rownames(path_df) <- rownames(pathway_table)
+    # use sd method
+    most_varied <- c(most_varied, get_most_varying_from_df(path_df, top_so_many = top_so_many))
+  }
+  most_varied <- unique(most_varied)
+  return(most_varied)
+}
 
 get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2, venn_output_loc='./', only_significant=T, pval_column = 'metap_bonferroni', group1name='group 1', group2name='group 2'){
   # list the files in directory 1
@@ -1435,4 +1480,52 @@ heatmap.3(t(v3_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"
 heatmap.3(t(v3_mono_avg_exp_normed_de_hmt_only_pathways), labCol = NA, col=(brewer.pal(10,"YlOrRd")), margins = c(5,10), ColSideColors = colors_pathways_only_pathways)
 
 
-get_most_shared_pathways(pathway_table = pathway_up_df[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]], top_so_many = 20)
+# filter to immune pathways
+pathway_up_df_mono_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]]
+# remove the monocyte and UTX monniker from the colnames
+colnames(pathway_up_df_mono_filtered) <- gsub('monocyteUTX', '', colnames(pathway_up_df_mono_filtered))
+# store which were zero
+pathway_up_df_mono_filtered_nonresults <- pathway_up_df_mono_filtered==0
+# now set to max instead
+pathway_up_df_mono_filtered[pathway_up_df_mono_filtered==0] <- max(pathway_up_df_mono_filtered)
+# get the most shared mono pathways that were upregulated
+mono_most_shared_pathways <- get_most_shared_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10)
+# subset to monocytes and these pathways
+mono_most_shared_pathways_df <- pathway_up_df_mono_filtered[mono_most_shared_pathways, ]
+# scale to a value from zero to one
+mono_most_shared_pathways_df <- 1 - (mono_most_shared_pathways_df/max(mono_most_shared_pathways_df))
+# set other hclust function
+#distfunc <- function(x) daisy(x,metric="gower")
+#hclustfunc <- function(x) hclust(x, method="complete")
+pdf('~/Desktop/mono_most_shared.pdf', width = 20, height=20)
+mono_most_shared_pathways_df_h <- heatmap.3(t(mono_most_shared_pathways_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)), to_na = min(mono_most_shared_pathways_df))
+dev.off()
+
+# get the most shared mono pathways that were upregulated
+mono_most_varied_pathways <- get_most_varied_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10, use_sd_method = T)
+# subset to monocytes and these pathways
+mono_most_varied_pathways_df <- pathway_up_df_mono_filtered[mono_most_varied_pathways, ]
+# scale to a value from zero to one
+mono_most_varied_pathways_df <- 1 - (mono_most_varied_pathways_df/max(mono_most_varied_pathways_df))
+# remove the monocyte and UTX monniker from the colnames
+colnames(mono_most_varied_pathways_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_df))
+# set other hclust function
+#distfunc <- function(x) daisy(x,metric="gower")
+#hclustfunc <- function(x) hclust(x, method="complete")
+pdf('~/Desktop/mono_most_varied.pdf', width = 20, height=20)
+heatmap.3(t(mono_most_varied_pathways_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)))
+dev.off()
+
+
+mono_most_varied_pathways_nosd <- get_most_varied_pathways(pathway_table = pathway_up_df[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]], top_so_many = 10, use_sd_method = F)
+# subset to monocytes and these pathways
+mono_most_varied_pathways_nosd_df <- pathway_up_df[mono_most_varied_pathways_nosd, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]]
+# scale to a value from zero to one
+mono_most_varied_pathways_nosd_df <- 1 - (mono_most_varied_pathways_nosd_df/max(mono_most_varied_pathways_nosd_df))
+# remove the monocyte and UTX monniker from the colnames
+colnames(mono_most_varied_pathways_nosd_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_nosd_df))
+pdf('~/Desktop/mono_most_varied_nosd.pdf', width = 20, height=20)
+heatmap.3(t(mono_most_varied_pathways_nosd_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)))
+dev.off()
+
+
