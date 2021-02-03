@@ -264,7 +264,7 @@ create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method 
   }
   # if requested, remove the zero-expression genes
   if(remove_any_zero_expressions){
-    cor.matrix <- cor.matrix[-which(rownames(cor.matrix) == eqtl.gene & rownames(cor.matrix) %in% genes_with_zeroes),]
+    cor.matrix <- cor.matrix[rownames(cor.matrix) == eqtl.gene | !(rownames(cor.matrix) %in% genes_with_zeroes),]
   }
   # #Remove the target gene itself
   # cor.matrix <- cor.matrix[-which(rownames(cor.matrix) == eqtl.gene),]
@@ -1603,7 +1603,7 @@ foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
   snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
   for(i2 in 1:5){
     # create the output dirs
-    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena100permzerogeneb', i2, '/', sep = '')
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena100permzerogeneb_', i2, '/', sep = '')
     # do mapping for each condition
     for(condition in conditions){
       print(paste('starting', cis_snp, coeqtl_gene, condition))
@@ -1614,3 +1614,56 @@ foreach(i=1:length(ff_coeqtl_genes_less)) %dopar% {
   }
 }
 
+for(i in 1:5){
+  for(coeqtl_gene in ff_coeqtl_genes_less){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena100permzerogeneb_', i, '/', sep = '')
+    
+    output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, coeqtl_gene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+  }
+}
+
+summary_list <- list()
+for(i in 1:5){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_missingness05replacena100permzerogeneb_', i, '/', sep = ''), ff_coeqtl_genes_less, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list[[i]] <- coeqtl_summary_i
+}
+
+ff_coeqtl_genes_undone <- setdiff(ff_coeqtl_genes, ff_coeqtl_genes_less)
+
+foreach(i=1:length(ff_coeqtl_genes_undone)) %dopar% {
+  coeqtl_gene <- ff_coeqtl_genes_undone[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:1){
+    # create the output dirs
+    meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_mono_missingness05replacena100permzerogeneb_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_mono, v3_mono, snp_genes, meta_mono_out, genotypes_all, cell_types = c('monocyte'), conditions = c(condition), replace_na = T, allowed_missingness = 0.5, n.perm = 100, remove_any_zero_expressions = T)
+      })
+    }
+  }
+}
+
+for(coeqtlgene in ff_coeqtl_genes_undone){
+  print(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtlgene,'_meta_mono_missingness05replacena100permzerogeneb_', 1, '/', sep = ''))
+}
+
+for(coeqtlgene in ff_coeqtl_genes_undone){
+  # create the output dirs
+  meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtlgene,'_meta_mono_missingness05replacena100permzerogeneb_', 1, '/', sep = '')
+  
+  output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, coeqtlgene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+}
+
+
+summary_list <- list()
+for(i in 1:1){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_missingness05replacena100permzerogeneb_', 1, '/', sep = ''), ff_coeqtl_genes_undone, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list[[i]] <- coeqtl_summary_i
+}
