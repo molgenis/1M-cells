@@ -1,8 +1,8 @@
 
+library(ggplot2)
+library(data.table)
 
-
-
-plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL){
+plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T){
   # use the supplied gene if possible
   gene_to_use <- gene_b
   if(is.null(gene_to_use)){
@@ -17,9 +17,6 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
     # grab the first one
     gene_to_use <- rownames(p_vals)[1]
   }
-  
-  # grab the data for the SNP
-  snps <- data.frame(t(genotype_data[snp, ]))
   # we have these per dataset
   plots <- list()
   # we have a meta-analysis of two sets
@@ -27,24 +24,65 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
     # get the location of the correlated output
     cor_data_loc <- paste(mapping_folder, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene_name, '.', i, '.txt', sep = '')
     # read the correlation data
-    cor_data <- read.table(cor_data_loc, sep = '\t', header = T, row.names = 1)
+    cor_data <- read.table(cor_data_loc, header = T, row.names = 1)
+    # get what we have data for in both
+    common_data <- intersect(colnames(cor_data), colnames(genotype_data))
     # grab the data for the gene
-    cor_gene <- data.frame(t(cor_data[gene_to_use, ]))
+    cor_gene <- as.vector(unlist(cor_data[gene_to_use, common_data]))
+    # set to zero if set so
+    if(na_to_zero){
+      cor_gene[is.na(cor_gene)] <- 0
+    }
     # grab the data for the SNP
-    snps <- data.frame(t(genotype_data[snp, ]))
+    snps <- as.vector(unlist(genotype_data[snp, common_data]))
     # merge the SNP and correlation
-    plot_data <- merge(snps, cor_gene, by=0) # no need to filter, SNPs without correlations are dropped
-    # set standard colnames
-    colnames(plot_data) <- c('snp', 'correlation')
-    p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = genotype)) + 
+    plot_data <- data.frame(participant=common_data, snp=snps, correlation=cor_gene)
+    # do plotting
+    p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp)) + 
       geom_boxplot() +
       geom_jitter(width = 0.1, alpha = 0.2) +
       theme_bw() + 
-      ggtitle(paste(snp, gene_name, gene_to_use, sep = ' '))
+      ggtitle(paste(snp, gene_name, gene_to_use, condition, sep = ' '))
     # add to plots
     plots[[i]] <- p
   }
   return(plots)
+}
+
+plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T){
+  # get a summary of the numbers
+  coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
+  # I like dataframes more than matrices
+  coeqtl_summary <- data.frame(coeqtl_summary)
+  # can only plot what we actually have output for
+  genes_to_plot <- intersect(genes, rownames(coeqtl_summary))
+  # plot for each geneA
+  for(gene in genes_to_plot){
+    # build the path to this specific mappings folder
+    #mapping_folder <- paste(mappings_folder, mapping_folder_prepend, monniker, gene, mapping_folder_append, sep = '')
+    # really dislike this, but don't want to fix this inconsistency now
+    mapping_folder <- paste(mappings_folder, mapping_folder_prepend, gene, substr(monniker, 1, nchar(monniker) - 1), mapping_folder_append, sep = '')
+    # get the snp belonging to the gene
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+    # plot for each condition
+    for(condition in conditions){
+      # check if there is any coeqtl for this condition and gene
+      if(!is.na(coeqtl_summary[gene, condition]) & coeqtl_summary[gene, condition] > 0){
+        # try to get the plot
+        top_gene_condition_plots <- plot_coexpression_qtl(genotype_data=genotype_data, mapping_folder=mapping_folder, gene_name=gene, snp=snp, monniker=monniker, cell_type=cell_type, condition=condition, gene_b=NULL, na_to_zero=na_to_zero)
+        # create the plot out locations
+        #plot_out_v2 <- paste(plot_output_loc, 'co-expressionQTL_', gene, '_tophit_', condition, '_V2.png', sep = '')
+        #top_gene_condition_plots[[1]]
+        #ggsave(plot_out_v2)
+        # twice of course
+        #plot_out_v3 <- paste(plot_output_loc, 'co-expressionQTL_', gene, '_tophit_', condition, '_V3.png', sep = '')
+        #top_gene_condition_plots[[2]]
+        #ggsave(plot_out_v3)
+        # plot both
+        ggsave(paste(plot_output_loc, 'co-expressionQTL_', gene, '_tophit_', condition, '.png', sep = ''), arrangeGrob(grobs = top_gene_condition_plots))
+      }
+    }
+  }
 }
 
 
@@ -104,7 +142,7 @@ output_rds_to_tsv <- function(output_loc, tsv_output_prepend, conditions=c('UT',
   }
 }
 
-summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_append, genes, snp_probe_mapping, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
   # we will have multiple summary matrices, one for each cell type
   summary_matrices <- list()
   # check for each cell type
@@ -355,4 +393,37 @@ vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotyp
 genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
 rownames(genotypes_all) <- vcf$ID
 
+# mapping for the probes that belong to the genes
+snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
+# get the mapping of the probe to the cis SNP
+snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
 
+# location of coeqtls output and correlation matrices
+coeqtl_out_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
+# prep and append we will use for now
+prepend <- 'output_'
+append <- '_meta_mono_missingness05replacena100permzerogeneb_1/'
+# location of plots
+coeqtl_plot_loc <- paste(coeqtl_out_loc, 'plots/', sep = '')
+# geneAs to plot
+coeqtl_genes <- c('SSU72','NDUFA12','NMB','PLGRKT','SEPHS2','BTN3A2','PGD','TNFAIP6','HLA-B','ZFAND2A','HEBP1','CTSC','TMEM109','NUCB2','HIP1','AP2S1','CD52','PPID','RPS26','TMEM176B','ERAP2','HLA-DQA2','TMEM176A','CLEC12A','MAP3K7CL','BATF3','MRPL54','LILRA3','NAAA','PRKCB','SMDT1','LGALS9','KIAA1598','UBE2D1','SCO2','DNAJC15','NDUFA10','NAA38','HLA-DQA1','ROGDI','RBP7','SDCCAG8','CFD','GPX1','PRDX2','C6orf48','RBBP8','IQGAP2','PTK2B','SMAP1')
+
+# try one plot
+RPS26_top_plot <- plot_coexpression_qtl(genotype_data = genotypes_all, mapping_folder = paste(coeqtl_out_loc, prepend, 'RPS26', append, sep = ''), gene_name = 'RPS26', snp = 'rs1131017')
+RPS26_top_plot[[1]]
+ggsave('co-expressionQTLRPS26tophitV2.png')
+TMEM176A_top_plot <- plot_coexpression_qtl(genotype_data = genotypes_all, mapping_folder = paste(coeqtl_out_loc, prepend, 'TMEM176A', append, sep = ''), gene_name = 'TMEM176A', snp = 'rs7806458', condition='X24hCA')
+TMEM176A_top_plot[[1]]
+ggsave('co-expressionQTLTMEM176AtophitV2.png')
+TMEM176A_top_plot[[2]]
+ggsave('co-expressionQTLTMEM176AtophitV3.png')
+TMEM176B_LYZ_plot <- plot_coexpression_qtl(genotype_data = genotypes_all, mapping_folder = paste(coeqtl_out_loc, prepend, 'TMEM176B', append, sep = ''), gene_name = 'TMEM176B', snp = 'rs7806458', condition='X24hCA', gene_b = 'LYZ')
+TMEM176B_LYZ_plot[[1]]
+ggsave('co-expressionQTLTMEM176BLYZV2.png')
+TMEM176B_LYZ_plot[[2]]
+ggsave('co-expressionQTLTMEM176BLYZV3.png')
+
+# do the top hit plotting
+plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
+  
+  
