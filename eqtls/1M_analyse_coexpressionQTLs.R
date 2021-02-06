@@ -1,6 +1,22 @@
-
+###########################################################################################################################
+#
+# Libraries
+#
+###########################################################################################################################
+library(methods)
+library(pbapply)
+library(Matrix)
+require(broom)
+library(Seurat)
 library(ggplot2)
 library(data.table)
+library(meta)
+
+###########################################################################################################################
+#
+# Functions
+#
+###########################################################################################################################
 
 plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T){
   # use the supplied gene if possible
@@ -330,6 +346,8 @@ get_gene_lists <- function(tsv_output_loc){
   for(condition in colnames(result)){
     # get for the condition in the column, if it was tested, and if it was below the significance threshold for this condition
     sig_genes <- rownames(result[!is.na(result[[condition]]) & result[[condition]] <= result['significance_threshold', condition], ])
+    # remove significance threshold itself
+    sig_genes <- sig_genes[!(sig_genes %in% c('significance_threshold'))]
     # add to the list under the condition name
     sig_genes_per_condition[[condition]] <- sig_genes
   }
@@ -374,6 +392,61 @@ significant_coeqtl_genes_to_file <- function(input_path_prepend, input_path_appe
   }
 }
 
+get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps, cell_type='monocyte', to_numeric=F){
+  # build the input directory
+  output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
+  # get the most significant one otherwise
+  p_loc <- paste(output_dir, gene, '_meta_', cell_type, '_p.tsv', sep = '')
+  # get the gene lists
+  sigs_per_cond <- get_gene_lists(p_loc)
+  # grab specifically this SNP
+  specific_snp <- snps[snp, , drop=F]
+  # save R matrix per condition
+  matrix_per_cond <- list()
+  for(i in 1:2){
+    # check per condition
+    for(condition in names(sigs_per_cond)){
+      # read the correlation table
+      cor_i_loc <- paste(output_dir, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene, '.', i, '.txt', sep = '')
+      cor_i <- read.table(cor_i_loc, header = T, row.names = 1)
+      # get the snps
+      snp_i <- unlist(specific_snp[,match(colnames(cor_i), colnames(specific_snp))])
+      if(to_numeric){
+        snp_i <- as.numeric(as.factor(snp_i)) - 1
+      }
+      # subset to the genes we care about
+      cor_i <- cor_i[sigs_per_cond[[condition]], ]
+      # do the interaction analysis
+      interaction.statistics <- interaction.regression(cor.matrix = cor_i, eqtl.gene = gene, snp = snp_i, cell.counts = NULL)
+      r.matrix <- (interaction.statistics$statistic / sqrt(length(snp_i) - 2 + interaction.statistics$statistic ** 2))
+      r.matrix <- data.frame(r.matrix)
+      rownames(r.matrix) <- sigs_per_cond[[condition]]
+      colnames(r.matrix) <- i
+      # add to existing r matrix if possible
+      if(condition %in% names(matrix_per_cond)){
+        matrix_per_cond[[condition]] <- cbind(matrix_per_cond[[condition]], r.matrix)
+      }
+      else{
+        matrix_per_cond[[condition]] <- r.matrix
+      }
+    }
+  }
+  return(matrix_per_cond)
+}
+
+interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
+  interaction.statistics <- do.call("rbind", apply(cor.matrix, 1, function(x) {
+    model <- NULL
+    if(is.null(cell.counts)){
+      model <- lm(formula = x~snp)
+    }
+    else{
+      model <- lm(formula = x~snp, weights = sqrt(cell.counts))
+    }
+    return(tidy(model)[2,])
+  }))
+  return(interaction.statistics)
+}
 
 # location of the coeqtl output
 coeqtl_out_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/'
@@ -425,5 +498,6 @@ ggsave('co-expressionQTLTMEM176BLYZV3.png')
 
 # do the top hit plotting
 plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
-  
+# check the Rs
+get_r_values(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', gene='TMEM176B', snp='rs7806458', snps=genotypes_all, cell_type='monocyte', to_numeric=F)
   
