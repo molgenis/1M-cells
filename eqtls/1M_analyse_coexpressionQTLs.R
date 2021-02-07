@@ -434,6 +434,58 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
   return(matrix_per_cond)
 }
 
+
+write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, snp_probe_mapping, snps, cell_type='monocyte', to_numeric=F){
+  # check each gene
+  for(gene in genes){
+    # get the matching snp
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+    # do the r catching
+    r_values_per_per_cond <- get_r_values(input_path_prepend=input_path_prepend, input_path_append=input_path_append, gene=gene, snp=snp, snps=snps, cell_type=cell_type, to_numeric=to_numeric)
+    # build the output dir
+    output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
+    # check each condition
+    for(condition in names(r_values_per_per_cond)){
+      # get the rs for this condition
+      rs <- r_values_per_per_cond[[condition]]
+      # set the output location
+      r_output_loc <- paste(output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
+      # write the result
+      write.table(rs, r_output_loc, row.names = T, col.names = T, sep = '\t')
+    }
+  }
+}
+
+
+write_r_plots_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, plot_output_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # check each gene
+  for(gene in genes){
+    # get base output dir for gene
+    base_output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
+    # go through the conditions
+    plot_per_condition <- list()
+    i <- 1
+    for(condition in conditions){
+      try({
+        # get the output dir of the condition
+        r_output_loc <- paste(base_output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
+        # read the r vals
+        rs <- read.table(r_output_loc, sep = '\t', header = T, row.names = 1)
+        if(!is.null(rs) & !is.null(dim(rs)) & nrow(rs) > 0 & ncol(rs) > 1){
+          # order by the X1 column
+          rs <- rs[order(rs$X1), ]
+          p <- ggplot(data=rs, aes(x=X1, y=X2)) + ggtitle(paste(gene, condition, 'v2 vs v3')) + geom_point() + coord_cartesian(xlim = c(-1, 1), ylim = c(-1, 1)) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = -1, ymax = 0), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax = 1, ymin = 0, ymax = 1), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = 0, ymax = 1), fill = "pink", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax =1, ymin = -1, ymax = 0), fill = "pink", alpha = 0.1)
+          plot_per_condition[[i]] <- p
+          i <- i + 1
+        }
+      })
+    }
+    if(length(plot_per_condition) > 0){
+      ggsave(paste(plot_output_loc, 'co-expressionQTL_', gene, '_Rs_', '.png', sep = ''), arrangeGrob(grobs = plot_per_condition))
+    }
+  }
+}
+
 interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
   interaction.statistics <- do.call("rbind", apply(cor.matrix, 1, function(x) {
     model <- NULL
@@ -500,4 +552,7 @@ ggsave('co-expressionQTLTMEM176BLYZV3.png')
 plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
 # check the Rs
 get_r_values(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', gene='TMEM176B', snp='rs7806458', snps=genotypes_all, cell_type='monocyte', to_numeric=F)
-  
+# write the Rs
+write_r_values_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, snps=genotypes_all, cell_type='monocyte', to_numeric=F)
+# write the R plots
+write_r_plots_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', genes=coeqtl_genes, plot_output_loc=coeqtl_plot_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
