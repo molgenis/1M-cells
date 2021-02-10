@@ -11,6 +11,9 @@ library(Seurat)
 library(ggplot2)
 library(data.table)
 library(meta)
+require("heatmap.plus")
+library(RColorBrewer)
+library(UpSetR)
 
 ###########################################################################################################################
 #
@@ -18,7 +21,94 @@ library(meta)
 #
 ###########################################################################################################################
 
-plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T){
+plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, version_chem, output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # go through all the conditions
+  for(condition in intersect(unique(as.character(seurat_object@meta.data$timepoint)), conditions)){
+    plot.matrix <- NULL
+    # subset to only this condition
+    seurat_object_condition <- seurat_object[,seurat_object@meta.data['timepoint'] == condition]
+    for(sample in unique(seurat_object_condition@meta.data$assignment)){
+      # subset to only this participant
+      seurat_object_condition_participant <- seurat_object_condition[, seurat_object_condition@meta.data$assignment == sample]
+      # grab the normalized counts
+      sample.matrix <- NULL
+      if(use_SCT){
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
+      }
+      else{
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@scale.data[gene1, ], seurat_object_condition_participant@assays$RNA@scale.data[gene2, ])
+      }
+      # remove the rownames, we don't need them
+      rownames(sample.matrix) <- NULL
+      # set the new colnames
+      colnames(sample.matrix) <- c('eqtl', 'interaction')
+      # add the participant name
+      sample.matrix$sample.name <- sample
+      # add the genotype of the participant
+      sample.matrix$snp <- as.character(genotype[[sample]])
+      if(is.null(plot.matrix)){
+        plot.matrix <- sample.matrix
+      }
+      else{
+        plot.matrix <- rbind(plot.matrix, sample.matrix)
+      }
+    }
+    # turn the SNP into a factor
+    plot.matrix$snp <- as.factor(plot.matrix$snp)
+    print(head(plot.matrix))
+    # store separate plots
+    plots <- list()
+    # do the actual plotting
+    for (i in 1:length(levels(plot.matrix$snp))) {
+      genotype.to.plot <- plot.matrix[plot.matrix$snp == levels(plot.matrix$snp)[i],]
+      
+      color.high <- c("lightgreen", "orange", "lightblue")
+      color.low <- c("darkgreen", "red3", "blue")
+      
+      plots[[i]] <- ggplot(genotype.to.plot, aes(y=eqtl, x=interaction, color=as.integer(sample.name), group = sample.name)) +
+        geom_point(size=0.3, alpha = 0.2) +
+        geom_smooth(method="lm", se=F, size = 0.5) +
+        scale_colour_gradient(name = "sample.name", guide = F,
+                              low = color.low[i], high = color.high[i]) +
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white", colour = "grey"),
+              panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+              panel.border = element_rect(colour = "grey", fill=NA, size=2)) + 
+        #scale_x_continuous(breaks = round(seq(min(genotype.to.plot$interaction), max(genotype.to.plot$interaction), by = 0.1),1)) +
+        ylab("") + xlab("") +
+        ggtitle(levels(plot.matrix$snp)[i])
+    }
+    title <- paste(gene1, "/", gene2, "/", snp.name, '/', condition, '/', version_chem)
+    if(!is.null(p.value) & !is.null(r) & !is.null(sign.cutoff)){
+      title <- paste(gene1, "/", gene2, "/", snp.name, "\n", signif(p.value, 3), "/", signif(r, 3), "/ cutoff=", sign.cutoff)
+    }
+    
+    plot.all <- ggplot(plot.matrix, aes(y=eqtl, x=interaction, color = snp)) + 
+      geom_point(size=0.7, alpha = 0.4) +
+      theme_minimal(base_size = 16) +
+      theme(panel.background = element_rect(fill = "white", colour = "grey"),
+            panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+            panel.border = element_rect(colour = "grey", fill=NA, size=2)) + 
+      scale_color_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
+      ylab(gene1) +
+      xlab(gene2) +
+      geom_smooth(method="lm") +
+      ggtitle(title)
+    
+    
+    if (length(plots) == 3){
+      right.col <- plot_grid(plots[[1]], plots[[2]], plots[[3]], ncol=1)
+      print(plot_grid(plot.all, right.col, rel_widths = c(2,1)))
+    } else {
+      right.col <- plot_grid(plots[[1]], plots[[2]], ncol=1)
+      print(plot_grid(plot.all, right.col, rel_widths = c(2,1)))
+    }
+    ggsave(paste(output_loc, "interaction", condition, gene1, gene2, version_chem, '.png', sep = ''))
+  }
+}
+
+
+plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T, to_numeric=F){
   # use the supplied gene if possible
   gene_to_use <- gene_b
   if(is.null(gene_to_use)){
@@ -51,6 +141,9 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
     }
     # grab the data for the SNP
     snps <- as.vector(unlist(genotype_data[snp, common_data]))
+    if(to_numeric){
+      #snps <- as.numeric(as.factor(snps))
+    }
     # merge the SNP and correlation
     plot_data <- data.frame(participant=common_data, snp=snps, correlation=cor_gene)
     # do plotting
@@ -65,7 +158,7 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
   return(plots)
 }
 
-plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T){
+plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T, to_numeric=F){
   # get a summary of the numbers
   coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
   # I like dataframes more than matrices
@@ -85,7 +178,7 @@ plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_f
       # check if there is any coeqtl for this condition and gene
       if(!is.na(coeqtl_summary[gene, condition]) & coeqtl_summary[gene, condition] > 0){
         # try to get the plot
-        top_gene_condition_plots <- plot_coexpression_qtl(genotype_data=genotype_data, mapping_folder=mapping_folder, gene_name=gene, snp=snp, monniker=monniker, cell_type=cell_type, condition=condition, gene_b=NULL, na_to_zero=na_to_zero)
+        top_gene_condition_plots <- plot_coexpression_qtl(genotype_data=genotype_data, mapping_folder=mapping_folder, gene_name=gene, snp=snp, monniker=monniker, cell_type=cell_type, condition=condition, gene_b=NULL, na_to_zero=na_to_zero, to_numeric=to_numeric)
         # create the plot out locations
         #plot_out_v2 <- paste(plot_output_loc, 'co-expressionQTL_', gene, '_tophit_', condition, '_V2.png', sep = '')
         #top_gene_condition_plots[[1]]
@@ -101,6 +194,42 @@ plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_f
   }
 }
 
+plot_top_hit_per_interaction <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, v2_object, v3_object, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # get a summary of the numbers
+  coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
+  # I like dataframes more than matrices
+  coeqtl_summary <- data.frame(coeqtl_summary)
+  # can only plot what we actually have output for
+  genes_to_plot <- intersect(genes, rownames(coeqtl_summary))
+  # plot for each geneA
+  for(gene in genes_to_plot){
+    # build the path to this specific mappings folder
+    #mapping_folder <- paste(mappings_folder, mapping_folder_prepend, monniker, gene, mapping_folder_append, sep = '')
+    # really dislike this, but don't want to fix this inconsistency now
+    mapping_folder <- paste(mappings_folder, mapping_folder_prepend, gene, substr(monniker, 1, nchar(monniker) - 1), mapping_folder_append, sep = '')
+    # get the snp belonging to the gene
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+    # plot for each condition
+    for(condition in conditions){
+      # check if there is any coeqtl for this condition and gene
+      if(!is.na(coeqtl_summary[gene, condition]) & coeqtl_summary[gene, condition] > 0){
+        # get the most significant one otherwise
+        p_loc <- paste(mapping_folder, gene, monniker, cell_type, '_p.tsv', sep = '')
+        # read output
+        p_vals <- read.table(p_loc, sep = '\t', header = T, row.names = 1)
+        # remove the significance threshold one
+        p_vals <- p_vals[!rownames(p_vals) %in% c('significance_threshold'), ]
+        # order by p value of the condition
+        p_vals <- p_vals[order(p_vals[[condition]]), ]
+        # grab the first one
+        gene_to_use <- rownames(p_vals)[1]
+        # try to get the plot
+        plot_interaction(v2_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v2', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
+        plot_interaction(v3_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v3', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
+      }
+    }
+  }
+}
 
 output_rds_to_tsv <- function(output_loc, tsv_output_prepend, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
   # check each cell type
@@ -379,10 +508,10 @@ significant_coeqtl_genes_to_file <- function(input_path_prepend, input_path_appe
       # get those genes
       sig_genes <- sigs_per_geneA[[geneA]][[condition]]
       # set up the output location
-      output_loc <- paste(output_path_prepend, 'coeqtls_', geneA, '_', condition, input_path_append, sep='')
+      output_loc <- paste(output_path_prepend, 'coeqtls_', geneA, '_', condition, output_path_append, sep='')
       # add the extention if required
       if(!(endsWith('.txt', output_loc))){
-        output_loc <- paste(output_loc, '.tsv', sep = '')
+        output_loc <- paste(output_loc, '.txt', sep = '')
       }
       # put the significant genes in a dataframe
       sig_genes_df <- data.frame(genes=sig_genes)
@@ -392,7 +521,23 @@ significant_coeqtl_genes_to_file <- function(input_path_prepend, input_path_appe
   }
 }
 
-get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps, cell_type='monocyte', to_numeric=F){
+
+get_significant_gene_overlap <- function(input_path_prepend, input_path_append, geneAs){
+  # first get these genes
+  sigs_per_geneA <- get_gene_list_geneAs(input_path_prepend, input_path_append, geneAs)
+  # then get the plots per gene
+  plots_per_geneA <- list()
+  # now start writing each geneA set
+  for(geneA in names(sigs_per_geneA)){
+    # and we need to write per condition
+    sigs_per_condition <- sigs_per_geneA[[geneA]]
+    upsetplot <- upset(fromList(sigs_per_condition), nsets = length(names(sigs_per_condition)), order.by = 'freq')
+    plots_per_geneA[[geneA]] <- upsetplot
+  }
+  return(plots_per_geneA)
+}
+
+get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps, cell_type='monocyte', to_numeric=F, sig_only=T){
   # build the input directory
   output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
   # get the most significant one otherwise
@@ -415,16 +560,28 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
         snp_i <- as.numeric(as.factor(snp_i)) - 1
       }
       # subset to the genes we care about
-      cor_i <- cor_i[sigs_per_cond[[condition]], ]
+      if(sig_only){
+        cor_i <- cor_i[sigs_per_cond[[condition]], ]
+      }
       # do the interaction analysis
       interaction.statistics <- interaction.regression(cor.matrix = cor_i, eqtl.gene = gene, snp = snp_i, cell.counts = NULL)
       r.matrix <- (interaction.statistics$statistic / sqrt(length(snp_i) - 2 + interaction.statistics$statistic ** 2))
       r.matrix <- data.frame(r.matrix)
-      rownames(r.matrix) <- sigs_per_cond[[condition]]
+      if(sig_only){
+        rownames(r.matrix) <- sigs_per_cond[[condition]]
+      }
+      else{
+        rownames(r.matrix) <- rownames(cor_i)
+      }
       colnames(r.matrix) <- i
       # add to existing r matrix if possible
-      if(condition %in% names(matrix_per_cond)){
+      if(condition %in% names(matrix_per_cond) & sig_only){ # this is way faster, so do this if possible
         matrix_per_cond[[condition]] <- cbind(matrix_per_cond[[condition]], r.matrix)
+      }
+      if(condition %in% names(matrix_per_cond) & sig_only == F){ # if checking non-sig, we might not always have the same number of genes
+        matrix_per_cond[[condition]] <- merge(matrix_per_cond[[condition]], r.matrix, by=0)
+        rownames(matrix_per_cond[[condition]]) <- matrix_per_cond[[condition]]$Row.names
+        matrix_per_cond[[condition]]$Row.names <- NULL
       }
       else{
         matrix_per_cond[[condition]] <- r.matrix
@@ -435,13 +592,13 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
 }
 
 
-write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, snp_probe_mapping, snps, cell_type='monocyte', to_numeric=F){
+write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, snp_probe_mapping, snps, cell_type='monocyte', to_numeric=F, sig_only=T){
   # check each gene
   for(gene in genes){
     # get the matching snp
     snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
     # do the r catching
-    r_values_per_per_cond <- get_r_values(input_path_prepend=input_path_prepend, input_path_append=input_path_append, gene=gene, snp=snp, snps=snps, cell_type=cell_type, to_numeric=to_numeric)
+    r_values_per_per_cond <- get_r_values(input_path_prepend=input_path_prepend, input_path_append=input_path_append, gene=gene, snp=snp, snps=snps, cell_type=cell_type, to_numeric=to_numeric, sig_only=sig_only)
     # build the output dir
     output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
     # check each condition
@@ -450,6 +607,9 @@ write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path
       rs <- r_values_per_per_cond[[condition]]
       # set the output location
       r_output_loc <- paste(output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
+      if(sig_only == F){
+        r_output_loc <- paste(output_dir, gene, '_', cell_type, '_', condition, '_rs_full.tsv', sep='')
+      }
       # write the result
       write.table(rs, r_output_loc, row.names = T, col.names = T, sep = '\t')
     }
@@ -457,31 +617,51 @@ write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path
 }
 
 
-write_r_plots_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, plot_output_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+write_r_plots_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, plot_output_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), sig_only=T){
   # check each gene
   for(gene in genes){
     # get base output dir for gene
     base_output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
+    # get the most significant one otherwise
+    p_loc <- paste(base_output_dir, gene, '_meta_', cell_type, '_p.tsv', sep = '')
+    # get the gene lists
+    sigs_per_cond <- get_gene_lists(p_loc)
     # go through the conditions
     plot_per_condition <- list()
     i <- 1
     for(condition in conditions){
       try({
         # get the output dir of the condition
-        r_output_loc <- paste(base_output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
+        r_output_loc <- paste(base_output_dir, gene, '_', cell_type, '_', condition, '_rs_full.tsv', sep='')
         # read the r vals
         rs <- read.table(r_output_loc, sep = '\t', header = T, row.names = 1)
+        if(!is.null(rs) & !is.null(dim(rs)) & nrow(rs) > 0 & ncol(rs) > 1 & sig_only){
+          rs[sigs_per_cond[[condition]], ]
+        }
         if(!is.null(rs) & !is.null(dim(rs)) & nrow(rs) > 0 & ncol(rs) > 1){
+          # add column to denote whether or not the coeqtl was significant
+          rs$significant <- 'no'
+          if(nrow(rs[rownames(rs) %in% sigs_per_cond[[condition]], ]) > 0){
+            rs[rownames(rs) %in% sigs_per_cond[[condition]], ]$significant <- 'yes'
+          }
+          rs$significant <- as.factor(rs$significant)
           # order by the X1 column
           rs <- rs[order(rs$X1), ]
-          p <- ggplot(data=rs, aes(x=X1, y=X2)) + ggtitle(paste(gene, condition, 'v2 vs v3')) + geom_point() + coord_cartesian(xlim = c(-1, 1), ylim = c(-1, 1)) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = -1, ymax = 0), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax = 1, ymin = 0, ymax = 1), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = 0, ymax = 1), fill = "pink", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax =1, ymin = -1, ymax = 0), fill = "pink", alpha = 0.1)
+          p <- ggplot(data=rs, aes(x=X1, y=X2))
+          if(sig_only){
+            p <- p + geom_point()
+          }
+          else{
+            p <- p + geom_point(aes(colour = significant))
+          }
+          p <- p + ggtitle(paste(gene, condition, 'v2 vs v3')) + labs(x = 'v2', y = 'v3') + coord_cartesian(xlim = c(-1, 1), ylim = c(-1, 1)) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = -1, ymax = 0), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax = 1, ymin = 0, ymax = 1), fill = "green", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = -1, xmax = 0, ymin = 0, ymax = 1), fill = "pink", alpha = 0.1) + geom_rect(data=data.frame(X2=c(-1,1), X1=c(-1,1)),aes(xmin = 0, xmax =1, ymin = -1, ymax = 0), fill = "pink", alpha = 0.1)
           plot_per_condition[[i]] <- p
           i <- i + 1
         }
       })
     }
     if(length(plot_per_condition) > 0){
-      ggsave(paste(plot_output_loc, 'co-expressionQTL_', gene, '_Rs_', '.png', sep = ''), arrangeGrob(grobs = plot_per_condition))
+      ggsave(paste(plot_output_loc, 'co-expressionQTL_', gene, '_Rs_', '.png', sep = ''), arrangeGrob(grobs = plot_per_condition), width=12, height=8)
     }
   }
 }
@@ -500,17 +680,305 @@ interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
   return(interaction.statistics)
 }
 
+get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_varying=T){
+  # now calculate the sd over this set of columns
+  sds <- apply(dataframe, 1, sd, na.rm=T)
+  # add the sds as a column
+  dataframe$sds <- sds
+  # order by the sd
+  dataframe <- dataframe[order(dataframe$sds, decreasing = dont_get_least_varying), ]
+  # we will return the rownames
+  most_varied <- NULL
+  # we need to make sure we can return as many rownames as requested
+  if(nrow(dataframe) < top_so_many){
+    print(paste('requested ', top_so_many, ', but dataframe only has ', nrow(most_varied), ' rows', sep = ''))
+    most_varied <- rownames(dataframe)
+  }
+  else{
+    most_varied <- rownames(dataframe)[1:top_so_many]
+  }
+  return(most_varied)
+}
+
+coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+  # put all results in a shared DF
+  pathway_df <- NULL
+  # check each cell type
+  for(gene in genes){
+    # check each stim
+    for(cell_type in cell_types){
+      #
+      for(condition in conditions){
+        try({
+          # paste the filepath together
+          filepath <- paste(output_path_prepend, '', gene, '_', condition, '_meta_', cell_type, output_path_append, sep = '')
+          # read the file
+          pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+          # create column name
+          newcolname <- paste(gene, '_', condition, '_', cell_type, sep = '')
+          # get the log2 of the significance value
+          if(use_ranking){
+            pathways[[newcolname]] <- as.numeric(rownames(pathways))
+          }
+          else{
+            pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+          }
+          pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
+          # reduce to the only two columns we care about
+          pathways <- pathways[, c('id_name', newcolname)]
+          # join with other pathway files
+          if(is.null(pathway_df)){
+            # just set as df if the first round through
+            pathway_df <- pathways
+            pathway_df <- data.table(pathway_df, key = c('id_name'))
+          }
+          else{
+            # otherwise, merge with existing pathways
+            pathway_df <- merge(pathway_df, data.table(pathways, key = c('id_name')), by.x='id_name', by.y='id_name', all=T)
+          }
+        })
+      }
+    }
+  }
+  # turn into regular df
+  pathway_df <- setDF(pathway_df)
+  # set all NA to zero
+  pathway_df[is.na(pathway_df)] <- 0
+  # set rownames
+  rownames(pathway_df) <- pathway_df$id_name
+  pathway_df$id_name <- NULL
+  # remove rows which amount to zero
+  pathway_df <- pathway_df[apply(pathway_df[,-1], 1, function(x) !all(x==0)),]
+  return(pathway_df)
+}
+
+
+get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F){
+  most_shared <- c()
+  # there are different methods to get the most shared pathways
+  if(use_sd_method){
+    # the SD methods just gets the pathways with the lowest standard deviation
+    most_shared <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many, dont_get_least_varying = F)
+  }
+  else{
+    # first get the sum of the rankings over the rows, lower overall ranking means more shared
+    summed_rank <- apply(pathway_table, 1, sum)
+    # get the top X so many from the pathway table, ordered by this sum of rankings
+    most_shared <- rownames(pathway_table[order(summed_rank), ])[1:top_so_many]
+    
+    # get the sum of the 3h conditions
+    timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
+    # only if there are two or more columns, can we do this
+    if(length(timepoints_3h) > 1){
+      summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
+      most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_3h), ])[1:top_so_many])
+    }
+    else{
+      print('one or less 3h timepoints')
+    }
+    # get the sum of the 24h conditions
+    timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
+    # only if there are two or more columns
+    if(length(timepoints_24h) > 1){
+      summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
+      most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_24h), ])[1:top_so_many])
+    }
+    else{
+      print('one or less 24h timepoints')
+    }
+    # make unique of course
+    most_shared <- unique(most_shared)
+  }
+  return(most_shared)
+}
+
+
+get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F){
+  most_varied <- c()
+  # most varied in 3h condition
+  timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
+  # most varied in 24h condition
+  timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_pa <- colnames(pathway_table)[grep('hPA', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_ca <- colnames(pathway_table)[grep('hCA', colnames(pathway_table))]
+  # most varied in PA condition
+  timepoints_mtb <- colnames(pathway_table)[grep('hMTB', colnames(pathway_table))]
+  if(use_sd_method){
+    # first overall most variation
+    most_varied <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many)
+    if(length(timepoints_3h) > 1){
+      most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_3h], top_so_many = top_so_many))
+    }
+    if(length(timepoints_24h) > 1){
+      most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_24h], top_so_many = top_so_many))
+    }
+  }
+  else{
+    if(length(timepoints_3h) > 0 & length(timepoints_24h) > 0){
+      # large difference between 3h and 24h
+      mean_3h_ranks <- apply(pathway_table[, timepoints_3h], 1, mean)
+      mean_24h_ranks <- apply(pathway_table[, timepoints_24h], 1, mean)
+      # absolute difference
+      mean_rank_diff <- abs(mean_3h_ranks - mean_24h_ranks)
+      # grab by varied over abs mean difference
+      most_varied <- rownames(pathway_table[order(mean_rank_diff, decreasing = T), ])[1:top_so_many]
+    }
+    if(length(timepoints_ca) > 0 & length(timepoints_mtb) > 0 & length(timepoints_pa) > 0){
+      # get pathogen mean ranks
+      mean_pa_ranks <- apply(pathway_table[, timepoints_pa], 1, mean)
+      mean_ca_ranks <- apply(pathway_table[, timepoints_ca], 1, mean)
+      mean_mtb_ranks <- apply(pathway_table[, timepoints_mtb], 1, mean)
+      # turn into separate df
+      path_df <- data.frame(pa=mean_pa_ranks, ca=mean_ca_ranks, mtb=mean_mtb_ranks)
+      rownames(path_df) <- rownames(pathway_table)
+      # use sd method
+      most_varied <- c(most_varied, get_most_varying_from_df(path_df, top_so_many = top_so_many))
+    }
+  }
+  print(most_varied)
+  most_varied <- unique(most_varied)
+  return(most_varied)
+}
+
+plot_pathway_sharing <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+  # get the pathways
+  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking)
+  # set the zeroes to max+1
+  pathways[pathways==0] <- max(pathways)+1
+  # get most shared pathways
+  most_shared_pathways <- get_most_shared_pathways(pathways)
+  print(most_shared_pathways)
+  # subset to those pathways
+  pathways <- pathways[most_shared_pathways, ]
+  if(length(cell_types) == 1){
+    colnames(pathways) <- gsub(paste('_', cell_types[1], sep=''), '', colnames(pathways))
+  }
+  # plot as heatmap
+  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,15))
+}
+
+
+plot_pathway_unique <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, use_sd_method=F){
+  # get the pathways
+  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking)
+  # set the zeroes to max+1
+  pathways[pathways==0] <- max(pathways)+1
+  # get most shared pathways
+  most_unique_pathways <- get_most_varied_pathways(pathways, use_sd_method=use_sd_method)
+  print(most_unique_pathways)
+  # subset to those pathways
+  pathways <- pathways[most_unique_pathways, ]
+  if(length(cell_types) == 1){
+    colnames(pathways) <- gsub(paste('_', cell_types[1], sep=''), '', colnames(pathways))
+  }
+  # plot as heatmap
+  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,15))
+}
+
+plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL){
+  # get the pathways
+  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking)
+  # set the zeroes to max+1
+  pathways[pathways==0] <- max(pathways)+1
+  if(length(cell_types) == 1){
+    colnames(pathways) <- gsub(paste('_', cell_types[1], sep=''), '', colnames(pathways))
+  }
+  # subset to top so many if requested
+  if(!is.null(top_so_many)){
+    # which we will use
+    top_pathways <- c()
+    # check for each column
+    for(colname in colnames(pathways)){
+      # we don't care about max/na
+      nona_pathways <- pathways[!is.na(pathways[[colname]]) & pathways[[colname]] != max(pathways), ]
+      # order by this column
+      nona_pathways_ordered <- pathways[order(pathways[[colname]]), ]
+      # get all if there are less than the top we can get
+      if(nrow(nona_pathways_ordered) < top_so_many){
+        # add to list
+        top_pathways <- c(top_pathways, rownames(nona_pathways_ordered))
+      }
+      # otherwise we will get so many
+      else{
+        top_pathways <- c(top_pathways, rownames(nona_pathways_ordered)[1:top_so_many])
+      }
+    }
+    top_pathways <- unique(top_pathways)
+    pathways <- pathways[top_pathways, ]
+  }
+  # plot as heatmap
+  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,15))
+}
+
+plot_pathway_sharing_genes <- function(output_path_prepend, output_path_append, genes, plot_out_loc, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+  # check each gene
+  for(gene in genes){
+    try({
+      # build the output location fully
+      full_plot_output_loc <- paste(plot_out_loc, 'coeqtl_pathways_shared_', gene, '.pdf', sep = '')
+      # create the plot
+      pdf(full_plot_output_loc)
+      plot_pathway_sharing(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, gene=gene, cell_types=cell_types, conditions=conditions)
+      dev.off()
+    })
+  }
+}
+
+plot_pathway_unique_genes <- function(output_path_prepend, output_path_append, genes, plot_out_loc, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, use_sd_method=F){
+  # check each gene
+  for(gene in genes){
+    try({
+      # build the output location fully
+      full_plot_output_loc <- paste(plot_out_loc, 'coeqtl_pathways_unique_', gene, '.pdf', sep = '')
+      # create the plot
+      pdf(full_plot_output_loc)
+      plot_pathway_unique(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, gene=gene, cell_types=cell_types, conditions=conditions, use_sd_method=use_sd_method)
+      dev.off()
+    })
+  }
+}
+
+plot_pathway_all_genes <- function(output_path_prepend, output_path_append, genes, plot_out_loc, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+  # check each gene
+  for(gene in genes){
+    try({
+      # build the output location fully
+      full_plot_output_loc <- paste(plot_out_loc, 'coeqtl_pathways_all_', gene, '.pdf', sep = '')
+      # create the plot
+      pdf(full_plot_output_loc)
+      plot_pathway_all(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, gene=gene, cell_types=cell_types, conditions=conditions)
+      dev.off()
+    })
+  }
+}
+
+plot_pathway_all_genes_top <- function(output_path_prepend, output_path_append, genes, plot_out_loc, top_so_many=10, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+  # check each gene
+  for(gene in genes){
+    try({
+      # build the output location fully
+      full_plot_output_loc <- paste(plot_out_loc, 'coeqtl_pathways_all_', gene, '_top_', top_so_many,'.pdf', sep = '')
+      # create the plot
+      pdf(full_plot_output_loc)
+      plot_pathway_all(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, gene=gene, cell_types=cell_types, conditions=conditions, top_so_many = top_so_many)
+      dev.off()
+    })
+  }
+}
+
 # location of the coeqtl output
-coeqtl_out_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/'
+coeqtl_out_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/'
 # the coeqtl 'geneA' genes we looked at
-coeqtl_genes <- c('HLA-DQA1', 'TMEM176B', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')
+coeqtl_genes <- c('HLA-DQA1', 'TMEM176B','TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')
 # we need to paste together the whole thing
 prepend <- coeqtl_out_loc
 append <- '_meta_monocyte_p.tsv'
 # get the sigs per geneA
 sigs_per_geneA <- get_gene_list_geneAs(prepend, append, coeqtl_genes)
 # set the location of where to store the significant genes
-significant_coeqtl_genes_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/significant_genes_20210203/'
+significant_coeqtl_genes_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/significant_genes_20210208/'
 # write these genes
 significant_coeqtl_genes_to_file(prepend, append, significant_coeqtl_genes_loc, '_meta_monocyte', coeqtl_genes)
 # get the genotype data
@@ -550,9 +1018,36 @@ ggsave('co-expressionQTLTMEM176BLYZV3.png')
 
 # do the top hit plotting
 plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
+# top interactions as well
+plot_top_hit_per_interaction(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogenebnumeric_1/', plot_output_loc=paste(coeqtl_plot_loc, '_num_', sep=''), genes=ff_coeqtl_genes_less, v2_object=v2_mono, v3_object=v3_mono, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+
 # check the Rs
 get_r_values(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', gene='TMEM176B', snp='rs7806458', snps=genotypes_all, cell_type='monocyte', to_numeric=F)
 # write the Rs
 write_r_values_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, snps=genotypes_all, cell_type='monocyte', to_numeric=F)
 # write the R plots
-write_r_plots_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', genes=coeqtl_genes, plot_output_loc=coeqtl_plot_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+write_r_plots_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogenebnumeric_1/', genes=coeqtl_genes, plot_output_loc=coeqtl_plot_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+
+# pathway output file descriptions
+pathway_out_prepend <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathways_20210208_numeric_snps/coeqtls_'
+pathway_out_append <- '_pathways.txt'
+tmem176b <- coeqt_gene_pathways_to_df(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=c('TMEM176B'), cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+plot_pathway_sharing(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, gene='TMEM176B', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+# plot all coeqtl genes
+plot_pathway_sharing_genes(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+plot_pathway_all_genes(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+plot_pathway_unique_genes(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_sd_method=T)
+plot_pathway_all_genes_top(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+plot_pathway_all_genes_top(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), top_so_many = 5)
+
+overlap_per_geneA <- get_significant_gene_overlap(prepend, append, coeqtl_genes)
+
+for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
+  dev.off()
+}
+
+for(coeqtlgene in coeqtl_genes){
+  print(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtlgene, ]$snp[1])
+}
+
+

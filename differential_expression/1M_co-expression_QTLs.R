@@ -1705,3 +1705,25 @@ foreach(i=1:length(ff_coeqtl_genes_undone)) %dopar% {
     }
   }
 }
+
+
+for(coeqtlgene in ff_coeqtl_genes_undone){
+  # create the output dirs
+  meta_mono_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtlgene,'_meta_mono_missingness05replacena100permzerogenebnumeric_', 1, '/', sep = '')
+  
+  output_rds_to_tsv(output_loc=meta_mono_out, tsv_output_prepend=paste(meta_mono_out, coeqtlgene, '_meta_', sep=''), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('monocyte'))
+}
+
+
+summary_list_numeric <- list()
+for(i in 1:1){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_missingness05replacena100permzerogenebnumeric_', 1, '/', sep = ''), ff_coeqtl_genes_undone, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list_numeric[[i]] <- coeqtl_summary_i
+}
+
+summary_list_numeric <- list()
+for(i in 1:1){
+  coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_mono_missingness05replacena100permzerogenebnumeric_', 1, '/', sep = ''), ff_coeqtl_genes_undone, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
+  summary_list_numeric[[i]] <- coeqtl_summary_i
+}
+
