@@ -967,14 +967,21 @@ create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assign
 }
 
 
-create_module_score_cor_matrices <- function(seurat_object, gene, modulescore.name, output_loc, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
-  DefaultAssay(seurat_object) <- 'SCT'
-  for(condition in conditions){
-    cells_condition <- subset(seurat_object, subset = timepoint == condition)
-    for(cell_type_to_check in cell_types){
-      
-    }
+# add the module score from a table of genes (now using as pathway plot)
+add_module_score_from_table <- function(pathway_gene_table_loc, pathway_name, seurat_object, and_plot=T, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), conditions=c('UT', 'Baseline', 't24h', 't8w'), cell_type_column='cell_type_lowerres', condition_column='timepoint.final', color_by_ct = T, to_per_part=F, participant_column='assignment.final'){
+  # get the cytokine genes
+  pathway_df <- read.table(pathway_gene_table_loc)
+  pathway_genes <- pathway_df$V1
+  pathway_genes_in_seurat_object <- intersect(rownames(seurat_object), pathway_genes)
+  # add to list
+  pathway_list_seurat_object <- list()
+  pathway_list_seurat_object[[pathway_name]] <- pathway_genes_in_seurat_object
+  # add the module score
+  seurat_object <- AddModuleScore(seurat_object, features = pathway_list_seurat_object, name = pathway_name)
+  if(and_plot){
+    #plot_average_expression(seurat_object, module_score_column_name=paste(pathway_name, '1', sep = ''), cell_types=cell_types, conditions=conditions, cell_type_column=cell_type_column, condition_column=condition_column, title=pathway_name, color_by_ct = color_by_ct, to_per_part=to_per_part, participant_column=participant_column)
   }
+  return(seurat_object)
 }
 
 output_rds_to_tsv <- function(output_loc, tsv_output_prepend, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
@@ -1727,3 +1734,22 @@ for(i in 1:1){
   summary_list_numeric[[i]] <- coeqtl_summary_i
 }
 
+registerDoMC(14)
+foreach(i=1:length(c('HLA-DQA1', 'TMEM176B', 'TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26'))) %dopar% {
+  coeqtl_gene <- c('HLA-DQA1', 'TMEM176B', 'TMEM176A',  'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:1){
+    # create the output dirs
+    meta_cd4t_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_cd4t_missingness05replacena100permzerogenebnumeric_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_cd4t, v3_cd4t, snp_genes, meta_cd4t_out, genotypes_all, cell_types = c('CD4T'), conditions = c(condition), replace_na = T, allowed_missingness = 0.5, n.perm = 100, remove_any_zero_expressions = T)
+      })
+    }
+  }
+}

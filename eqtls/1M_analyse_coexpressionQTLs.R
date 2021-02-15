@@ -14,6 +14,8 @@ library(meta)
 require("heatmap.plus")
 library(RColorBrewer)
 library(UpSetR)
+library(foreach)
+library(doMC)
 
 ###########################################################################################################################
 #
@@ -577,14 +579,16 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
       # add to existing r matrix if possible
       if(condition %in% names(matrix_per_cond) & sig_only){ # this is way faster, so do this if possible
         matrix_per_cond[[condition]] <- cbind(matrix_per_cond[[condition]], r.matrix)
+        print('cbinding')
       }
-      if(condition %in% names(matrix_per_cond) & sig_only == F){ # if checking non-sig, we might not always have the same number of genes
+      else if(condition %in% names(matrix_per_cond) & sig_only == F){ # if checking non-sig, we might not always have the same number of genes
         matrix_per_cond[[condition]] <- merge(matrix_per_cond[[condition]], r.matrix, by=0)
         rownames(matrix_per_cond[[condition]]) <- matrix_per_cond[[condition]]$Row.names
         matrix_per_cond[[condition]]$Row.names <- NULL
       }
       else{
         matrix_per_cond[[condition]] <- r.matrix
+        print('setting')
       }
     }
   }
@@ -632,7 +636,7 @@ write_r_plots_per_gene_and_condition <- function(input_path_prepend, input_path_
     for(condition in conditions){
       try({
         # get the output dir of the condition
-        r_output_loc <- paste(base_output_dir, gene, '_', cell_type, '_', condition, '_rs_full.tsv', sep='')
+        r_output_loc <- paste(base_output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
         # read the r vals
         rs <- read.table(r_output_loc, sep = '\t', header = T, row.names = 1)
         if(!is.null(rs) & !is.null(dim(rs)) & nrow(rs) > 0 & ncol(rs) > 1 & sig_only){
@@ -968,6 +972,137 @@ plot_pathway_all_genes_top <- function(output_path_prepend, output_path_append, 
   }
 }
 
+get_cors_per_part <- function(seurat_object, gene, pathway, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), condition.column='timepoint', assignment.column='assignment', cell.type.column='cell_type_lowerres'){
+  # init table
+  cor_score_table <- NULL
+  # check each cell type
+  for(cell_type in intersect(cell_types, unique(as.character(seurat_object@meta.data[[cell.type.column]])))){
+    print(cell_type)
+    # subset to cell type
+    seurat_object_ct <- seurat_object[, seurat_object@meta.data[[cell.type.column]] == cell_type]
+    # check each condition
+    for(condition in intersect(conditions, unique(as.character(seurat_object_ct@meta.data[[condition.column]])))){
+      print(condition)
+      # subset to condition
+      seurat_object_ct_cond <- seurat_object_ct[, seurat_object_ct@meta.data[[condition.column]] == condition]
+      # finally check for each participant
+      for(participant in unique(seurat_object_ct_cond@meta.data[[assignment.column]])){
+        print(participant)
+        # subset to participant
+        seurat_object_ct_cond_part <- seurat_object_ct_cond[, seurat_object_ct_cond[[assignment.column]] == participant]
+        # get the correlation
+        gene_exp <- as.vector(unlist(seurat_object_ct_cond_part@assays$SCT@counts[gene, ]))
+        pathway_score <- as.vector(seurat_object_ct_cond_part@meta.data[, pathway])
+        correlation <- 0
+        try({
+          correlation <- cor(gene_exp, pathway_score, method='spearman')
+        })
+        # make table of result
+        this_cor_score_table <- data.frame(cell_type=c(cell_type), condition=c(condition), participant=c(participant), cor=c(correlation), stringsAsFactors=F)
+        # add to overarching table if possible
+        if(is.null(cor_score_table)){
+          cor_score_table <- this_cor_score_table
+        }
+        else{
+          cor_score_table <- rbind(cor_score_table, this_cor_score_table)
+        }
+      }
+    }
+    return(cor_score_table)
+  }
+}
+
+add_gt_to_cors <- function(cors_per_part_df, snps, gene, snp_probe_mapping, assignment.column='participant', new_gt_colname=NULL){
+  # get the gene that belongs to the SNP
+  snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+  # get the participants, not only unique, so we can grab and paste easily later on
+  participants <- cors_per_part_df[[assignment.column]]
+  # grab for those participants, that SNP
+  snps_participants <- as.vector(unlist(snps[snp, participants]))
+  # should be the same length as correlations, so we can just cbind
+  cors_per_part_df[[snp]] <- snps_participants
+  # if requested, we'll name this column differently
+  if(!is.null(new_gt_colname)){
+    # add with new name
+    cors_per_part_df[[new_gt_colname]] <- cors_per_part_df[[snp]]
+    # remove old column
+    cors_per_part_df[[snp]] <- NULL
+  }
+  return(cors_per_part_df)
+}
+
+plot_gene_to_pathway <- function(cors_per_part_df, cor_column='cor', gt_column='snp', title='pathway vs gene'){
+  # create plot data, new df so we have consistent column names
+  plot_data <- data.frame(snp=cors_per_part_df[[gt_column]], correlation=cors_per_part_df[[cor_column]])
+  # create plot
+  p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp)) + 
+    geom_boxplot() +
+    geom_jitter(width = 0.1, alpha = 0.2) +
+    theme_bw() + 
+    ggtitle(title)
+  # add to plots
+  return(p)
+}
+
+
+create_gene_correlations <- function(seurat_object, genes=NULL, method='spearman'){
+  # get the genes to check
+  genes_to_check <- genes
+  # if no genes are supplied, then check all of them
+  if(is.null(genes_to_check)){
+    genes_to_check <- rownames(seurat_object)
+  }
+    # create the matrix to fill in
+    correlations <- matrix(, ncol=length(genes_to_check), nrow=length(genes_to_check), dimnames=list(genes_to_check, genes_to_check))
+    # check each gene against each gene
+    for(i in 1:length(genes_to_check)){
+      for(i2 in i:length(genes_to_check)){
+        # calculate the correlations
+        try({
+          # grab the gene names
+          gene1 <- genes_to_check[i]
+          gene2 <- genes_to_check[i2]
+          # check the correlation
+          correlation <- cor(as.vector(unlist(seurat_object@assays$SCT@counts[gene1, ])), as.vector(unlist(seurat_object@assays$SCT@counts[gene2, ])), method=method)
+          # and add that to the correlation matrix
+          correlations[gene1, gene2] <- correlation
+          correlations[gene2, gene1] <- correlation
+        })
+      }
+    }
+}
+
+create_gene_correlations_mt <- function(seurat_object, genes=NULL, nthreads=1, method='spearman'){
+  # we'll try this in parallel
+  registerDoMC(nthreads)
+  # get the genes to check
+  genes_to_check <- genes
+  # if no genes are supplied, then check all of them
+  if(is.null(genes_to_check)){
+    genes_to_check <- rownames(seurat_object)
+  }
+  # create the matrix to fill in
+  correlations <- matrix(, ncol=length(genes_to_check), nrow=length(genes_to_check), dimnames=list(genes_to_check, genes_to_check))
+  # check each gene against each gene
+  foreach(i=1:length(genes_to_check)) %dopar% {
+    for(i2 in i:length(genes_to_check)){
+      # calculate the correlations
+      try({
+        # grab the gene names
+        gene1 <- genes_to_check[i]
+        gene2 <- genes_to_check[i2]
+        # check the correlation
+        correlation <- cor(as.vector(unlist(seurat_object@assays$SCT@counts[gene1, ])), as.vector(unlist(seurat_object@assays$SCT@counts[gene2, ])), method = method)
+        # and add that to the correlation matrix
+        correlations[gene1, gene2] <- correlation
+        correlations[gene2, gene1] <- correlation
+      })
+    }
+  }
+  return(correlations)
+}
+
+
 # location of the coeqtl output
 coeqtl_out_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/'
 # the coeqtl 'geneA' genes we looked at
@@ -1024,7 +1159,7 @@ plot_top_hit_per_interaction(genotype_data=genotypes_all, mappings_folder=coeqtl
 # check the Rs
 get_r_values(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', gene='TMEM176B', snp='rs7806458', snps=genotypes_all, cell_type='monocyte', to_numeric=F)
 # write the Rs
-write_r_values_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, snps=genotypes_all, cell_type='monocyte', to_numeric=F)
+write_r_values_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogenebnumeric_1/', genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, snps=genotypes_all, cell_type='monocyte', to_numeric=T)
 # write the R plots
 write_r_plots_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogenebnumeric_1/', genes=coeqtl_genes, plot_output_loc=coeqtl_plot_loc, cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
 
@@ -1050,4 +1185,80 @@ for(coeqtlgene in coeqtl_genes){
   print(snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtlgene, ]$snp[1])
 }
 
+ye_shared <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/YE_INF_shared.txt'
+ye_type1 <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/YE_INF_type1.txt'
+ye_type2 <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/YE_INF_type2.txt'
 
+v2 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds')
+v2 <- add_module_score_from_table(ye_shared, 'YE_shared', v2, and_plot=F)
+v2 <- add_module_score_from_table(ye_type1, 'YE_type1', v2, and_plot=F)
+v2 <- add_module_score_from_table(ye_type2, 'YE_type2', v2, and_plot=F)
+v2_ye_pathways <- v2@meta.data[, c('YE_shared1', 'YE_type11', 'YE_type21')]
+colnames(v2_ye_pathways) <- c('YE_shared', 'YE_type1', 'YE_type2')
+v2_ye_pathways$barcode <- rownames(v2_ye_pathways)
+v2_ye_pathways <- v2_ye_pathways[, c('barcode', 'YE_shared', 'YE_type1', 'YE_type2')]
+write.table(v2_ye_pathways, sep='\t', '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/module_scores/YE_module_scores_v2.tsv', row.names=F, col.names=T, quote=F)
+
+v3 <- readRDS('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds')
+v3 <- add_module_score_from_table(ye_shared, 'YE_shared', v3, and_plot=F)
+v3 <- add_module_score_from_table(ye_type1, 'YE_type1', v3, and_plot=F)
+v3 <- add_module_score_from_table(ye_type2, 'YE_type2', v3, and_plot=F)
+v3_ye_pathways <- v3@meta.data[, c('YE_shared1', 'YE_type11', 'YE_type21')]
+colnames(v3_ye_pathways) <- c('YE_shared', 'YE_type1', 'YE_type2')
+v3_ye_pathways$barcode <- rownames(v3_ye_pathways)
+v3_ye_pathways <- v3_ye_pathways[, c('barcode', 'YE_shared', 'YE_type1', 'YE_type2')]
+write.table(v3_ye_pathways, sep='\t', '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/module_scores/YE_module_scores_v3.tsv', row.names=F, col.names=T, quote=F)
+
+
+v3_YE_type1_cors_CLEC12A <- get_cors_per_part(v3_mono, 'CLEC12A', 'YE_type1', cell_types=c('monocyte'))
+v3_YE_type1_cors_CLEC12A <- (add_gt_to_cors(v3_YE_type1_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+for(condition in unique(v3_YE_type1_cors_CLEC12A$condition)){
+  v3_YE_type1_cors_CLEC12A_plot <- plot_gene_to_pathway(v3_YE_type1_cors_CLEC12A[v3_YE_type1_cors_CLEC12A$condition == condition, ], gt_column='rs12230244', title=paste('v3', condition, 'YE type1 CLEC12A'))
+  # ggsave
+  v3_YE_type1_cors_CLEC12A_plot
+  ggsave(paste('v3_YE_type1_cors_CLEC12A_', condition, '_plot.png', sep=''))
+}
+
+for(condition in unique(v3_mono@meta.data$timepoint)){
+  # subset to condition
+  v3_mono_cond <- v3_mono[, v3_mono@meta.data$timepoint == condition]
+  #v3_mono_cond <- add_module_score_from_table(ye_shared, 'YE_shared', v3_mono_cond, and_plot=F)
+  #v3_mono_cond <- add_module_score_from_table(ye_type1, 'YE_type1', v3_mono_cond, and_plot=F)
+  #v3_mono_cond <- add_module_score_from_table(ye_type2, 'YE_type2', v3_mono_cond, and_plot=F)
+  v3_mono_YE_type1_cors_CLEC12A <- get_cors_per_part(v3_mono_cond, 'CLEC12A', 'YE_type1', cell_types=c('monocyte'))
+  v3_mono_YE_type1_cors_CLEC12A <- (add_gt_to_cors(v3_mono_YE_type1_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v3_mono_YE_type1_cors_CLEC12A_plot <- plot_gene_to_pathway(v3_mono_YE_type1_cors_CLEC12A, gt_column='rs12230244', title=paste('v3', condition, 'YE type1 CLEC12A mspc'))
+  #v3_mono_YE_type1_cors_CLEC12A_plot
+  v3_mono_YE_type2_cors_CLEC12A <- get_cors_per_part(v3_mono_cond, 'CLEC12A', 'YE_type2', cell_types=c('monocyte'))
+  v3_mono_YE_type2_cors_CLEC12A <- (add_gt_to_cors(v3_mono_YE_type2_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v3_mono_YE_type2_cors_CLEC12A_plot <- plot_gene_to_pathway(v3_mono_YE_type2_cors_CLEC12A, gt_column='rs12230244', title=paste('v3', condition, 'YE type2 CLEC12A mspc'))
+  #v3_mono_YE_type2_cors_CLEC12A_plot
+  v3_mono_YE_shared_cors_CLEC12A <- get_cors_per_part(v3_mono_cond, 'CLEC12A', 'YE_shared', cell_types=c('monocyte'))
+  v3_mono_YE_shared_cors_CLEC12A <- (add_gt_to_cors(v3_mono_YE_shared_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v3_mono_YE_shared_cors_CLEC12A_plot <- plot_gene_to_pathway(v3_mono_YE_shared_cors_CLEC12A, gt_column='rs12230244', title=paste('v3', condition, 'YE shared CLEC12A mspc'))
+  #v3_mono_YE_shared_cors_CLEC12A_plot
+  ggsave(paste('v3_YE_shared_type1_type2_cors_CLEC12A_', condition, '_plot.png', sep=''), arrangeGrob(grobs = list(v3_mono_YE_type1_cors_CLEC12A_plot, v3_mono_YE_type2_cors_CLEC12A_plot, v3_mono_YE_shared_cors_CLEC12A_plot)))
+}
+
+for(condition in unique(v2_mono@meta.data$timepoint)){
+  # subset to condition
+  v2_mono_cond <- v2_mono[, v2_mono@meta.data$timepoint == condition]
+  v2_mono_cond <- add_module_score_from_table(ye_shared, 'YE_shared', v2_mono_cond, and_plot=F)
+  v2_mono_cond <- add_module_score_from_table(ye_type1, 'YE_type1', v2_mono_cond, and_plot=F)
+  v2_mono_cond <- add_module_score_from_table(ye_type2, 'YE_type2', v2_mono_cond, and_plot=F)
+  v2_mono_YE_type1_cors_CLEC12A <- get_cors_per_part(v2_mono_cond, 'CLEC12A', 'YE_type11', cell_types=c('monocyte'))
+  v2_mono_YE_type1_cors_CLEC12A <- (add_gt_to_cors(v2_YE_type1_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v2_mono_YE_type1_cors_CLEC12A_plot <- plot_gene_to_pathway(v2_mono_YE_type1_cors_CLEC12A, gt_column='rs12230244', title=paste('v2', condition, 'YE type1 CLEC12A mspc'))
+  v2_mono_YE_type1_cors_CLEC12A_plot
+  ggsave(paste('v2_YE_type1_cors_CLEC12A_', condition, '_plot_mspc.png', sep=''))
+  v2_mono_YE_type2_cors_CLEC12A <- get_cors_per_part(v2_mono_cond, 'CLEC12A', 'YE_type21', cell_types=c('monocyte'))
+  v2_mono_YE_type2_cors_CLEC12A <- (add_gt_to_cors(v2_YE_type2_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v2_mono_YE_type2_cors_CLEC12A_plot <- plot_gene_to_pathway(v2_mono_YE_type2_cors_CLEC12A, gt_column='rs12230244', title=paste('v2', condition, 'YE type2 CLEC12A mspc'))
+  v2_mono_YE_type2_cors_CLEC12A_plot
+  ggsave(paste('v2_YE_type2_cors_CLEC12A_', condition, '_plot_mspc.png', sep=''))
+  v2_mono_YE_shared_cors_CLEC12A <- get_cors_per_part(v2_mono_cond, 'CLEC12A', 'YE_shared1', cell_types=c('monocyte'))
+  v2_mono_YE_shared_cors_CLEC12A <- (add_gt_to_cors(v2_YE_shared_cors_CLEC12A, genotypes_all, 'CLEC12A', snp_probe_mapping))
+  v2_mono_YE_shared_cors_CLEC12A_plot <- plot_gene_to_pathway(v2_mono_YE_shared_cors_CLEC12A, gt_column='rs12230244', title=paste('v2', condition, 'YE shared CLEC12A mspc'))
+  v2_mono_YE_shared_cors_CLEC12A_plot
+  ggsave(paste('v2_YE_shared_cors_CLEC12A_', condition, '_plot_mspc.png', sep=''))
+}
