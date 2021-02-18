@@ -80,13 +80,16 @@ create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.d
 # Output:
 #   A matrix with the interaction statistics for every gene with the eQTL gene
 
-interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
+interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts, to_numeric=T) {
   #interaction.statistics <- do.call("rbind", apply(cor.matrix, 1, function(x) {
   #  model <- lm(formula = x~snp, weights = sqrt(cell.counts))
   #  return(tidy(model)[2,])
   #}))
   #snp_vector <- unlist(snp[,match(colnames(cor.matrix), colnames(snp))])
   snp_vector <- as.vector(unlist(snp[match(colnames(cor.matrix), names(snp))]))
+  if(to_numeric){
+    snp_vector <- as.numeric(as.factor(snp_vector)) - 1
+  }
   interaction.statistics <- do.call("rbind", apply(cor.matrix, 1, interaction.regression.row, snp = snp_vector, cell.counts=cell.counts))
   interaction.statistics$probeB <- rownames(interaction.statistics)
   print(head(interaction.statistics))
@@ -491,7 +494,10 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   return(result_dataframe)
 }
 
-do_regression <- function(correlations, snp, weights, datasets){
+do_regression <- function(correlations, snp, weights, datasets, to_numeric=T){
+  if(to_numeric){
+    snp <- as.numeric(as.factor(snp))
+  }
   # create dataframe to house data
   lm_data <- data.frame(correlations=correlations, snp=snp)
   # add weights in df if not null. When null, it will not be in the df, grabbed from outside the df and still be null. that works for lm

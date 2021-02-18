@@ -160,7 +160,7 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
   return(plots)
 }
 
-plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T, to_numeric=F){
+plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T, to_numeric=T){
   # get a summary of the numbers
   coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
   # I like dataframes more than matrices
@@ -196,6 +196,46 @@ plot_top_hit_per_condition <- function(genotype_data, mappings_folder, mapping_f
   }
 }
 
+plot_bottom_hit_per_condition <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T, to_numeric=T){
+  # get a summary of the numbers
+  coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
+  # I like dataframes more than matrices
+  coeqtl_summary <- data.frame(coeqtl_summary)
+  # can only plot what we actually have output for
+  genes_to_plot <- intersect(genes, rownames(coeqtl_summary))
+  # plot for each geneA
+  for(gene in genes_to_plot){
+    # build the path to this specific mappings folder
+    #mapping_folder <- paste(mappings_folder, mapping_folder_prepend, monniker, gene, mapping_folder_append, sep = '')
+    # really dislike this, but don't want to fix this inconsistency now
+    mapping_folder <- paste(mappings_folder, mapping_folder_prepend, gene, substr(monniker, 1, nchar(monniker) - 1), mapping_folder_append, sep = '')
+    # get the snp belonging to the gene
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+    # plot for each condition
+    for(condition in conditions){
+      # check if there is any coeqtl for this condition and gene
+      if(!is.na(coeqtl_summary[gene, condition]) & coeqtl_summary[gene, condition] > 0){
+        # get the most significant one otherwise
+        p_loc <- paste(mapping_folder, gene, monniker, cell_type, '_p.tsv', sep = '')
+        # read output
+        p_vals <- read.table(p_loc, sep = '\t', header = T, row.names = 1)
+        # grab the significance threshold
+        sig_thres <- p_vals['significance_threshold', condition]
+        # now remove the threshold itself
+        p_vals <- p_vals[!rownames(p_vals) %in% c('significance_threshold'), ]
+        # get the gene that has the significance threshold
+        gene_b <- rownames(p_vals[!is.na(p_vals[[condition]]) & p_vals[[condition]] == sig_thres, ])[1]
+        print(gene_b)
+        # try to get the plot
+        top_gene_condition_plots <- plot_coexpression_qtl(genotype_data=genotype_data, mapping_folder=mapping_folder, gene_name=gene, snp=snp, monniker=monniker, cell_type=cell_type, condition=condition, gene_b=gene_b, na_to_zero=na_to_zero, to_numeric=to_numeric)
+        ggsave(paste(plot_output_loc, 'co-expressionQTL_', gene, '_tophit_', condition, '.png', sep = ''), arrangeGrob(grobs = top_gene_condition_plots))
+      }
+    }
+  }
+}
+
+
+
 plot_top_hit_per_interaction <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, v2_object, v3_object, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
   # get a summary of the numbers
   coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
@@ -226,6 +266,43 @@ plot_top_hit_per_interaction <- function(genotype_data, mappings_folder, mapping
         # grab the first one
         gene_to_use <- rownames(p_vals)[1]
         # try to get the plot
+        plot_interaction(v2_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v2', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
+        plot_interaction(v3_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v3', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
+      }
+    }
+  }
+}
+
+
+plot_bottom_hit_per_interaction <- function(genotype_data, mappings_folder, mapping_folder_prepend, mapping_folder_append, plot_output_loc, genes, v2_object, v3_object, snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # get a summary of the numbers
+  coeqtl_summary <- summarize_coeqtl_tsvs(paste(mappings_folder, mapping_folder_prepend, sep = ''), paste(mapping_folder_append, '/', sep = ''), genes, cell_types=c('monocyte'), conditions=conditions)[[cell_type]]
+  # I like dataframes more than matrices
+  coeqtl_summary <- data.frame(coeqtl_summary)
+  # can only plot what we actually have output for
+  genes_to_plot <- intersect(genes, rownames(coeqtl_summary))
+  # plot for each geneA
+  for(gene in genes_to_plot){
+    # really dislike this, but don't want to fix this inconsistency now
+    mapping_folder <- paste(mappings_folder, mapping_folder_prepend, gene, substr(monniker, 1, nchar(monniker) - 1), mapping_folder_append, sep = '')
+    # get the snp belonging to the gene
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
+    # plot for each condition
+    for(condition in conditions){
+      # check if there is any coeqtl for this condition and gene
+      if(!is.na(coeqtl_summary[gene, condition]) & coeqtl_summary[gene, condition] > 0){
+        # get the most significant one otherwise
+        p_loc <- paste(mapping_folder, gene, monniker, cell_type, '_p.tsv', sep = '')
+        # read output
+        p_vals <- read.table(p_loc, sep = '\t', header = T, row.names = 1)
+        # grab the significance threshold
+        sig_thres <- p_vals['significance_threshold', condition]
+        # now remove the threshold itself
+        p_vals <- p_vals[!rownames(p_vals) %in% c('significance_threshold'), ]
+        # get the gene that has the significance threshold
+        gene_to_use <- rownames(p_vals[!is.na(p_vals[[condition]]) & p_vals[[condition]] == sig_thres, ])[1]
+        print(gene_to_use)
+        # plot for that specific gene
         plot_interaction(v2_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v2', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
         plot_interaction(v3_object, gene, gene_to_use, genotype_data[snp, ], snp, 'v3', plot_output_loc, p.value = NULL, r = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c(condition))
       }
@@ -1072,7 +1149,7 @@ create_gene_correlations <- function(seurat_object, genes=NULL, method='spearman
     }
 }
 
-create_gene_correlations_mt <- function(seurat_object, genes=NULL, nthreads=1, method='spearman'){
+create_gene_correlations_mt <- function(seurat_object, genes=NULL, nthreads=1, method='spearman', verbose=F){
   # we'll try this in parallel
   registerDoMC(nthreads)
   # get the genes to check
@@ -1086,6 +1163,9 @@ create_gene_correlations_mt <- function(seurat_object, genes=NULL, nthreads=1, m
   # check each gene against each gene
   foreach(i=1:length(genes_to_check)) %dopar% {
     for(i2 in i:length(genes_to_check)){
+      if(verbose & i2 %% 1000 == 0){
+        print(paste('doing', i, i2))
+      }
       # calculate the correlations
       try({
         # grab the gene names
@@ -1101,6 +1181,170 @@ create_gene_correlations_mt <- function(seurat_object, genes=NULL, nthreads=1, m
   }
   return(correlations)
 }
+
+create_cor_matrix_mt <- function(seurat_object, genes1=NULL, genes2=NULL, nthreads=1, method='spearman', verbose=F, cache_loc='./'){
+  DefaultAssay(seurat_object) <- 'SCT'
+  # we'll try this in parallel
+  registerDoMC(nthreads)
+  # set the genes to check
+  genes_x <- genes1
+  genes_y <- genes2
+  # check if they were supplied, otherwise grab use the genes available in the object
+  if(is.null(genes_x)){
+    genes_x <- rownames(seurat_object)
+  }
+  if(is.null(genes_y)){
+    genes_y <- rownames(seurat_object)
+  }
+  # we'll cache to a file, let's create a random string, so we won't get into trouble running multiple instances
+  random_string <- get_random_strings(1)
+  # check the genes
+  foreach(i=1:length(genes_x)) %dopar% {
+    # grab the gene1
+    gene1 <- genes_x[i]
+    # create the matrix to fill in
+    correlations <- matrix(, ncol=length(genes_y), nrow=length(1), dimnames=list(c(gene1), genes_y))
+    # check against each other gene
+    for(i2 in 1:length(genes_y)){
+      if(verbose & i2 %% 1000 == 0){
+        print(paste('doing', i, i2))
+      }
+      # grab the gene2
+      gene2 <- genes_y[i2]
+      # check the correlation
+      try({
+        #correlation <- cor(as.vector(unlist(seurat_object@assays$SCT@counts[gene1, ])), as.vector(unlist(seurat_object@assays$SCT@counts[gene2, ])), method = method)
+        correlation <- rcorr(as.vector(unlist(seurat_object@assays$SCT@counts[gene1, ])), as.vector(unlist(seurat_object@assays$SCT@counts[gene2, ])), type = method)$r['x', 'y']
+        # and add that to the correlation matrix
+        correlations[gene1, gene2] <- correlation
+      })
+    }
+    # write for this gene to a file
+    cache_file_loc <- paste(cache_loc, random_string, '_', gene1, '.tsv', sep = '')
+    write.table(correlations, cache_file_loc, col.names=T, row.names=T, sep = '\t')
+  }
+  # merge the genes together again
+  full_cor_table <- NULL
+  for(gene in genes_x){
+    # construct the location again
+    cache_file_loc <- paste(cache_loc, random_string, '_', gene, '.tsv', sep = '')
+    # read the table
+    correlations <- read.table(cache_file_loc, header=T, row.names=1, sep='\t')
+    # merge
+    if(is.null(full_cor_table)){
+      full_cor_table <- correlations
+    }
+    else{
+      full_cor_table <- rbind(full_cor_table, correlations)
+    }
+  }
+  return(full_cor_table)
+}
+
+get_random_strings <- function(n = 1) {
+  a <- do.call(paste0, replicate(5, sample(LETTERS, n, TRUE), FALSE))
+  paste0(a, sprintf("%04d", sample(9999, n, TRUE)), sample(LETTERS, n, TRUE))
+}
+
+
+get_cor_matrix_per_cond <- function(seurat_object, genes1=NULL, genes2=NULL, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), condition.column='timepoint', nthreads=1, method='spearman', verbose=F, cache_loc='./'){
+  # store correlations per condition
+  cors_per_cond <- list()
+  # check each condition
+  for(condition in conditions){
+    # subset to condition
+    seurat_object_condition <- seurat_object[, seurat_object@meta.data[[condition.column]] == condition]
+    # create correlation matrix
+    cors_condition <- create_cor_matrix_mt(seurat_object_condition, genes1=genes1, genes2=genes2, nthreads=nthreads, method=method, verbose=verbose, cache_loc=cache_loc)
+    # store in list
+    cors_per_cond[[condition]] <- cors_condition
+  }
+  return(cors_per_cond)
+}
+
+
+get_avg_cor_per_gt <- function(cor_matrix_loc, genotype_data, snp){
+  # read the correlation matrix
+  cor_matrix <- read.table(cor_matrix_loc, header=T, row.names=1)
+  # subset to the snp
+  geno_snp <- genotype_data[snp, colnames(cor_matrix)]
+  geno_snp <- data.frame(t(geno_snp))
+  # create dataframe to get the average cor per get
+  avg_cor_per_gts <- NULL
+  # get the alleles
+  alleles_combos <- unique(geno_snp[[snp]])
+  # check each genotype
+  for(alleles in alleles_combos){
+    # get the participants with this genotype
+    parts_alleles <- rownames(geno_snp[as.character(geno_snp[[snp]]) == alleles, , drop = F])
+    # we can only do this if there are people with this genotype
+    if(length(parts_alleles) > 0){
+      # subset to that allele
+      cor_matrix_genotype <- cor_matrix[, parts_alleles, drop = F]
+      # get the mean expression of each gene in this group
+      avg_cor <- apply(cor_matrix_genotype, 1, mean)
+      # add to the cor df
+      if(is.null(avg_cor_per_gts)){
+        avg_cor_per_gts <- avg_cor
+      }
+      else{
+        avg_cor_per_gts <- cbind(avg_cor_per_gts, avg_cor)
+      }
+    }
+  }
+  # set names
+  rownames(avg_cor_per_gts) <- rownames(cor_matrix)
+  colnames(avg_cor_per_gts) <- alleles_combos
+  return(avg_cor_per_gts)
+}
+
+write_avg_cor_per_gt_per_cond <- function(cor_matrices_loc, gene, genotype_data, snp, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), sets=c(1, 2)){
+  # check each cell type
+  for(cell_type in cell_types){
+    # check each condition
+    for(condition in conditions){
+      # check each set
+      for(set in sets){
+        # paste together the reading path
+        input_loc <- paste(cor_matrices_loc, condition, '_', cell_type, '_correlation_matrix_', gene, '.', set, '.txt', sep = '')
+        # paste together the output loc
+        output_loc <- paste(cor_matrices_loc, condition, '_', cell_type, '_avg_cor_matrix_', gene, '.', set, '.tsv', sep = '')
+        # get the average correlation matrix
+        avg_cor_matrix <- get_avg_cor_per_gt(input_loc, genotype_data, snp)
+        # write the result
+        write.table(avg_cor_matrix, output_loc, sep = '\t', row.names = T, col.names = T, quote = F)
+      }
+    }
+  }
+}
+
+
+write_avg_cor_per_coeqtl_gene <- function(output_loc_prepend, output_loc_append, coeqtl_genes, genotype_data, snp_probe_mapping, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), sets=c(1, 2)){
+  # check each coeqtl gene
+  for(coeqtl_gene in coeqtl_genes){
+    # get the SNP that belongs to that gene
+    snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+    # paste together the location of the matrices
+    cor_matrices_loc <- paste(output_loc_prepend, coeqtl_gene, output_loc_append, '/correlationMatrices/', sep = '')
+    # put in the work for the average correlation
+    write_avg_cor_per_gt_per_cond(cor_matrices_loc = cor_matrices_loc, gene = coeqtl_gene, genotype_data = genotype_data, snp = snp, cell_types = cell_types, conditions = conditions, sets = sets)
+  }
+}
+
+plot_baseline_correlations <- function(correlations_matrix_prepend, geneA, geneBs, conditions=NULL){
+  conditions.to.check <- colnames(correlations_matrix)
+  # subset to requested genes if asked to do so
+  if(!is.null(conditions)){
+    conditions.to.check <- intersect(conditions.to.check, conditions)
+  }
+  # init plot data
+  plot_data <- NULL
+  # get correlations for each condition
+  for(condition in conditions.to.check){
+    cors <- correlations_matrix[]
+  }
+}
+
 
 
 # location of the coeqtl output
@@ -1176,6 +1420,10 @@ plot_pathway_all_genes_top(output_path_prepend=pathway_out_prepend, output_path_
 plot_pathway_all_genes_top(output_path_prepend=pathway_out_prepend, output_path_append=pathway_out_append, genes=coeqtl_genes, plot_out_loc='/data/scRNA/pathways/plots/pathways_20210208_numeric_snps/', cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), top_so_many = 5)
 
 overlap_per_geneA <- get_significant_gene_overlap(prepend, append, coeqtl_genes)
+
+write_avg_cor_per_coeqtl_gene(output_loc_prepend=paste(coeqtl_out_loc, prepend, sep=''), output_loc_append=append, coeqtl_genes=coeqtl_genes, genotype_data=genotypes_all, snp_probe_mapping=snp_probe_mapping, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), sets=c(1, 2))
+
+
 
 for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
   dev.off()
