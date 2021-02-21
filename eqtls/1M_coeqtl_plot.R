@@ -4,7 +4,7 @@ library(scales)
 library(ggplot2)
 library(cowplot)
 
-plot_coexqtl <- function(seurat_object, individuals_to_use, gene1, gene2, genotype, version_chem, output_loc){
+plot_coexqtl <- function(seurat_object, individuals_to_use, gene1, gene2, genotype, version_chem, output_loc, replace_na=F){
   # the correlations
   correlations_UT <- vector()
   correlations_X3hCA <- vector()
@@ -45,6 +45,11 @@ plot_coexqtl <- function(seurat_object, individuals_to_use, gene1, gene2, genoty
       }
     }
   }
+  if(replace_na){
+    correlations_UT[is.na(correlations_UT)] <- 0
+    correlations_X3hCA[is.na(correlations_X3hCA)] <- 0
+    correlations_X24hCA[is.na(correlations_X24hCA)] <- 0
+  }
   plot_data <- data.frame(genotype=genos_UT, correlation=correlations_UT, condition = "UT")
   plot_data <- rbind.data.frame(plot_data, data.frame(genotype=genos_X3hCA, correlation=correlations_X3hCA, condition = "3hCA"))
   plot_data <- rbind.data.frame(plot_data, data.frame(genotype=genos_X24hCA, correlation=correlations_X24hCA, condition = "24hCA"))
@@ -52,7 +57,8 @@ plot_coexqtl <- function(seurat_object, individuals_to_use, gene1, gene2, genoty
   ggplot(plot_data, aes(x=genotype, y=correlation, group=genotype)) +
     geom_boxplot(notch=F, color = "black", outlier.shape=NA, lwd=0.6, alpha=1) +
     facet_wrap(~condition) +
-    ggtitle(paste("co-expressionQTL", gene1, gene2, version_chem))
+    ggtitle(paste("co-expressionQTL", gene1, gene2, version_chem)) +
+    scale_fill_manual(name = 'genotype', values = c("firebrick1", "deepskyblue3", "limegreen"))
   
   ggsave(paste(output_loc, "co-expressionQTL", gene1, gene2, version_chem, '.png', sep = ''))
 }
@@ -149,8 +155,8 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
 
 # object locations
 object_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/'
-object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
-object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
+object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds', sep = '')
+object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
 
 # where to save the plots
 plot_output_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/'
@@ -162,7 +168,7 @@ genotype_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/genotypes/1M
 cell_type <- 'monocyte'
 SNP <- "rs1131017"
 gene1 <- "RPS26"
-gene2 <- "EEF1A1"
+gene2 <- "RPL21"
 
 # read the objects
 v2 <- readRDS(object_loc_v2)

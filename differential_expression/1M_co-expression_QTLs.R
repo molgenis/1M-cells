@@ -11,6 +11,8 @@ library(Seurat)
 library(ggplot2)
 library(data.table)
 library(meta)
+library(foreach)
+library(doMC)
 
 ###########################################################################################################################
 #
@@ -1767,4 +1769,27 @@ summary_list_cd4t <- list()
 for(i in 1:1){
   coeqtl_summary_i <- summarize_coeqtl_tsvs('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', paste('_cd4t_missingness05replacena100permzerogenebnumeric_', 1, '/', sep = ''), c('HLA-DQA1', 'TMEM176B', 'TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26'), cell_types=c('CD4T'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
   summary_list_cd4t[[i]] <- coeqtl_summary_i
+}
+
+
+
+
+registerDoMC(14)
+foreach(i=1:length(c('HLA-DQA1', 'TMEM176B', 'TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26'))) %dopar% {
+  coeqtl_gene <- c('HLA-DQA1', 'TMEM176B', 'TMEM176A',  'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')[i]
+  # get the matching SNP
+  cis_snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == coeqtl_gene, ]$snp[1]
+  # paste the gene and snp together
+  snp_genes <- c(paste(cis_snp, coeqtl_gene, sep = '_'))
+  for(i2 in 1:1){
+    # create the output dirs
+    meta_cd8t_out <- paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', coeqtl_gene,'_meta_cd8t_missingness05replacena100permzerogenebnumeric_', i2, '/', sep = '')
+    # do mapping for each condition
+    for(condition in conditions){
+      print(paste('starting', cis_snp, coeqtl_gene, condition))
+      try({
+        do_coexqtl.meta(v2_cd8t, v3_cd8t, snp_genes, meta_cd8t_out, genotypes_all, cell_types = c('CD8T'), conditions = c(condition), replace_na = T, allowed_missingness = 0.5, n.perm = 100, remove_any_zero_expressions = T)
+      })
+    }
+  }
 }

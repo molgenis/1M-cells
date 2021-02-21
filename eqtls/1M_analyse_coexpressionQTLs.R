@@ -16,6 +16,10 @@ library(RColorBrewer)
 library(UpSetR)
 library(foreach)
 library(doMC)
+library(cowplot)
+library(lattice)
+library(grid)
+library(gridExtra)
 
 ###########################################################################################################################
 #
@@ -1263,7 +1267,7 @@ get_cor_matrix_per_cond <- function(seurat_object, genes1=NULL, genes2=NULL, con
 }
 
 
-get_avg_cor_per_gt <- function(cor_matrix_loc, genotype_data, snp){
+get_avg_cor_per_gt <- function(cor_matrix_loc, genotype_data, snp, na_to_zero=T){
   # read the correlation matrix
   cor_matrix <- read.table(cor_matrix_loc, header=T, row.names=1)
   # subset to the snp
@@ -1281,6 +1285,9 @@ get_avg_cor_per_gt <- function(cor_matrix_loc, genotype_data, snp){
     if(length(parts_alleles) > 0){
       # subset to that allele
       cor_matrix_genotype <- cor_matrix[, parts_alleles, drop = F]
+      if(na_to_zero){
+        cor_matrix_genotype[is.na(cor_matrix_genotype)] <- 0
+      }
       # get the mean expression of each gene in this group
       avg_cor <- apply(cor_matrix_genotype, 1, mean)
       # add to the cor df
@@ -1331,8 +1338,8 @@ write_avg_cor_per_coeqtl_gene <- function(output_loc_prepend, output_loc_append,
   }
 }
 
-plot_baseline_correlations <- function(correlations_matrix_prepend, geneA, geneBs, conditions=NULL){
-  conditions.to.check <- colnames(correlations_matrix)
+plot_baseline_correlations <- function(correlations_matrix_per_condition, geneA, geneBs, conditions=NULL, title='correlations', xlab='condition', ylab='correlation'){
+  conditions.to.check <- names(correlations_matrix_per_condition)
   # subset to requested genes if asked to do so
   if(!is.null(conditions)){
     conditions.to.check <- intersect(conditions.to.check, conditions)
@@ -1341,9 +1348,213 @@ plot_baseline_correlations <- function(correlations_matrix_prepend, geneA, geneB
   plot_data <- NULL
   # get correlations for each condition
   for(condition in conditions.to.check){
-    cors <- correlations_matrix[]
+    # get the correct correlation matrix
+    cor_matrix_condition <- correlations_matrix_per_condition[[condition]]
+    # get the specific correlations we wanted
+    correlations <- as.vector(unlist(cor_matrix_condition[geneA, intersect(gsub('-', '.', geneBs), colnames(cor_matrix_condition))]))
+    # create plot data
+    plot_data_condition <- data.frame(correlation=correlations, condition=rep(condition, times=length(correlations)))
+    # add to overarching plot data
+    if(is.null(plot_data)){
+      plot_data <- plot_data_condition
+    }
+    else{
+      plot_data <- rbind(plot_data, plot_data_condition)
+    }
   }
+  plot_data$condition <- as.factor(plot_data$condition)
+  levels(plot_data$condition) <- conditions
+  cc <- get_color_coding_dict()
+  #colScale <- scale_fill_manual(name = plot_data$condition, values = unlist(cc[conditions]))
+  ggplot(plot_data, aes(x=condition, y=correlation, fill=condition)) +
+    geom_boxplot() +
+    #colScale +
+    ggtitle(title) +
+    labs(y = ylab, x=ylab) +
+    geom_jitter(width = 0.1, alpha = 0.2)
 }
+
+plot_coeqtl_baseline_correlations <- function(geneA, tsv_loc, coexp_loc_prepend, coexp_append='_cor_coeqtlgenes.tsv', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), do_ggparcoord=F){
+  # get the significant genes per condition
+  sigs_per_cond <- get_gene_lists(tsv_loc)
+  # subset to conditions we care about
+  sigs_per_cond <- sigs_per_cond[intersect(names(sigs_per_cond), conditions)]
+  # merge these into a single vector
+  sigs <- unlist(sigs_per_cond)
+  # make unique, because some genes are a coeqtl in multiple conditions
+  sigs <- unique(sigs)
+  # read the coexpression matrices
+  correlations_matrix_per_condition <- list()
+  for(condition in conditions){
+    # paste together the path
+    coexp_path <- paste(coexp_loc_prepend, condition, coexp_append, sep='')
+    # read and add to list
+    try({
+      coexp_condition <- read.table(coexp_path, header=T, row.names=1, sep = '\t')
+      correlations_matrix_per_condition[[condition]] <- coexp_condition
+    })
+  }
+  # actually plot now
+  if(do_ggparcoord){
+    plot_baseline_correlations_ggparcoord(correlations_matrix_per_condition, geneA, sigs, conditions)
+  }
+  else{
+    plot_baseline_correlations(correlations_matrix_per_condition, geneA, sigs, conditions)
+  }
+  
+}
+
+plot_baseline_correlations_ggparcoord <- function(correlations_matrix_per_condition, geneA, geneBs, conditions=NULL){
+  full_matrix <- NULL
+  conditions.to.check <- names(correlations_matrix_per_condition)
+  # subset to requested genes if asked to do so
+  if(!is.null(conditions)){
+    conditions.to.check <- intersect(conditions.to.check, conditions)
+  }
+  # get correlations for each condition
+  for(condition in conditions.to.check){
+    # get the correct correlation matrix
+    cor_matrix_condition <- correlations_matrix_per_condition[[condition]]
+    # get the specific correlations we wanted
+    correlations <- as.vector(unlist(cor_matrix_condition[geneA, gsub('-', '.', geneBs)]))
+    # turn into df
+    condition_df <- data.frame(correlation=correlations)
+    colnames(condition_df) <- condition
+    # add to dataframe
+    if(is.null(full_matrix)){
+      full_matrix <- condition_df
+    }
+    else{
+      full_matrix <- cbind(full_matrix, condition_df)
+    }
+  }
+  ggparcoord(full_matrix)
+}
+
+plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend, midpend='_monocyte_avg_cor_matrix_', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), avg_pos_only=F, avg_neg_only=F){
+  # get the significant genes per condition
+  sigs_per_cond <- get_gene_lists(tsv_loc)
+  # subset to conditions we care about
+  sigs_per_cond <- sigs_per_cond[intersect(names(sigs_per_cond), conditions)]
+  # merge these into a single vector
+  sigs <- unlist(sigs_per_cond)
+  # make unique, because some genes are a coeqtl in multiple conditions
+  sigs <- unique(sigs)
+  # init plot data
+  plot_data <- NULL
+  for(condition in conditions){
+    # paste together the path
+    coexp_path <- paste(prepend, condition, midpend, geneA, '.', i, '.tsv', sep='')
+    # load file
+    cors <- read.table(coexp_path, header=T, row.names=1, sep='\t')
+    # subset to only positive or negative correlations
+    if(avg_pos_only){
+      mean_row <- apply(cors, 1, mean)
+      cors <- cors[mean_row >= 0, ]
+    }
+    if(avg_neg_only){
+      mean_row <- apply(cors, 1, mean)
+      cors <- cors[mean_row <= 0, ]
+    }
+    # check each genotype
+    for(geno in colnames(cors)){
+      cors_geno_and_genes <- cors[sigs, geno]
+      # turn into dataframe
+      cors_geno_and_genes_df <- data.frame(cor=cors_geno_and_genes, stringsAsFactors = F)
+      cors_geno_and_genes_df$condition <- condition
+      cors_geno_and_genes_df$geno <- geno
+      # add to df
+      if(is.null(plot_data)){
+        plot_data <- cors_geno_and_genes_df
+      }
+      else{
+        plot_data <- rbind(plot_data, cors_geno_and_genes_df)
+      }
+    }
+  }
+  # sort conditions
+  levels(plot_data$geno) <- conditions
+  ggplot(plot_data, aes(condition, cor, fill=geno)) + geom_boxplot()
+}
+
+
+scatter_baseline_correlations <- function(geneA, tsv_loc, condition.1, condition.2, coexp_loc_prepend, coexp_append='_cor_coeqtlgenes.tsv'){
+  # get significant genes per condition
+  sigs_per_cond <- get_gene_lists(tsv_loc)
+  # grab for both conditions and make unique
+  cond1_genes <- sigs_per_cond[[condition.1]]
+  cond2_genes <- sigs_per_cond[[condition.2]]
+  cond1_genes <- gsub('-', '.', cond1_genes)
+  cond2_genes <- gsub('-', '.', cond2_genes)
+  interested_genes <- unique(c(cond1_genes, cond2_genes))
+  # read the two coexpression matrices
+  coexp_path_cond1 <- paste(coexp_loc_prepend, condition.1, coexp_append, sep='')
+  coexp_condition1 <- read.table(coexp_path_cond1, header=T, row.names=1, sep = '\t')
+  coexp_path_cond2 <- paste(coexp_loc_prepend, condition.2, coexp_append, sep='')
+  coexp_condition2 <- read.table(coexp_path_cond2, header=T, row.names=1, sep = '\t')
+  # we can only plot what is in both matrices
+  interested_genes <- intersect(interested_genes, intersect(colnames(coexp_condition1), colnames(coexp_condition2)))
+  # grab the values from each matrix
+  plot_data <- data.frame(x=as.vector(unlist(coexp_condition1[geneA, interested_genes])), y=as.vector(unlist(coexp_condition2[geneA, interested_genes])))
+  rownames(plot_data) <- interested_genes
+  # order by x to make the plot easier on the eyes
+  plot_data <- plot_data[order(plot_data$x), ]
+  # add extra column to note where this was a coeqtl
+  plot_data$coeqtl <- 'neither'
+  if(nrow(plot_data[rownames(plot_data) %in% cond1_genes, ]) > 0){
+    plot_data[rownames(plot_data) %in% cond1_genes, ]$coeqtl <- 'cond1'
+  }
+  if(nrow(plot_data[rownames(plot_data) %in% cond2_genes, ]) > 0){
+    plot_data[rownames(plot_data) %in% cond2_genes, ]$coeqtl <- 'cond2'
+  }
+  if(nrow(plot_data[(rownames(plot_data) %in% cond1_genes & rownames(plot_data) %in% cond2_genes), ]) > 0){
+    plot_data[rownames(plot_data) %in% cond1_genes & rownames(plot_data) %in% cond2_genes, ]$coeqtl <- 'both'
+  }
+  plot_data$coeqtl <- as.factor(plot_data$coeqtl)
+  # actually plot now
+  ggplot(plot_data, aes(x=x, y=y, color=coeqtl)) + geom_point() + geom_smooth(method=lm) + coord_cartesian(xlim = c(-0.5, 0.5), ylim = c(-0.5, 0.5)) + labs(y = condition.2, x=condition.1)
+}
+
+
+create_scatter_per_condition_combination <- function(geneA, tsv_loc, plot_save_loc, coexp_loc_prepend, coexp_append='_cor_coeqtlgenes.tsv', conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  condition_plots <- list()
+  for(condition in conditions){
+    try({
+      condition_plot <- scatter_baseline_correlations(geneA, tsv_loc, condition.1='UT', condition.2=condition, coexp_loc_prepend=coexp_loc_prepend, coexp_append=coexp_append)
+      condition_plots[[condition]] <- condition_plot
+    })
+  }
+  ggsave(plot_save_loc, arrangeGrob(grobs = condition_plots), width=12, height=8)
+}
+
+
+get_color_coding_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[["UT"]] <- "grey"
+  color_coding[["3hCA"]] <- "khaki2"
+  color_coding[["24hCA"]] <- "khaki4"
+  color_coding[["3hMTB"]] <- "paleturquoise1"
+  color_coding[["24hMTB"]] <- "paleturquoise3"
+  color_coding[["3hPA"]] <- "rosybrown1"
+  color_coding[["24hPA"]] <- "rosybrown3"
+  color_coding[["X3hCA"]] <- "khaki2"
+  color_coding[["X24hCA"]] <- "khaki4"
+  color_coding[["X3hMTB"]] <- "paleturquoise1"
+  color_coding[["X24hMTB"]] <- "paleturquoise3"
+  color_coding[["X3hPA"]] <- "rosybrown1"
+  color_coding[["X24hPA"]] <- "rosybrown3"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  return(color_coding)
+}
+
 
 
 
@@ -1374,7 +1585,7 @@ snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T
 coeqtl_out_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
 # prep and append we will use for now
 prepend <- 'output_'
-append <- '_meta_mono_missingness05replacena100permzerogeneb_1/'
+append <- '_meta_mono_missingness05replacena100permzerogenebnumeric_1/'
 # location of plots
 coeqtl_plot_loc <- paste(coeqtl_out_loc, 'plots/', sep = '')
 # geneAs to plot
@@ -1423,6 +1634,18 @@ overlap_per_geneA <- get_significant_gene_overlap(prepend, append, coeqtl_genes)
 
 write_avg_cor_per_coeqtl_gene(output_loc_prepend=paste(coeqtl_out_loc, prepend, sep=''), output_loc_append=append, coeqtl_genes=coeqtl_genes, genotype_data=genotypes_all, snp_probe_mapping=snp_probe_mapping, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), sets=c(1, 2))
 
+for(coeqtl_gene in coeqtl_genes){
+  plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_per_gt_avg_correlations_v2.png', sep='')
+  p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+  p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
+  plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_per_gt_avg_correlations_v3.png', sep='')
+  p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+}
 
 
 for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
