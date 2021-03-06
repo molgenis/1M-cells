@@ -581,6 +581,105 @@ get_gene_list_geneAs <- function(path_prepend, path_append, geneAs){
   return(sigs_per_geneA)
 }
 
+get_correlationceofs_geneAs <- function(path_prepend, midpend, path_append, geneAs, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # list for the coefs per geneA
+  coefs_per_geneA <- list()
+  # check each gene
+  for(gene in geneAs){
+    # list for coefs per condition
+    rs_per_condition <- list()
+    # check each condition
+    for(condition in conditions){
+      # read the correlation coefficients
+      rs_loc <- paste(path_prepend, gene, midpend, condition, path_append, sep='')
+      try({
+        rs <- read.table(rs_loc, sep = '\t', header = T, row.names = 1)
+        # add to the list
+        rs_per_condition[[condition]] <- rs
+      })
+    }
+    # add to the list
+    coefs_per_geneA[[gene]] <- rs_per_condition
+  }
+  return(coefs_per_geneA)
+}
+
+
+get_geneB_cor_matrix <- function(seurat_object, path_prepend, path_append, geneA, conditions = c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), condition.column = 'timepoint', nthreads = 1, method = 'spearman', verbose = T, cache_loc = './'){
+  # combine to get the path
+  full_path <- paste(path_prepend, geneA, path_append, sep = '')
+  # get the sig genes per condition
+  sigs_geneA <- get_gene_lists(full_path)
+  # get unique genes in any condition
+  sigs_geneA <- unique(as.vector(unlist(sigs_geneA)))
+  # create the correlation matrix
+  cor_matrix <- get_cor_matrix_per_cond(seurat_object = seurat_object, genes1 = sigs_geneA, genes2 = sigs_geneA, conditions = conditions, condition.column = condition.column, nthreads = nthreads, method = method, verbose = verbose, cache_loc = cache_loc)
+  return(cor_matrix)
+}
+
+
+plot_coexpression_vs_coeqtl_direction <- function(output_dir, matrix_prepend, gene, cell_type, col, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # get the most significant one otherwise
+  p_loc <- paste(output_dir, gene, '_meta_', cell_type, '_p.tsv', sep = '')
+  # get the sig genes per condition
+  sigs_per_cond <- get_gene_lists(p_loc)
+  # init plot data
+  plot_data <- NULL
+  # check each condition
+  for(condition in conditions){
+    try({
+      # get the output dir of the condition
+      r_output_loc <- paste(output_dir, gene, '_', cell_type, '_', condition, '_rs.tsv', sep='')
+      # read the r vals
+      rs <- read.table(r_output_loc, sep = '\t', header = T, row.names = 1)
+      # get significant gene
+      rs <- rs[sigs_per_cond[[condition]], ]
+      # get the output dir of the matrix
+      matrix_dir <- paste(matrix_prepend, '', gene, '_', cell_type, '_', condition, '_cor_coeqtlgenes.tsv', sep='')
+      # read the file
+      coex_matrix <- read.table(matrix_dir, sep = '\t', header = T, row.names = 1)
+      # of course the colnames in R replace dashes with dots, so we need to do the same
+      sigs_geneA_rcolsafe <- gsub('-', '.', sigs_per_cond[[condition]])
+      # subset to the genes that were coeqtls
+      matrix_coeqtls <- coex_matrix[sigs_per_cond[[condition]], sigs_geneA_rcolsafe]
+      # get the coeqtl genes with a positive correlation coefficient
+      rs_pos_genes <- rownames(rs[rs[[col]] > 0, ])
+      rs_pos_genes_rcolsafe <- gsub('-', '.', rs_pos_genes)
+      # get the coeqtl genes with a negative correlation coefficient
+      rs_neg_genes <- rownames(rs[rs[[col]] < 0, ])
+      rs_neg_genes_rcolsafe <- gsub('-', '.', rs_neg_genes)
+      # grab the correlations from the matrix checking coeqtl genes with a positive or negative r
+      pos_pos <- as.vector(unlist(matrix_coeqtls[rs_pos_genes, rs_pos_genes_rcolsafe]))
+      pos_neg <- as.vector(unlist(matrix_coeqtls[rs_pos_genes, rs_neg_genes_rcolsafe]))
+      neg_pos <- as.vector(unlist(matrix_coeqtls[rs_neg_genes, rs_pos_genes_rcolsafe]))
+      neg_neg <- as.vector(unlist(matrix_coeqtls[rs_neg_genes, rs_neg_genes_rcolsafe]))
+      # remove perfect correlations, as these are with the gene against themselves
+      pos_pos <- pos_pos[pos_pos != 1]
+      neg_neg <- neg_neg[neg_neg != 1]
+      # turn into plot data
+      plot_data_condition <- data.frame(correlation=pos_pos, geno_directions=rep('pos-pos', times=length(pos_pos)))
+      plot_data_condition <- rbind(plot_data_condition, data.frame(correlation=pos_neg, geno_directions=rep('pos-neg', times=length(pos_neg))))
+      plot_data_condition <- rbind(plot_data_condition, data.frame(correlation=neg_pos, geno_directions=rep('neg-pos', times=length(neg_pos))))
+      plot_data_condition <- rbind(plot_data_condition, data.frame(correlation=neg_neg, geno_directions=rep('neg-neg', times=length(neg_neg))))
+      # add condition
+      plot_data_condition$condition <- condition
+      # add to the plot data
+      if(is.null(plot_data)){
+        plot_data <- plot_data_condition
+      }
+      else{
+        plot_data <- rbind(plot_data, plot_data_condition)
+      }
+    })
+  }
+  p <- ggplot(data=plot_data, aes(x=geno_directions, y=correlation, fill=geno_directions)) + 
+    geom_boxplot() + 
+    geom_jitter() +
+    facet_grid(. ~ condition)
+  return(p)
+}
+
+
 significant_coeqtl_genes_to_file <- function(input_path_prepend, input_path_append, output_path_prepend, output_path_append, geneAs){
   # first get these genes
   sigs_per_geneA <- get_gene_list_geneAs(input_path_prepend, input_path_append, geneAs)
@@ -600,6 +699,39 @@ significant_coeqtl_genes_to_file <- function(input_path_prepend, input_path_appe
       sig_genes_df <- data.frame(genes=sig_genes)
       # finally write the table
       write.table(sig_genes_df, output_loc, quote = F, col.names=F, row.names=F)
+    }
+  }
+}
+
+# fix this method, as it's ugly
+significant_coeqtl_geneBs_to_file_per_dir <- function(input_path_prepend, input_path_append, output_path_loc, geneAs){
+  # first get these genes
+  sigs_per_geneA <- get_gene_list_geneAs(input_path_prepend, input_path_append, geneAs)
+  # now start writing each geneA set
+  for(geneA in names(sigs_per_geneA)){
+    # and we need to write per condition
+    for(condition in names(sigs_per_geneA[[geneA]])){
+      # get those genes
+      sig_genes <- sigs_per_geneA[[geneA]][[condition]]
+      if(length(sig_genes) > 0){
+        # get the output dir of the condition
+        r_output_loc <- paste(input_path_prepend, geneA, '_', 'monocyte', '_', condition, '_rs.tsv', sep='')
+        # read the Rs
+        rs <- read.table(r_output_loc, header = T, row.names = 1, sep = '\t')
+        # subset to the significant ones
+        rs <- rs[sig_genes, ]
+        # add the mean r to the rs
+        rs$meanR <- apply(rs, 1, mean)
+        # grab the positive direction genes
+        pos_genes <- rownames(rs[rs$meanR > 0, ])
+        # grab the negative direction genes
+        neg_genes <- rownames(rs[rs$meanR < 0, ])
+        # write to files
+        output_loc_pos <- paste(output_path_loc, 'coeqtls_', geneA, '_', condition, '_pos_meta_monocyte.txt', sep = '')
+        output_loc_neg <- paste(output_path_loc, 'coeqtls_', geneA, '_', condition, '_neg_meta_monocyte.txt', sep = '')
+        write.table(data.frame(gene=pos_genes), output_loc_pos, row.names = F, col.names = F, quote=F)
+        write.table(data.frame(gene=neg_genes), output_loc_neg, row.names = F, col.names = F, quote=F)
+      }
     }
   }
 }
@@ -1555,7 +1687,43 @@ get_color_coding_dict <- function(){
   return(color_coding)
 }
 
-
+combined_sigs_to_file <- function(sigs_per_geneA, coefs_per_geneA, genes, combinations, output_loc){
+  # check each gene
+  for(gene in intersect(names(sigs_per_geneA), genes)){
+    # we'll store the positive and negative direction genes
+    pos_dir_geneBs <- c()
+    neg_dir_geneBs <- c()
+    # grab per condition
+    for(condition in intersect(combinations, names(sigs_per_geneA[[gene]])) ){
+      # grab these conditions
+      geneBs <- sigs_per_geneA[[gene]][[condition]]
+      # get the coef matrix
+      coefs <- coefs_per_geneA[[gene]][[condition]]
+      # get the mean coef
+      coefs$mean <- apply(coefs, 1, mean)
+      # grab the positive and negative genes
+      coefs_pos <- rownames(coefs[!is.na(coefs$mean) &coefs$mean > 0, ])
+      coefs_neg <- rownames(coefs[!is.na(coefs$mean) &coefs$mean < 0, ])
+      # get the significant ones with the direction
+      sigs_pos <- intersect(geneBs, coefs_pos)
+      sigs_neg <- intersect(geneBs, coefs_neg)
+      # add to the list
+      pos_dir_geneBs <- c(pos_dir_geneBs, sigs_pos)
+      neg_dir_geneBs <- c(neg_dir_geneBs, sigs_neg)
+    }
+    # make unique
+    pos_dir_geneBs <- unique(pos_dir_geneBs)
+    neg_dir_geneBs <- unique(neg_dir_geneBs)
+    # paste combinations togeter
+    combs_string <- paste(combinations, collapse = '')
+    # set output locs
+    pos_dir_out <- paste(output_loc, gene, '_', combs_string, '_pos.txt', sep = '')
+    neg_dir_out <- paste(output_loc, gene, '_', combs_string, '_neg.txt', sep = '')
+    # write the lists of genes
+    write.table(data.frame(gene=pos_dir_geneBs), pos_dir_out, row.names = F, col.names = F)
+    write.table(data.frame(gene=neg_dir_geneBs), neg_dir_out, row.names = F, col.names = F)
+  }
+}
 
 
 # location of the coeqtl output
@@ -1647,6 +1815,35 @@ for(coeqtl_gene in coeqtl_genes){
   ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
 }
 
+for(coeqtl_gene in coeqtl_genes){
+  try({
+  plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_cd4t_per_gt_avg_correlations_v2.png', sep='')
+  p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+  p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
+  plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_cd4t_per_gt_avg_correlations_v3.png', sep='')
+  p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+  })
+}
+
+for(coeqtl_gene in coeqtl_genes){
+  try({
+    plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_cd8t_per_gt_avg_correlations_v2.png', sep='')
+    p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+    p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+    p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+    ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
+    plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_cd8t_per_gt_avg_correlations_v3.png', sep='')
+    p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
+    p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
+    p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+    ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+  })
+}
 
 for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
   dev.off()

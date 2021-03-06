@@ -524,7 +524,7 @@ get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
   return(most_shared)
 }
 
-get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F){
+get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_method=F, disregard_3h_vs_24h=F){
   most_varied <- c()
   # most varied in 3h condition
   timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
@@ -538,7 +538,12 @@ get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
   timepoints_mtb <- colnames(pathway_table)[grep('hMTB', colnames(pathway_table))]
   if(use_sd_method){
     # first overall most variation
-    most_varied <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many)
+    most_varied <- c()
+    # because 3h has sharing and 24h has sharing, looking overall, we might see 3h vs 24h effects, we can choose to ignore this
+    if(disregard_3h_vs_24h == F){
+      most_varied <- get_most_varying_from_df(pathway_table, top_so_many = top_so_many)
+    }
+    # most varied in 3h and most varied in 24h
     most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_3h], top_so_many = top_so_many))
     most_varied <- c(most_varied, get_most_varying_from_df(pathway_table[, timepoints_24h], top_so_many = top_so_many))
   }
@@ -972,6 +977,17 @@ get_average_gene_expression_per_ct_and_tp <- function(seurat_object, condition.c
   return(exp_df)
 }
 
+avg_exp_to_table <- function(avg_exp_table, cell_type, genes){
+  subsetted_avg_exp <- avg_exp_table[avg_exp_table$cell_type %in% c(cell_type) & avg_exp_table$gene %in% genes, ]
+  avg_exp_matrix <- matrix(, nrow=length(unique(subsetted_avg_exp$gene)), ncol=length(unique(subsetted_avg_exp$condition)), dimnames=list(unique(subsetted_avg_exp$gene), unique(subsetted_avg_exp$condition)))
+  for(gene in unique(subsetted_avg_exp$gene)){
+    for(condition in unique(subsetted_avg_exp$condition)){
+      avg_exp_matrix[gene, condition] <- subsetted_avg_exp[subsetted_avg_exp$condition ==  condition & subsetted_avg_exp$gene == gene, 'average']
+    }
+  }
+  return(avg_exp_matrix)
+}
+
 get_normed_to_max_expression <- function(expression_table, cell_type){
   # subset to table of cell_type
   expression_table_ct <- expression_table[expression_table$cell_type == cell_type, ]
@@ -1020,7 +1036,7 @@ subset_expression_table_by_de <- function(expression_table, mast_output_loc, cel
   return(expression_table_filtered)
 }
 
-avg_exp_table_to_hm_table <- function(expression_table, cell_type){
+avg_exp_table_to_hm_table <- function(expression_table){
   # initialise table
   hm_table <- NULL
   # go through the conditions
@@ -1114,7 +1130,7 @@ mast_meta_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/
 write_meta_mast(NULL, mast_output_prepend, mast_output_append, mast_meta_output_loc)
 
 # do the same for the 3h vs 24h stuff
-mast_meta_output_3h24h_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20200713_3h24h/rna/'
+mast_meta_output_3h24h_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106_3h24h/rna/'
 write_meta_mast_3hvs24h(NULL, mast_output_prepend, mast_output_append, mast_meta_output_3h24h_loc)
 
 
@@ -1351,9 +1367,11 @@ filtered_names <- get_filtered_pathway_names(pathways, pathway_mappings, 'R-HSA-
 # get the df that is left after filtering
 pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
 pathway_up_df_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)
-pathway_up_df_filtered[pathway_up_df_filtered==0] <- 400
+#pathway_up_df_filtered[pathway_up_df_filtered==0] <- 400
+pathway_up_df_filtered[pathway_up_df_filtered==0] <- max(pathway_up_df_filtered) + 1
 # check what is top now
 pathway_up_df_filtered_top_10 <- get_top_pathways(pathway_up_df_filtered, 10, T)
+pathway_up_df_filtered_top_10 <- 1 - (pathway_up_df_filtered_top_10 / max(pathway_up_df_filtered))
 # show pathways
 cc <- get_color_coding_dict()
 colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
@@ -1361,8 +1379,11 @@ colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T'
 colors_m <- cbind(colors_ct, colors_cond)
 colnames(colors_m) <- c('celltype',
                         'condition')
+
+rownames(pathway_up_df_filtered_top_10) <- sapply( strwrap(rownames(pathway_up_df_filtered_top_10), 50, simplify=FALSE), paste, collapse="\n" )
+
 heatmap.3(t(as.matrix(pathway_up_df_filtered_top_10)),
-          col=(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(22,10), dendrogram = 'none')
+          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(20,8), dendrogram = 'none', to_na = 0)
 
 cell_type_numbers_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
 
@@ -1479,7 +1500,8 @@ colors_pathways_only_pathways <- pathways_to_hm_colors(v3_mono_avg_exp_normed_de
 heatmap.3(t(v3_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"RdBu")), margins = c(5,10), ColSideColors = colors_pathways)
 heatmap.3(t(v3_mono_avg_exp_normed_de_hmt_only_pathways), labCol = NA, col=(brewer.pal(10,"YlOrRd")), margins = c(5,10), ColSideColors = colors_pathways_only_pathways)
 
-
+# read again
+pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
 # filter to immune pathways
 pathway_up_df_mono_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]]
 # remove the monocyte and UTX monniker from the colnames
@@ -1487,33 +1509,52 @@ colnames(pathway_up_df_mono_filtered) <- gsub('monocyteUTX', '', colnames(pathwa
 # store which were zero
 pathway_up_df_mono_filtered_nonresults <- pathway_up_df_mono_filtered==0
 # now set to max instead
-pathway_up_df_mono_filtered[pathway_up_df_mono_filtered==0] <- max(pathway_up_df_mono_filtered)
+pathway_up_df_mono_filtered[pathway_up_df_mono_filtered==0] <- max(pathway_up_df_mono_filtered) + 1
+
 # get the most shared mono pathways that were upregulated
 mono_most_shared_pathways <- get_most_shared_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10)
-# subset to monocytes and these pathways
+# subset to these pathways
 mono_most_shared_pathways_df <- pathway_up_df_mono_filtered[mono_most_shared_pathways, ]
 # scale to a value from zero to one
-mono_most_shared_pathways_df <- 1 - (mono_most_shared_pathways_df/max(mono_most_shared_pathways_df))
+mono_most_shared_pathways_df <- 1 - (mono_most_shared_pathways_df/max(pathway_up_df_mono_filtered))
 # set other hclust function
 #distfunc <- function(x) daisy(x,metric="gower")
 #hclustfunc <- function(x) hclust(x, method="complete")
+colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 1)
+colors_ct <- c(
+  #rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),
+  rep(cc[['monocyte']], times=6)
+  #,rep(cc[['NK']], times=6)
+  )
+colors_m <- cbind(colors_ct, colors_cond)
+colnames(colors_m) <- c('celltype',
+                        'condition')
+# fix some of these insanely long names
+rownames(mono_most_shared_pathways_df) <- sapply( strwrap(rownames(mono_most_shared_pathways_df), 50, simplify=FALSE), paste, collapse="\n" )
+
 pdf('~/Desktop/mono_most_shared.pdf', width = 20, height=20)
-mono_most_shared_pathways_df_h <- heatmap.3(t(mono_most_shared_pathways_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)), to_na = min(mono_most_shared_pathways_df))
+mono_most_shared_pathways_df_h <- heatmap.3(t(mono_most_shared_pathways_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(20,6), to_na = 0)
 dev.off()
 
 # get the most shared mono pathways that were upregulated
-mono_most_varied_pathways <- get_most_varied_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10, use_sd_method = T)
+mono_most_varied_pathways <- get_most_varied_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10, use_sd_method = T, disregard_3h_vs_24h = T)
 # subset to monocytes and these pathways
 mono_most_varied_pathways_df <- pathway_up_df_mono_filtered[mono_most_varied_pathways, ]
 # scale to a value from zero to one
-mono_most_varied_pathways_df <- 1 - (mono_most_varied_pathways_df/max(mono_most_varied_pathways_df))
+mono_most_varied_pathways_df <- 1 - (mono_most_varied_pathways_df/max(pathway_up_df_mono_filtered))
 # remove the monocyte and UTX monniker from the colnames
 colnames(mono_most_varied_pathways_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_df))
 # set other hclust function
 #distfunc <- function(x) daisy(x,metric="gower")
 #hclustfunc <- function(x) hclust(x, method="complete")
+colors_m <- cbind(colors_ct, colors_cond)
+colnames(colors_m) <- c('celltype',
+                        'condition')
+# fix some of these insanely long names
+rownames(mono_most_varied_pathways_df) <- sapply( strwrap(rownames(mono_most_varied_pathways_df), 50, simplify=FALSE), paste, collapse="\n" )
+
 pdf('~/Desktop/mono_most_varied.pdf', width = 20, height=20)
-heatmap.3(t(mono_most_varied_pathways_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)))
+heatmap.3(t(mono_most_varied_pathways_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(20,6), to_na = 0)
 dev.off()
 
 
@@ -1524,8 +1565,12 @@ mono_most_varied_pathways_nosd_df <- pathway_up_df[mono_most_varied_pathways_nos
 mono_most_varied_pathways_nosd_df <- 1 - (mono_most_varied_pathways_nosd_df/max(mono_most_varied_pathways_nosd_df))
 # remove the monocyte and UTX monniker from the colnames
 colnames(mono_most_varied_pathways_nosd_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_nosd_df))
+# 
+colors_m <- cbind(colors_ct, colors_cond)
+colnames(colors_m) <- c('celltype',
+                        'condition')
 pdf('~/Desktop/mono_most_varied_nosd.pdf', width = 20, height=20)
-heatmap.3(t(mono_most_varied_pathways_nosd_df), dendrogram = 'none', margins=c(25,6), col=(colorRampPalette(c('lightgoldenrod1', 'red'))(100)))
+heatmap.3(t(mono_most_varied_pathways_nosd_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(25,6), to_na = 0)
 dev.off()
 
 
