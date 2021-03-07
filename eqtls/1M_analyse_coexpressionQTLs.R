@@ -1575,34 +1575,36 @@ plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend,
   # init plot data
   plot_data <- NULL
   for(condition in conditions){
-    # paste together the path
-    coexp_path <- paste(prepend, condition, midpend, geneA, '.', i, '.tsv', sep='')
-    # load file
-    cors <- read.table(coexp_path, header=T, row.names=1, sep='\t')
-    # subset to only positive or negative correlations
-    if(avg_pos_only){
-      mean_row <- apply(cors, 1, mean)
-      cors <- cors[mean_row >= 0, ]
-    }
-    if(avg_neg_only){
-      mean_row <- apply(cors, 1, mean)
-      cors <- cors[mean_row <= 0, ]
-    }
-    # check each genotype
-    for(geno in colnames(cors)){
-      cors_geno_and_genes <- cors[sigs, geno]
-      # turn into dataframe
-      cors_geno_and_genes_df <- data.frame(cor=cors_geno_and_genes, stringsAsFactors = F)
-      cors_geno_and_genes_df$condition <- condition
-      cors_geno_and_genes_df$geno <- geno
-      # add to df
-      if(is.null(plot_data)){
-        plot_data <- cors_geno_and_genes_df
+    try({
+      # paste together the path
+      coexp_path <- paste(prepend, condition, midpend, geneA, '.', i, '.tsv', sep='')
+      # load file
+      cors <- read.table(coexp_path, header=T, row.names=1, sep='\t')
+      # subset to only positive or negative correlations
+      if(avg_pos_only){
+        mean_row <- apply(cors, 1, mean)
+        cors <- cors[mean_row >= 0, ]
       }
-      else{
-        plot_data <- rbind(plot_data, cors_geno_and_genes_df)
+      if(avg_neg_only){
+        mean_row <- apply(cors, 1, mean)
+        cors <- cors[mean_row <= 0, ]
       }
-    }
+      # check each genotype
+      for(geno in colnames(cors)){
+        cors_geno_and_genes <- cors[sigs, geno]
+        # turn into dataframe
+        cors_geno_and_genes_df <- data.frame(cor=cors_geno_and_genes, stringsAsFactors = F)
+        cors_geno_and_genes_df$condition <- condition
+        cors_geno_and_genes_df$geno <- geno
+        # add to df
+        if(is.null(plot_data)){
+          plot_data <- cors_geno_and_genes_df
+        }
+        else{
+          plot_data <- rbind(plot_data, cors_geno_and_genes_df)
+        }
+      }
+    })
   }
   # sort conditions
   levels(plot_data$geno) <- conditions
@@ -1818,14 +1820,14 @@ for(coeqtl_gene in coeqtl_genes){
 for(coeqtl_gene in coeqtl_genes){
   try({
   plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_cd4t_per_gt_avg_correlations_v2.png', sep='')
-  p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
-  p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
-  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_cd4t_avg_cor_matrix_')
+  p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_cd4t_avg_cor_matrix_')
+  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_cd4t_avg_cor_matrix_')
   ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
   plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_cd4t_per_gt_avg_correlations_v3.png', sep='')
-  p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
-  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
-  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_cd4t_avg_cor_matrix_')
+  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_cd4t_avg_cor_matrix_')
+  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd4t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_cd4t_avg_cor_matrix_')
   ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
   })
 }
@@ -1833,18 +1835,47 @@ for(coeqtl_gene in coeqtl_genes){
 for(coeqtl_gene in coeqtl_genes){
   try({
     plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_cd8t_per_gt_avg_correlations_v2.png', sep='')
-    p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
-    p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
-    p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+    p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_cd8t_avg_cor_matrix_')
+    p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_cd8t_avg_cor_matrix_')
+    p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_cd8t_avg_cor_matrix_')
     ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
     plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_cd8t_per_gt_avg_correlations_v3.png', sep='')
-    p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
-    p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
-    p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+    p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_cd8t_avg_cor_matrix_')
+    p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_cd8t_avg_cor_matrix_')
+    p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_cd8t_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_cd8t_avg_cor_matrix_')
     ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
   })
 }
 
+for(coeqtl_gene in coeqtl_genes){
+  try({
+    plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_dc_per_gt_avg_correlations_v2.png', sep='')
+    p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_dc_avg_cor_matrix_')
+    p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_cd8t_avg_cor_matrix_')
+    p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_cd8t_avg_cor_matrix_')
+    ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
+    plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_dc_per_gt_avg_correlations_v3.png', sep='')
+    p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_dc_avg_cor_matrix_')
+    p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_dc_avg_cor_matrix_')
+    p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_dc_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_dc_avg_cor_matrix_')
+    ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+  })
+}
+
+for(coeqtl_gene in c('RPS26', 'CLEC12A')){
+  try({
+    plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_dc_mono_genes_per_gt_avg_correlations_v2.png', sep='')
+    p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_monocyte_avg_cor_matrix_')
+    p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_monocyte_avg_cor_matrix_')
+    p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_monocyte_avg_cor_matrix_')
+    ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
+    plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_dc_mono_genes_per_gt_avg_correlations_v3.png', sep='')
+    p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', midpend='_monocyte_avg_cor_matrix_')
+    p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, midpend='_monocyte_avg_cor_matrix_')
+    p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, midpend='_monocyte_avg_cor_matrix_')
+    ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+  })
+}
 for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
   dev.off()
 }
