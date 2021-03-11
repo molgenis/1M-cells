@@ -5,7 +5,7 @@ library(data.table)
 
  
 #PREPARED ANALYSIS
-do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='-'){
+do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='-', na_to_zero=F, allowed_zeroness=0.0){
   # read the genotype data
   vcf <- fread(combined_genotype_location)
   genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
@@ -34,7 +34,14 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   #prepared_correlations <- read.table(prepared_correlations, sep = '\t', header = T, row.names = 1)
   print(paste('genes before filtering: ', str(nrow(prepared_correlations))))
   # remove the correlations of genes that did not have complete correlations calculated
-  prepared_correlations <- prepared_correlations[apply(prepared_correlations, 1, function(x){!any(is.na(x))}),]
+  # prepared_correlations <- prepared_correlations[apply(prepared_correlations, 1, function(x){!any(is.na(x))}),] # now using a cutoff
+  # remove according to the zeroness
+  zeroness <- apply(prepared_correlations, 1, function(x){sum(is.na(x)) / length(x)})
+  prepared_correlations <- prepared_correlations[zeroness <= allowed_zeroness, ]
+  # convert NA to zero if requested
+  if(na_to_zero){
+    prepared_correlations[is.na(prepared_correlations)] <- 0
+  }
   print(paste('genes after filtering: ', str(nrow(prepared_correlations))))
   # remove the prepared correlations that we do not have genotype data for
   prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
@@ -187,7 +194,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
 
 do_regression <- function(correlations, snp, weights, datasets, to_numeric=T){
   if(to_numeric){
-    snp <- as.numeric(as.factor(snp))
+    snp <- as.numeric(as.factor(snp)) - 1
   }
   # create dataframe to house data
   lm_data <- data.frame(correlations=correlations, snp=snp)
@@ -262,6 +269,24 @@ do_regression <- function(correlations, snp, weights, datasets, to_numeric=T){
   result[['std.error']] <- std.error
   result[['t']] <- tval
   result[['p']] <- pval
+  # calculate the correlation coefficient from the t and the square of the number of participants
+  r <- tval / sqrt(nrow(lm_data) - 2 + tval ** 2)
+  result[['r']] <- r
+  # calculate the residual sum of squares
+  rss <- sum(resid(model) ^ 2)
+  # add as well
+  result[['rss']] <- rss
+  # add the number of participants
+  result[['n_part']] <- nrow(lm_data)
+  # add the number of cells
+  result[['n_cell']] <- NA
+  if(!is.null(weights)){
+    result[['n_cell']] <- sum(lm_data$weights)
+  }
+  # paste the freq
+  freqs <- data.frame(table(lm_data$snp))
+  freq_string <- paste(freqs$Var1, freqs$Freq, collapse = ',', sep = ':')
+  result[['freq']] <- freq_string
   return(result)
 }
 
@@ -347,15 +372,15 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
   return(interaction.result)
 }
 
-do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='-'){
+do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='_', na_to_zero=F, allowed_zeroness=0.0){
   # read the correlations
   prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
   # do the actual work
-  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations, gene_split_character = gene_split_character)
+  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations, gene_split_character = gene_split_character, , na_to_zero=na_to_zero, allowed_zeroness=allowed_zeroness)
   return(interaction.result)
 }
 
-do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='-'){
+do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_correlations_location, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=NULL, datasets=NULL, cell_counts_location=NULL, nr_of_permutations=20, gene_split_character='_', na_to_zero=F, allowed_zeroness=0.0){
   # read the datasets annotation file
   dataset_annotation <- read.table(dataset_annotation_loc, sep = '\t', header = T, row.names = 1)
   # replace the dash with a dot, as the colnames in the dataset annotation are auto-replace
@@ -380,7 +405,7 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
     relevant_prepared_correlations <- prepared_correlations[, colnames(prepared_correlations) %in% relevant_correlation_colnames, drop = F]
     if(nrow(relevant_prepared_correlations) > 0){
       # do the interaction analysis with just this correlation
-      interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations, gene_split_character=gene_split_character)
+      interaction_analysis_dataset <- do_interaction_analysis_prepared_correlations(relevant_prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=cell_counts_location, dataset_annotation_loc=NULL, nr_of_permutations=nr_of_permutations, gene_split_character=gene_split_character, na_to_zero=na_to_zero, allowed_zeroness=allowed_zeroness)
       if(!is.null(interaction_analysis_dataset)){
         # set the dataset as a column
         interaction_analysis_dataset$dataset <- as.character(dataset)
@@ -529,7 +554,7 @@ plot_correlation_per_genotype <- function(prepared_correlations_location, combin
   return(plotted)
 }
 
-create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte')){
+create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), method='spearman'){
   # check the different cell types
   for(cell_type in intersect(cell_types, unique(as.character(seurat_object@meta.data[[cell_type_column]])))){
     # subset to this cell type
@@ -543,7 +568,7 @@ create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, outpu
       seurat_cell_type_condition <- seurat_cell_type[, !is.na(seurat_cell_type@meta.data[[condition_column]]) & seurat_cell_type@meta.data[[condition_column]] == condition]
       print(paste('subset condition:', condition))
       # create the correlation table for this cell type and condition
-      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column)
+      cor_cell_type_condition <- create_correlations_from_genes(seurat_object = seurat_cell_type_condition, geneAs = geneAs, geneBs = geneBs, assignment_column = assignment_column, method = method)
       # add the condition to the column names
       colnames(cor_cell_type_condition) <- paste(colnames(cor_cell_type_condition), condition, sep = '-')
       # add to exising correlations if possible
@@ -556,17 +581,17 @@ create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, outpu
     }
     # paste together an output location
     output_loc_full <- paste(output_loc, cell_type, '.tsv', sep = '')
-    print(head(cell_type_correlations))
     # write the table
     write.table(cell_type_correlations, output_loc_full, sep = '\t', row.names=T, col.names=T, quote=F)
   }
 }
 
-create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment'){
+
+create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assignment_column='assignment', gene_sep='_', method='spearman'){
   # get every gene combination
   gene_combinations <- expand.grid(A=geneAs, B=geneBs)
   # turn into vector
-  gene_combinations <- paste(gene_combinations$A, gene_combinations$B, sep='-')
+  gene_combinations <- paste(gene_combinations$A, gene_combinations$B, sep=gene_sep)
   # init table
   correlation_table <- matrix(, nrow=length(gene_combinations), ncol=length(unique(seurat_object@meta.data[[assignment_column]])))
   rownames(correlation_table) <- gene_combinations
@@ -582,9 +607,9 @@ create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assign
         # we need to try, because sometimes a gene might not be present. Failing is okay, because it will just leave the default NA
         try({
           # calculate the correlation
-          correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = 'spearman')
+          correlation <- cor(as.vector(unlist(seurat_participant$SCT@counts[geneA, ])), as.vector(unlist(seurat_participant$SCT@counts[geneB, ])), method = method)
           # set this correlation
-          genepair <- paste(geneA, geneB, sep = '-')
+          genepair <- paste(geneA, geneB, sep = gene_sep)
           correlation_table[genepair, participant] <- correlation
         })
       }
