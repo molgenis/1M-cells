@@ -5,7 +5,7 @@ library(data.table)
 
  
 #PREPARED ANALYSIS
-do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='-', na_to_zero=F, allowed_zeroness=0.0){
+do_interaction_analysis_prepared_correlations <- function(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, cell_counts_location=NULL, dataset_annotation_loc=NULL, nr_of_permutations=20, gene_split_character='_', na_to_zero=F, allowed_zeroness=0.0){
   # read the genotype data
   vcf <- fread(combined_genotype_location)
   genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
@@ -26,13 +26,31 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   genotypes_all[genotypes_all == '.|0'] <- NA
   genotypes_all[genotypes_all == './.'] <- NA
   genotypes_all[genotypes_all == '.|.'] <- NA
+  genotypes_all[genotypes_all == '2/.'] <- NA
+  genotypes_all[genotypes_all == '2|.'] <- NA
+  genotypes_all[genotypes_all == './2'] <- NA
+  genotypes_all[genotypes_all == '.|2'] <- NA
+  genotypes_all[genotypes_all == './.'] <- NA
+  genotypes_all[genotypes_all == '.|.'] <- NA
+  genotypes_all[genotypes_all == '.:.'] <- NA
+  genotypes_all[genotypes_all == '2/2'] <- NA
+  genotypes_all[genotypes_all == '2|2'] <- NA
+  genotypes_all[genotypes_all == '1/2'] <- NA
+  genotypes_all[genotypes_all == '1|2'] <- NA
+  genotypes_all[genotypes_all == '2/1'] <- NA
+  genotypes_all[genotypes_all == '2|1'] <- NA
+  genotypes_all[genotypes_all == '0/2'] <- NA
+  genotypes_all[genotypes_all == '0|2'] <- NA
+  genotypes_all[genotypes_all == '2/0'] <- NA
+  genotypes_all[genotypes_all == '2|0'] <- NA
+  
   genotypes_all <- data.frame(genotypes_all)
   rownames(genotypes_all) <- vcf$ID
   # get the mapping of the probe to the cis SNP
   snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
   # read the correlations
   #prepared_correlations <- read.table(prepared_correlations, sep = '\t', header = T, row.names = 1)
-  print(paste('genes before filtering: ', str(nrow(prepared_correlations))))
+  print(paste('genes before filtering: ', (nrow(prepared_correlations))))
   # remove the correlations of genes that did not have complete correlations calculated
   # prepared_correlations <- prepared_correlations[apply(prepared_correlations, 1, function(x){!any(is.na(x))}),] # now using a cutoff
   # remove according to the zeroness
@@ -376,7 +394,7 @@ do_interaction_analysis_prepared_correlations_use_loc <- function(prepared_corre
   # read the correlations
   prepared_correlations <- read.table(prepared_correlations_location, sep = '\t', header = T, row.names = 1)
   # do the actual work
-  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations, gene_split_character = gene_split_character, , na_to_zero=na_to_zero, allowed_zeroness=allowed_zeroness)
+  interaction.result <- do_interaction_analysis_prepared_correlations(prepared_correlations, combined_genotype_location, snp_probe_mapping_location, dataset_annotation_loc=dataset_annotation_loc, cell_counts_location=cell_counts_location, nr_of_permutations=nr_of_permutations, gene_split_character = gene_split_character, na_to_zero=na_to_zero, allowed_zeroness=allowed_zeroness)
   return(interaction.result)
 }
 
