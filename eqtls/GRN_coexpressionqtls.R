@@ -62,7 +62,7 @@ do_interaction_analysis_prepared_correlations <- function(prepared_correlations,
   }
   print(paste('genes after filtering: ', str(nrow(prepared_correlations))))
   # remove the prepared correlations that we do not have genotype data for
-  prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
+  #prepared_correlations <- prepared_correlations[, startsWith(colnames(prepared_correlations), 'TEST') | startsWith(colnames(prepared_correlations), 'LLDeep') | startsWith(colnames(prepared_correlations), 'X1_LLDeep')]
   # create a regex to get the last index of the dot
   last_dash_pos <- "\\."
   # extract the participants from the correlation matrix column names
@@ -436,7 +436,7 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
         }
       }
       else{
-        print(paste('null result for', str(dataset)))
+        print(paste('null result for', (dataset)))
       }
     }
     else{

@@ -1,4 +1,13 @@
 
+######################
+# libraries          #
+######################
+
+library(data.table)
+require("heatmap.plus")
+library(RColorBrewer)
+library(VennDiagram)
+
 
 heatmap.3 <- function(x,
                       Rowv = TRUE, Colv = if (symm) "Rowv" else TRUE,
@@ -751,6 +760,30 @@ get_child_genes <- function(heatmap_branch){
 }
 
 
+pathways_to_hm_colors <- function(expression_heatmap, pathways_named_lists){
+  colors_df <- NULL
+  for(pathway_name in names(pathways_named_lists)){
+    # get the pathway genes
+    pathway.genes <- read.table(pathways_named_lists[[pathway_name]], header=F)
+    pathway.genes <- as.character(pathway.genes$V1)
+    pathway.genes <- pathway.genes[pathway.genes %in% rownames(expression_heatmap)]
+    pathway.annotation <- rep("gray97", nrow(expression_heatmap))
+    pathway.annotation[rownames(expression_heatmap) %in% pathway.genes] <- "gray55"
+    # add to colors df
+    if(is.null(colors_df)){
+      colors_df <- data.frame(pathway.annotation)
+      colnames(colors_df) <- pathway_name
+    }
+    else{
+      colors_df[[pathway_name]] <- pathway.annotation
+    }
+  }
+  # transform to matrix
+  colors_m <- as.matrix(colors_df)
+  return(colors_m)
+}
+
+
 # this is the reactome ID for the immune system
 immune_system_reactome_id <- 'R-HSA-168256'
 # load the pathways
@@ -767,8 +800,8 @@ pathways_up_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20
 # the location of the DE output
 mast_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/'
 # location of the expression
-v2_exp_loc <- '/data/scRNA/expression/1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029_avgexp_sct.tsv'
-v3_exp_loc <- '/data/scRNA/expression/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106_avgexp_sct.tsv'
+v2_exp_loc <- '/data/scRNA/expression/1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029_avgexp_rna.tsv'
+v3_exp_loc <- '/data/scRNA/expression/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106_avgexp_rna.tsv'
 
 # get all the pathway output
 pathway_list <- get_pathway_tables(pathways_up_loc, cell_types = c('monocyte'))
@@ -798,14 +831,62 @@ v2_expression_mono_de_hm <- avg_exp_table_to_hm_table(v2_expression_mono_de)
 # scale to the max of the row
 v2_expression_mono_de_hm <- apply(v2_expression_mono_de_hm, 1, function(x){x <- x/max(x)})
 
+# grab some pathway genes to use for annotation
+pathways_list <- list()
+# 3h
+pathways_list[['Interferon signalling']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
+# 24h
+#pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
+# all
+pathways_list[['Cytokine signalling']] <- "/data/scRNA/pathways/REACTOME_Cytokine_Signaling_in_Immune_system_genes.txt"
+# 3h
+pathways_list[['Interleukin-1 signalling']] <- "/data/scRNA/pathways/REACTOME_Interleukin-1_signaling.txt"
+# 24h
+pathways_list[['Cross-presentation of soluble exogenous antigens']] <- "/data/scRNA/pathways/REACTOME_Cross-presentation_of_soluble_exogenous_antigens.txt"
+# 24h
+#pathways_list[['Regulation of RAS by GAPs']] <- "/data/scRNA/pathways/REACTOME_Regulation_of_RAS_by_GAPs.txt"
+# all
+#pathways_list[['Neutrophil degranulation']] <- "/data/scRNA/pathways/REACTOME_Neutrophil_degranulation.txt"
+# 24h
+pathways_list[['C-type lectin receptors']] <- "/data/scRNA/pathways/REACTOME_C-type_lectin_receptors.txt"
+
+
+# add all the genes from the pathways togeter
+pathway_genes <- c()
+for(pathway in names(pathways_list)){
+  genes_pathway_loc <- pathways_list[[pathway]]
+  genes_pathway <- read.table(genes_pathway_loc, header=F, stringsAsFactors = F)$V1
+  pathway_genes <- c(pathway_genes, genes_pathway)
+}
+pathway_genes <- unique(pathway_genes)
+
+# transform the pathways to colors
+colors_pathways_v2_de_hm <- pathways_to_hm_colors(t(v2_expression_mono_de_hm), pathways_list)
+
 # plot that stuff
-heatmap.3(v2_expression_mono_de_hm, col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'column', labCol = NA)
+heatmap.3(v2_expression_mono_de_hm, col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v2_de_hm)
 
 
-# read the file
-pathway_tbl <- read.table('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/monocyteUTX24hCA_sig_up_pathways.txt', sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
-# subset to immune
-pathway_tbl_immune <- filter_pathway_on_category(pathway_tbl, filtered_names)
+
+
+# now with all DE genes
+v2_expression <- read.table(v2_exp_loc, header = T, sep = '\t')
+v2_expression_mono_de_all <- v2_expression[v2_expression$gene %in% rownames(lfc_de_df) & v2_expression$cell_type == 'monocyte', ]
+v2_expression_mono_de_all_hm <- avg_exp_table_to_hm_table(v2_expression_mono_de_all)
+v2_expression_mono_de_all_hm <- data.frame(t(apply(v2_expression_mono_de_all_hm, 1, function(x){x <- x/max(x)})))
+colnames(v2_expression_mono_de_all_hm) <- gsub('X', '', colnames(v2_expression_mono_de_all_hm))
+colors_pathways_v2_de_all_hm <- pathways_to_hm_colors(v2_expression_mono_de_all_hm, pathways_list)
+heatmap.3(t(v2_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v2_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression')
+
+# and V3
+v3_expression <- read.table(v3_exp_loc, header = T, sep = '\t')
+v3_expression_mono_de_all <- v3_expression[v3_expression$gene %in% rownames(lfc_de_df) & v3_expression$cell_type == 'monocyte', ]
+v3_expression_mono_de_all_hm <- avg_exp_table_to_hm_table(v3_expression_mono_de_all)
+v3_expression_mono_de_all_hm <- data.frame(t(apply(v3_expression_mono_de_all_hm, 1, function(x){x <- x/max(x)})))
+colnames(v3_expression_mono_de_all_hm) <- gsub('X', '', colnames(v3_expression_mono_de_all_hm))
+colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_hm, pathways_list)
+heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression')
+
 
 
 
