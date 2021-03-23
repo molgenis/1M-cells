@@ -834,21 +834,31 @@ v2_expression_mono_de_hm <- apply(v2_expression_mono_de_hm, 1, function(x){x <- 
 # grab some pathway genes to use for annotation
 pathways_list <- list()
 # 3h
-pathways_list[['Interferon signalling']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
-# 24h
-#pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
-# all
-pathways_list[['Cytokine signalling']] <- "/data/scRNA/pathways/REACTOME_Cytokine_Signaling_in_Immune_system_genes.txt"
+pathways_list[['Interferon Signalling']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
 # 3h
 pathways_list[['Interleukin-1 signalling']] <- "/data/scRNA/pathways/REACTOME_Interleukin-1_signaling.txt"
+# 3h
+#pathways_list[['MyD88 cascade initiated on plasma membrane']] <- "/data/scRNA/pathways/REACTOME_MyD88_cascade_initiated_on_plasma_membrane.txt"
+# 3h
+#pathways_list[['MyD88 dependent cascade initiated on endosome']] <- "/data/scRNA/pathways/REACTOME_MyD88_dependent_cascade_initiated_on_endosome.txt"
+# 3h
+pathways_list[['Toll-Like Receptors Cascades']] <- "/data/scRNA/pathways/REACTOME_Toll-Like_Receptors_Cascades.txt"
 # 24h
-pathways_list[['Cross-presentation of soluble exogenous antigens']] <- "/data/scRNA/pathways/REACTOME_Cross-presentation_of_soluble_exogenous_antigens.txt"
+#pathways_list[['Dectin-1 mediated noncanonical NF-kB signaling']] <- "/data/scRNA/pathways/REACTOME_Dectin-1_mediated_noncanonical_NF-kB_signaling.txt"
+# 24h, bit in 3h
+#pathways_list[['CLEC7A (Dectin-1) signaling']] <- "/data/scRNA/pathways/REACTOME_CLEC7A_(Dectin-1)_signaling.txt"
+# 24h
+#pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
+# 24h
+#pathways_list[['Cross-presentation of soluble exogenous antigens']] <- "/data/scRNA/pathways/REACTOME_Cross-presentation_of_soluble_exogenous_antigens.txt"
 # 24h
 #pathways_list[['Regulation of RAS by GAPs']] <- "/data/scRNA/pathways/REACTOME_Regulation_of_RAS_by_GAPs.txt"
-# all
-#pathways_list[['Neutrophil degranulation']] <- "/data/scRNA/pathways/REACTOME_Neutrophil_degranulation.txt"
 # 24h
 pathways_list[['C-type lectin receptors']] <- "/data/scRNA/pathways/REACTOME_C-type_lectin_receptors.txt"
+# all
+#pathways_list[['Neutrophil degranulation']] <- "/data/scRNA/pathways/REACTOME_Neutrophil_degranulation.txt"
+# all
+#pathways_list[['Cytokine signalling']] <- "/data/scRNA/pathways/REACTOME_Cytokine_Signaling_in_Immune_system_genes.txt"
 
 
 # add all the genes from the pathways togeter
