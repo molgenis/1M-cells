@@ -376,8 +376,7 @@ plot_per_condition <- function(reqtl_summary, ggpubr=F, to_pct=F, remove_classif
   }
   # order the plots
   if(!is.null(plot_order)){
-    reqtl_summary$condition <- as.factor(reqtl_summary$condition)
-    levels(reqtl_summary$condition) <- plot_order
+    reqtl_summary$condition <- factor(reqtl_summary$condition, levels = plot_order)
   }
   if(use_label_dict){
     ld <- label_dict()

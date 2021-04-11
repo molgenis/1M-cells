@@ -106,8 +106,8 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
             panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
             panel.border = element_rect(colour = "grey", fill=NA, size=2)) + 
       scale_color_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
-      ylab(gene1) +
-      xlab(gene2) +
+      ylab(paste(gene1, 'expression')) +
+      xlab(paste(gene2, 'expression')) +
       geom_smooth(method="lm") +
       ggtitle(title)
     
@@ -142,7 +142,7 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
 }
 
 
-plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T, to_numeric=F){
+plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylims=NULL){
   # use the supplied gene if possible
   gene_to_use <- gene_b
   if(is.null(gene_to_use)){
@@ -180,12 +180,37 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
     }
     # merge the SNP and correlation
     plot_data <- data.frame(participant=common_data, snp=snps, correlation=cor_gene)
+    # rename SNPs if requested
+    if(!is.null(snp_rename)){
+      plot_data$snp <- unlist(snp_rename[plot_data$snp])
+      plot_data$snp <- as.factor(plot_data$snp)
+    }
     # do plotting
-    p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp)) + 
-      geom_boxplot() +
+    p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp), pch=21, size=0.75, alpha=1) + 
+      geom_boxplot(outlier.shape = NA) +
       geom_jitter(width = 0.1, alpha = 0.2) +
       theme_bw() + 
-      ggtitle(paste(snp, gene_name, gene_to_use, condition, sep = ' '))
+      ggtitle(paste(snp, gene_name, gene_to_use, condition, sep = ' ')) +
+      scale_fill_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
+      ylab(paste(gene_name, '-', gene_to_use, ' Spearman correlation', sep='')) +
+      xlab('genotype') + ylim(c(-0.3, 0.7))
+    if(!is.null(p.value)){
+      p <- p + annotation_custom(
+        grobTree(textGrob(
+          label = paste('P = ',p.value[[i]]), x=0.5, y=0.95, gp=gpar(col="gray", fontsize=13, just=0))
+        )
+      )
+    }
+    if(!is.null(r.value)){
+      p <- p + annotation_custom(
+        grobTree(textGrob(
+          label = paste('r = ',r.value[[i]]), x=0.5, y=0.92, gp=gpar(col="gray", fontsize=13, just=0))
+        )
+      )
+    }
+    if(!is.null(ylims)){
+      p <- p + ylim(ylims)
+    }
     # add to plots
     plots[[i]] <- p
   }
@@ -577,15 +602,20 @@ write_significant_genes <- function(parent_output_dir_prepend, parent_output_dir
   }
 }
 
-get_gene_lists <- function(tsv_output_loc){
+get_gene_lists <- function(tsv_output_loc, use_threshold=T){
   # read the table
   result <- read.table(tsv_output_loc, sep = '\t', header = T, row.names = 1)
   # create a list to store the genes
   sig_genes_per_condition <- list()
   # check each condition, which is per column
   for(condition in colnames(result)){
-    # get for the condition in the column, if it was tested, and if it was below the significance threshold for this condition
-    sig_genes <- rownames(result[!is.na(result[[condition]]) & result[[condition]] <= result['significance_threshold', condition], ])
+    if(use_threshold){
+      # get for the condition in the column, if it was tested, and if it was below the significance threshold for this condition
+      sig_genes <- rownames(result[!is.na(result[[condition]]) & result[[condition]] <= result['significance_threshold', condition], ])
+    }
+    else{
+      sig_genes <- rownames(result[!is.na(result[[condition]]) & result[[condition]] < 0.05, ])
+    }
     # remove significance threshold itself
     sig_genes <- sig_genes[!(sig_genes %in% c('significance_threshold'))]
     # add to the list under the condition name
@@ -780,7 +810,7 @@ get_significant_gene_overlap <- function(input_path_prepend, input_path_append, 
   return(plots_per_geneA)
 }
 
-get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps, cell_type='monocyte', to_numeric=F, sig_only=T){
+get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps, cell_type='monocyte', to_numeric=T, sig_only=T, cell_counts=NULL, na_to_zero=T){
   # build the input directory
   output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
   # get the most significant one otherwise
@@ -802,12 +832,15 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
       if(to_numeric){
         snp_i <- as.numeric(as.factor(snp_i)) - 1
       }
+      if(na_to_zero){
+        cor_i[is.na(cor_i)] <- 0
+      }
       # subset to the genes we care about
       if(sig_only){
         cor_i <- cor_i[sigs_per_cond[[condition]], ]
       }
       # do the interaction analysis
-      interaction.statistics <- interaction.regression(cor.matrix = cor_i, eqtl.gene = gene, snp = snp_i, cell.counts = NULL)
+      interaction.statistics <- interaction.regression(cor.matrix = cor_i, eqtl.gene = gene, snp = snp_i, cell.counts = as.vector(unlist(cell_counts[[condition]][[i]][colnames(cor_i)])))
       r.matrix <- (interaction.statistics$statistic / sqrt(length(snp_i) - 2 + interaction.statistics$statistic ** 2))
       r.matrix <- data.frame(r.matrix)
       if(sig_only){
@@ -1591,7 +1624,7 @@ plot_baseline_correlations_ggparcoord <- function(correlations_matrix_per_condit
   ggparcoord(full_matrix)
 }
 
-plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend, midpend='_monocyte_avg_cor_matrix_', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), avg_pos_only=F, avg_neg_only=F, coef_path_prepend='', coef_path_append='_rs.tsv', positive_gen_only=F, negative_gen_only=F, na_to_zero=F){
+plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend, midpend='_monocyte_avg_cor_matrix_', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), avg_pos_only=F, avg_neg_only=F, coef_path_prepend='', coef_path_append='_rs.tsv', positive_gen_only=F, negative_gen_only=F, na_to_zero=F, ut_sig_only=F, stim_sig_only=F, stim_sig=F, ut_sig=F, stim_specific_only=F, color_by_condition=F, color_by_genotype=F, remove_prepend='^X', sig_change_loc=NULL, snp_rename=NULL, apply_paper_settings=T, xlab=NULL, ylab=NULL, remove_outliers=F, ylim=NULL){
   # get the significant genes per condition
   sigs_per_cond <- get_gene_lists(tsv_loc)
   # subset to conditions we care about
@@ -1602,6 +1635,8 @@ plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend,
   sigs <- unique(sigs)
   # init plot data
   plot_data <- NULL
+  title <- 'average gene expression'
+  runthrough1 <- T
   for(condition in conditions){
     try({
       # paste together the path
@@ -1612,22 +1647,61 @@ plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend,
       if(na_to_zero){
         cors[is.na(cors)] <- 0
       }
+      # copy for subsetting
+      sigs_per_cond_nout <- sigs_per_cond
+      sigs_per_cond_nout[['UT']] <- NULL
       # subset to only positive or negative correlations
       if(avg_pos_only){
         mean_row <- apply(cors, 1, mean)
         cors <- cors[mean_row >= 0, ]
+        if(runthrough1){title <- paste(title, 'positive correlation')}
       }
       if(avg_neg_only){
         mean_row <- apply(cors, 1, mean)
         cors <- cors[mean_row <= 0, ]
+        if(runthrough1){title <- paste(title, 'negative correlation')}
       }
       if(positive_gen_only){
         dirs <- read.table(paste(coef_path_prepend, condition, coef_path_append, sep = ''), header=T, row.names=1, sep='\t')
         cors <- cors[rownames(dirs[dirs[[i]] > 0, ]), ]
+        if(runthrough1){title <- paste(title, 'positive gt effect')}
       }
       if(negative_gen_only){
         dirs <- read.table(paste(coef_path_prepend, condition, coef_path_append, sep = ''), header=T, row.names=1, sep='\t')
         cors <- cors[rownames(dirs[dirs[[i]] < 0, ]), ]
+        if(runthrough1){title <- paste(title, 'negative gt effect')}
+      }
+      if(ut_sig_only){
+        cors <- cors[rownames(cors) %in% sigs_per_cond[['UT']] & !(rownames(cors) %in% as.vector(unlist(sigs_per_cond_nout[conditions]))), ]
+        if(runthrough1){title <- paste(title, 'significant in UT only')}
+      }
+      if(stim_sig_only){
+        cors <- cors[!(rownames(cors) %in% sigs_per_cond[['UT']]) & rownames(cors) %in% as.vector(unlist(sigs_per_cond_nout[conditions])), ]
+        if(runthrough1){title <- paste(title, 'significant in stim only')}
+      }
+      if(stim_specific_only){
+        cors <- cors[!(rownames(cors) %in% sigs_per_cond[['UT']]) & rownames(cors) %in% sigs_per_cond[[condition]], ]
+        if(runthrough1){title <- paste(title, 'significant specific stim only')}
+      }
+      if(stim_sig){
+        cors <- cors[(rownames(cors) %in% sigs_per_cond[[condition]]), ]
+        if(runthrough1){title <- paste(title, 'significant in stim')}
+      }
+      if(ut_sig){
+        cors <- cors[(rownames(cors) %in% sigs_per_cond[['UT']]), ]
+        if(runtrough1){title <- paste(title, 'significant in UT')}
+      }
+      if(!is.null(sig_change_loc)){
+        if(!condition == 'UT'){
+          changes <- read.table(sig_change_loc, sep = '\t', header = T, row.names = 1)
+          sig_chances_cond <- rownames(changes[!is.na(changes[[paste('UT_vs_', condition, sep = '')]]) & changes[[paste('UT_vs_', condition, sep = '')]], ])
+          cors <- cors[rownames(cors) %in% sig_chances_cond, ]
+        }
+        else{
+          all_sigs <- unique(as.vector(unlist(get_gene_lists(sig_change_loc, use_threshold = F))))
+          cors <- cors[rownames(cors) %in% all_sigs, ]
+        }
+        if(runthrough1){title <- paste(title, 'nominal effect change')}
       }
       # check each genotype
       for(geno in colnames(cors)){
@@ -1645,12 +1719,62 @@ plot_coeqtl_baseline_correlations_per_gt <- function(geneA, tsv_loc, i, prepend,
           plot_data <- rbind(plot_data, cors_geno_and_genes_df)
         }
       }
+      runthrough1 <- F
     })
   }
-  print(plot_data)
+  # some magic to order the names and remove prepends
+  condition_names <- conditions
+  if(!is.null(remove_prepend)){
+    plot_data$condition <- gsub(remove_prepend, '', plot_data$condition)
+    condition_names <- gsub(remove_prepend, '', condition_names)
+  }
+  plot_data$condition <- factor(plot_data$condition, levels=condition_names)
+  # rename snps if requested
+  if(!is.null(snp_rename)){
+    plot_data$geno <- unlist(snp_rename[plot_data$geno])
+    plot_data$geno <- as.factor(plot_data$geno)
+  }
   # sort conditions
-  levels(plot_data$geno) <- conditions
-  ggplot(plot_data, aes(condition, cor, fill=geno)) + geom_boxplot()
+  p <- ggplot(plot_data, aes(condition, cor, fill=geno)) + geom_boxplot()
+  if(remove_outliers){
+    p <- ggplot(plot_data, aes(condition, cor, fill=geno)) + geom_boxplot(outlier.shape = NA)
+  }
+  if(color_by_condition){
+    p <- ggplot(plot_data, aes(geno, cor, fill=condition))
+    if(remove_outliers){
+      p <- p + geom_boxplot(outlier.shape = NA) + facet_grid(. ~ condition)
+    }
+    else{
+      p <- p + geom_boxplot() + facet_grid(. ~ condition)
+    }
+    cc <- get_color_coding_dict()
+    colScale <- scale_fill_manual(values=unlist(cc[plot_data$condition]))
+    p <- p + colScale
+    p <- p + theme(legend.position = 'none',
+                   #axis.ticks.x = element_blank(),
+                   #axis.text.x = element_blank(),
+                   #axis.title.x = element_blank(),
+                   #axis.title.y = element_blank(),
+                   plot.title = element_text(size = 10)) + 
+                  ggtitle(title)
+  }
+  if(color_by_genotype){
+    #colScale <- scale_fill_manual(values = unlist(cc[plot_data$conditions]))
+    #p <- p + colScale
+  }
+  if(apply_paper_settings){
+    p <- p + theme(axis.text.x = element_text(angle = 90, hjust = 1, size=7), panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white")) + geom_jitter(aes(x=geno, y=cor, fill="none"), pch=21, size=0.5, alpha=0.3, dodge.width=0.4) + scale_color_manual(values="lightgrey")
+  }
+  if(!is.null(xlab)){
+    p <- p + xlab(xlab)
+  }
+  if(!is.null(ylab)){
+    p <- p + ylab(ylab)
+  }
+  if(!is.null(ylim)){
+    p <- p + ylim(ylim)
+  }
+  return(p)
 }
 
 
@@ -1703,34 +1827,6 @@ create_scatter_per_condition_combination <- function(geneA, tsv_loc, plot_save_l
   ggsave(plot_save_loc, arrangeGrob(grobs = condition_plots), width=12, height=8)
 }
 
-
-get_color_coding_dict <- function(){
-  # set the condition colors
-  color_coding <- list()
-  color_coding[["UT"]] <- "grey"
-  color_coding[["3hCA"]] <- "khaki2"
-  color_coding[["24hCA"]] <- "khaki4"
-  color_coding[["3hMTB"]] <- "paleturquoise1"
-  color_coding[["24hMTB"]] <- "paleturquoise3"
-  color_coding[["3hPA"]] <- "rosybrown1"
-  color_coding[["24hPA"]] <- "rosybrown3"
-  color_coding[["X3hCA"]] <- "khaki2"
-  color_coding[["X24hCA"]] <- "khaki4"
-  color_coding[["X3hMTB"]] <- "paleturquoise1"
-  color_coding[["X24hMTB"]] <- "paleturquoise3"
-  color_coding[["X3hPA"]] <- "rosybrown1"
-  color_coding[["X24hPA"]] <- "rosybrown3"
-  # set the cell type colors
-  color_coding[["Bulk"]] <- "black"
-  color_coding[["CD4T"]] <- "#153057"
-  color_coding[["CD8T"]] <- "#009DDB"
-  color_coding[["monocyte"]] <- "#EDBA1B"
-  color_coding[["NK"]] <- "#E64B50"
-  color_coding[["B"]] <- "#71BC4B"
-  color_coding[["DC"]] <- "#965EC8"
-  return(color_coding)
-}
-
 combined_sigs_to_file <- function(sigs_per_geneA, coefs_per_geneA, genes, combinations, output_loc){
   # check each gene
   for(gene in intersect(names(sigs_per_geneA), genes)){
@@ -1764,9 +1860,285 @@ combined_sigs_to_file <- function(sigs_per_geneA, coefs_per_geneA, genes, combin
     pos_dir_out <- paste(output_loc, gene, '_', combs_string, '_pos.txt', sep = '')
     neg_dir_out <- paste(output_loc, gene, '_', combs_string, '_neg.txt', sep = '')
     # write the lists of genes
-    write.table(data.frame(gene=pos_dir_geneBs), pos_dir_out, row.names = F, col.names = F)
-    write.table(data.frame(gene=neg_dir_geneBs), neg_dir_out, row.names = F, col.names = F)
+    write.table(data.frame(gene=pos_dir_geneBs), pos_dir_out, row.names = F, col.names = F, quote=F)
+    write.table(data.frame(gene=neg_dir_geneBs), neg_dir_out, row.names = F, col.names = F, quote=F)
   }
+}
+
+create_re_coeqtl_matrices <- function(gene, cell_type, input_path_prepend, input_path_append, output_path_prepend, output_path_append, unstim_condition='UT', stim_conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), allowed_missingness=0, na_to_zero=T){
+  # build the input directory
+  input_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
+  output_dir <- paste(output_path_prepend, gene, '_meta', output_path_append, sep = '')
+  for(i in 1:2){
+    cor_ut_loc <- paste(input_dir, 'correlationMatrices/', unstim_condition, '_', cell_type, '_correlation_matrix_', gene, '.', i, '.txt', sep = '')
+    cor_ut <- read.table(cor_ut_loc, header = T, row.names = 1)
+    # check per condition
+    for(condition in stim_conditions){
+      # read the correlation table
+      cor_i_loc <- paste(input_dir, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene, '.', i, '.txt', sep = '')
+      cor_i <- read.table(cor_i_loc, header = T, row.names = 1)
+      # check for missingness
+      if(allowed_missingness <= 0){
+        cor_i <- cor_i[apply(cor_i, 1, function(x){!any(is.na(x))}),]
+      }
+      # or if a number was given, then subset to the genes that have correlation
+      else{
+        cor_i <- cor_i[apply(cor_i, 1, function(x){sum(is.na(x))/length(x) <= allowed_missingness}),]
+      }
+      if(na_to_zero){
+        cor_i[is.na(cor_i)] <- 0
+      }
+      # find common genes
+      common_genes <- intersect(rownames(cor_ut), rownames(cor_i))
+      # find common participants
+      common_participants <- intersect(colnames(cor_ut), colnames(cor_i))
+      # create new matrix
+      diff_matrix <- matrix(, nrow=length(common_genes), ncol=length(common_participants), dimnames = list(common_genes, common_participants))
+      # fill the matrix
+      for(cor_gene in common_genes){
+        for(participant in common_participants){
+          ut_val <- cor_ut[cor_gene, participant]
+          i_val <- cor_i[cor_gene, participant]
+          diff_val <- diff(c(ut_val, i_val))
+          diff_matrix[cor_gene, participant] <- diff_val
+        }
+      }
+      output_full <- paste(output_dir, unstim_condition, '_vs_', condition, '_', cell_type, '_correlation_matrix_', gene, '.', i, '.txt', sep = '')
+      write.table(diff_matrix, output_full, row.names=T, col.names=T, quote=F)
+    }
+  }
+}
+
+do_unpermuted_coeqtl_mapping_from_dir <- function(folder_loc, gene, cell_type, genotype_info, snp, cell_counts, condition_combinations=c('UT_vs_X3hCA', 'UT_vs_X24hCA', 'UT_vs_X3hMTB', 'UT_vs_X24hMTB', 'UT_vs_X3hPA', 'UT_vs_X24hPA'), sets=c(1,2)){
+  # create overall p value matrix
+  pval_df_full <- NULL
+  # check each condition combination
+  for(condition in condition_combinations){
+    print(paste('starting condition', condition))
+    dataset_per_set <- list()
+    common_genes <- NULL
+    # check each dataset
+    for(set in sets){
+      # load set
+      set_loc <- paste(folder_loc, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene, '.', set, '.txt', sep = '')
+      set_i <- read.table(set_loc, header=T, row.names=1)
+      # add to list
+      dataset_per_set[[as.character(set)]] <- set_i
+      # check the common genes
+      if(is.null(common_genes)){
+        common_genes <- rownames(set_i)
+      }
+      else{
+        common_genes <- intersect(common_genes, rownames(set_i))
+      }
+    }
+    # store the P values
+    pvals <- c()
+    # check the common genes
+    for(common_gene in common_genes){
+      # create the vectors to meta-analyse on
+      betas <- c()
+      stdes <- c()
+      # check in each set
+      for(set in names(dataset_per_set)){
+        # grab the dataset
+        set_i <- dataset_per_set[[set]]
+        # get the common genotype data
+        parts_common <- intersect(colnames(set_i), colnames(genotype_info))
+        # grab the SNPs
+        snps <- as.vector(unlist(genotype_info[snp, parts_common]))
+        snps <- as.numeric(as.factor(snps))
+        # grab the correlation difference
+        cors <- as.vector(unlist(set_i[common_gene, parts_common]))
+        # grab the cell type numbers
+        cond.1 <- strsplit(condition, '_vs_')[[1]][1]
+        cond.2 <- strsplit(condition, '_vs_')[[1]][2]
+        cell.counts.1 <- as.vector(unlist(cell_counts[[cond.1]][[set]][parts_common]))
+        cell.counts.2 <- as.vector(unlist(cell_counts[[cond.2]][[set]][parts_common]))
+        cell.counts <- cell.counts.1 + cell.counts.2
+        # do the model
+        model.1 <- lm(formula = cors~snps, weights = sqrt(cell.counts))
+        modelSummary.1 <- summary(model.1)
+        modelCoeffs.1 <- modelSummary.1$coefficients
+        beta.estimate.1 <- modelCoeffs.1[2, "Estimate"]
+        std.error.1 <- modelCoeffs.1[2, "Std. Error"]
+        # add to vectors
+        betas <- c(betas, beta.estimate.1)
+        stdes <- c(stdes, std.error.1)
+      }
+      # do the meta analysis
+      metaAnalysis <- metagen(TE=betas, seTE = stdes, studlab = names(dataset_per_set))
+      # grab the p value
+      pval <- metaAnalysis$pval.random
+      # add to pvals
+      pvals <- c(pvals, pval)
+    }
+    # create pval df
+    pval_df <- data.frame(p.value=pvals)
+    rownames(pval_df) <- common_genes
+    colnames(pval_df) <- condition
+    # add to overarching df
+    if(is.null(pval_df_full)){
+      pval_df_full <- pval_df
+    }
+    else{
+      pval_df_full <- merge(pval_df_full, pval_df, by=0, all=T)
+      rownames(pval_df_full) <- pval_df_full$Row.names
+      pval_df_full$Row.names <- NULL
+    }
+  }
+  return(pval_df_full)
+}
+
+plot_coeqtl_numbers <- function(sigs_per_geneA){
+  # init the table
+  coeqtl_numbers <- NULL
+  # check each gene
+  for(gene in names(sigs_per_geneA)){
+    # check each coeqtl
+    for(condition in names(sigs_per_geneA[[gene]])){
+      group <- '-'
+      if(startsWith(condition, 'X3h')){
+        group <- '3h'
+      }
+      else if(startsWith(condition, 'X24h')){
+        group <- '24h'
+      }
+      else if(startsWith(condition, 'UT')){
+        group <- 'UT'
+      }
+      nr_of_coeqtls <- length(sigs_per_geneA[[gene]][[condition]])
+      # convert the label
+      condition_pretty <- label_dict()[[condition]]
+      
+      row <- data.frame(gene=c(gene), condition=c(condition_pretty), timepoint=c(group), number=c(nr_of_coeqtls), stringsAsFactors = F)
+      # add to df
+      if(is.null(coeqtl_numbers)){
+        coeqtl_numbers <- row
+      }
+      else{
+        coeqtl_numbers <- rbind(coeqtl_numbers, row)
+      }
+    }
+  }
+  # set the order
+  coeqtl_numbers$condition <- as.factor(coeqtl_numbers)
+  levels(coeqtl_numbers) <- c('-', 'UT', '3h', '24h')
+  # make the plot
+  p <- ggplot(data=coeqtl_numbers, aes(x=timepoint, y=number, fill=condition)) + geom_bar(position='stack', stat='identity') + ggtitle(paste('')) + facet_wrap(. ~ gene, ncol=ceiling(sqrt(length(unique(coeqtl_numbers$gene)))))
+  return(p)
+}
+
+get_color_coding_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[["UT"]] <- "lightgrey"
+  color_coding[["3hCA"]] <- "darkolivegreen2"
+  color_coding[["24hCA"]] <- "forestgreen"
+  color_coding[["3hMTB"]] <- "lightskyblue"
+  color_coding[["24hMTB"]] <- "deepskyblue3"
+  color_coding[["3hPA"]] <- "sandybrown"
+  color_coding[["24hPA"]] <- "darkorange1"
+  color_coding[["X3hCA"]] <- "darkolivegreen2"
+  color_coding[["X24hCA"]] <- "forestgreen"
+  color_coding[["X3hMTB"]] <- "lightskyblue"
+  color_coding[["X24hMTB"]] <- "deepskyblue3"
+  color_coding[["X3hPA"]] <- "sandybrown"
+  color_coding[["X24hPA"]] <- "darkorange1"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  color_coding[["CD4+ T"]] <- "#153057"
+  color_coding[["CD8+ T"]] <- "#009DDB"
+  # other cell type colors
+  color_coding[["HSPC"]] <- "#009E94"
+  color_coding[["platelet"]] <- "#9E1C00"
+  color_coding[["plasmablast"]] <- "#DB8E00"
+  color_coding[["other T"]] <- "#FF63B6"
+  return(color_coding)
+}
+
+get_text_colour_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "white"
+  color_coding[["CD4T"]] <- "white"
+  color_coding[["CD8T"]] <- "black"
+  color_coding[["monocyte"]] <- "black"
+  color_coding[["NK"]] <- "black"
+  color_coding[["B"]] <- "black"
+  color_coding[["DC"]] <- "white"
+  color_coding[["CD4+ T"]] <- "white"
+  color_coding[["CD8+ T"]] <- "black"
+  # other cell type colors
+  color_coding[["HSPC"]] <- "black"
+  color_coding[["platelet"]] <- "black"
+  color_coding[["plasmablast"]] <- "black"
+  color_coding[["other T"]] <- "black"
+  return(color_coding)
+}
+
+label_dict <- function(){
+  label_dict <- list()
+  label_dict[["UT"]] <- "UT"
+  label_dict[["X3hCA"]] <- "3hCA"
+  label_dict[["X24hCA"]] <- "24hCA"
+  label_dict[["X3hMTB"]] <- "3hMTB"
+  label_dict[["X24hMTB"]] <- "24hMTB"
+  label_dict[["X3hPA"]] <- "3hPA"
+  label_dict[["X24hPA"]] <- "24hPA"
+  label_dict[["3hCA"]] <- "3hCA"
+  label_dict[["24hCA"]] <- "24hCA"
+  label_dict[["3hMTB"]] <- "3hMTB"
+  label_dict[["24hMTB"]] <- "24hMTB"
+  label_dict[["3hPA"]] <- "3hPA"
+  label_dict[["24hPA"]] <- "24hPA"
+  # major cell types
+  label_dict[["Bulk"]] <- "bulk-like"
+  label_dict[["CD4T"]] <- "CD4+ T"
+  label_dict[["CD8T"]] <- "CD8+ T"
+  label_dict[["monocyte"]] <- "monocyte"
+  label_dict[["NK"]] <- "NK"
+  label_dict[["B"]] <- "B"
+  label_dict[["DC"]] <- "DC"
+  label_dict[["HSPC"]] <- "HSPC"
+  label_dict[["plasmablast"]] <- "plasmablast"
+  label_dict[["platelet"]] <- "platelet"
+  label_dict[["T_other"]] <- "other T"
+  # minor cell types
+  label_dict[["CD4_TCM"]] <- "CD4 TCM"
+  label_dict[["Treg"]] <- "T regulatory"
+  label_dict[["CD4_Naive"]] <- "CD4 naive"
+  label_dict[["CD4_CTL"]] <- "CD4 CTL"
+  label_dict[["CD8_TEM"]] <- "CD8 TEM"
+  label_dict[["cMono"]] <- "cMono"
+  label_dict[["CD8_TCM"]] <- "CD8 TCM"
+  label_dict[["ncMono"]] <- "ncMono"
+  label_dict[["cDC2"]] <- "cDC2"
+  label_dict[["B_intermediate"]] <- "B intermediate"
+  label_dict[["NKdim"]] <- "NK dim"
+  label_dict[["pDC"]] <- "pDC"
+  label_dict[["ASDC"]] <- "ASDC"
+  label_dict[["CD8_Naive"]] <- "CD8 naive"
+  label_dict[["MAIT"]] <- "MAIT"
+  label_dict[["CD8_Proliferating"]] <- "CD8 proliferating"
+  label_dict[["CD4_TEM"]] <- "CD4 TEM"
+  label_dict[["B_memory"]] <- "B memory"
+  label_dict[["NKbright"]] <- "NK bright"
+  label_dict[["B_naive"]] <- "B naive"
+  label_dict[["gdT"]] <- "gamma delta T"
+  label_dict[["CD4_Proliferating"]] <- "CD4 proliferating"
+  label_dict[["NK_Proliferating"]] <- "NK proliferating"
+  label_dict[["cDC1"]] <- "cDC1"
+  label_dict[["ILC"]] <- "ILC"
+  label_dict[["dnT"]] <- "double negative T"
+  return(label_dict)
 }
 
 
@@ -1783,6 +2155,8 @@ sigs_per_geneA <- get_gene_list_geneAs(prepend, append, coeqtl_genes)
 significant_coeqtl_genes_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/significant_genes_20210208/'
 # write these genes
 significant_coeqtl_genes_to_file(prepend, append, significant_coeqtl_genes_loc, '_meta_monocyte', coeqtl_genes)
+
+
 # get the genotype data
 vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
 genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
@@ -1794,7 +2168,7 @@ snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAse
 snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
 
 # location of coeqtls output and correlation matrices
-coeqtl_out_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
+coeqtl_out_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
 # prep and append we will use for now
 prepend <- 'output_'
 append <- '_meta_mono_missingness05replacena100permzerogenebnumeric_1/'
@@ -1824,7 +2198,7 @@ plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_o
 plot_top_hit_per_interaction(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogenebnumeric_1/', plot_output_loc=paste(coeqtl_plot_loc, '_num_', sep=''), genes=ff_coeqtl_genes_less, v2_object=v2_mono, v3_object=v3_mono, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'))
 
 # check the Rs
-get_r_values(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogeneb_1/', gene='TMEM176B', snp='rs7806458', snps=genotypes_all, cell_type='monocyte', to_numeric=F)
+get_r_values(input_path_prepend='/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogenebnumeric_1/', gene='RPS26', snp='rs1131017', snps=genotypes_all, cell_type='monocyte', to_numeric=T, sig_only = F, cell_counts = cell_counts)
 # write the Rs
 write_r_values_per_gene_and_condition(input_path_prepend='/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_', input_path_append='_mono_missingness05replacena100permzerogenebnumeric_1/', genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, snps=genotypes_all, cell_type='monocyte', to_numeric=T)
 # write the R plots
@@ -1876,13 +2250,36 @@ for(coeqtl_gene in coeqtl_genes){
   plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_na_to_zero_per_gt_avg_correlations_gendir_v2.png', sep='')
   p1 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T)
   p2 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T)
-  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = F)
+  p3 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T)
   ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p1, p2, p3)), width=9, height=9)
   plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_na_to_zero_per_gt_avg_correlations_gendir_v3.png', sep='')
   p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T)
-  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T, na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T)
-  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T, na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = F)
+  p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T)
+  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T)
   ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
+}
+
+for(coeqtl_gene in c('RPS26')){
+  plot_save_location_v2 <- paste('~/Desktop/', coeqtl_gene, '_na_to_zero_per_gt_avg_correlations_gendir_utstimsplit_v2.png', sep='')
+  p7 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, ut_sig_only = T, color_by_condition = T)
+  p8 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, stim_sig_only = T, color_by_condition = T)
+  #p15 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, stim_specific_only = T, color_by_condition = T)
+  p15 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, color_by_condition = T, sig_change_loc = '/data/scRNA/eQTL_mapping/coexpressionQTLs/recoeqtl_numeric/RPS26_meta_monocyte_p.tsv', snp_rename = list('1/1'='G/G', '1/0'='G/C', '1/1'='C/C'))
+  p9 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, ut_sig_only = T, color_by_condition = T)
+  p10 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/',na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, stim_sig_only = T, color_by_condition = T)
+  #p16 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/',na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, stim_specific_only = T, color_by_condition = T)
+  p16 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 1, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/',na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, color_by_condition = T, sig_change_loc = '/data/scRNA/eQTL_mapping/coexpressionQTLs/recoeqtl_numeric/RPS26_meta_monocyte_p.tsv')
+  ggsave(plot_save_location_v2, arrangeGrob(grobs = list(p7, p9, p8, p10, p15, p16)), width=12, height=12)
+  plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_na_to_zero_per_gt_avg_correlations_gendir_utstimsplit_v3.png', sep='')
+  p11 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, ut_sig_only = T, color_by_condition = T)
+  p12 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, stim_sig_only = T, color_by_condition = T)
+  #p17 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, stim_specific_only = T, color_by_condition = T)
+  p17 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), negative_gen_only = T, color_by_condition = T, sig_change_loc = '/data/scRNA/eQTL_mapping/coexpressionQTLs/recoeqtl_numeric/RPS26_meta_monocyte_p.tsv')
+  p13 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, ut_sig_only = T, color_by_condition = T)
+  p14 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, stim_sig_only = T, color_by_condition = T)
+  #p18 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, stim_specific_only = T, color_by_condition = T)
+  p18 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', na_to_zero = T, coef_path_prepend = paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_monocyte_', sep = ''), positive_gen_only = T, color_by_condition = T, sig_change_loc = '/data/scRNA/eQTL_mapping/coexpressionQTLs/recoeqtl_numeric/RPS26_meta_monocyte_p.tsv')
+  ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p11, p13, p12, p14, p17, p18)), width=12, height=12)
 }
 
 for(coeqtl_gene in coeqtl_genes){
