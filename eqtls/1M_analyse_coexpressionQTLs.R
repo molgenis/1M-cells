@@ -27,7 +27,7 @@ library(gridExtra)
 #
 ###########################################################################################################################
 
-plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, version_chem, output_loc, p.value = NULL, r.value = NULL, sign.cutoff = NULL, use_SCT=T, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), set_axis_by_max=T, height=5, width=5, extention='.png', remove_prepend=NULL){
+plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, version_chem, output_loc, p.value = NULL, r.value = NULL, sign.cutoff = NULL, use_SCT=T, sct_data=F, conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), set_axis_by_max=T, height=5, width=5, extention='.png', remove_prepend=NULL, snp_rename=NULL, xlim=NULL, ylim=NULL){
   # go through all the conditions
   for(condition in intersect(unique(as.character(seurat_object@meta.data$timepoint)), conditions)){
     plot.matrix <- NULL
@@ -39,10 +39,17 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
       # grab the normalized counts
       sample.matrix <- NULL
       if(use_SCT){
-        sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
+        DefaultAssay(seurat_object_condition_participant) <- 'SCT'
+        if(sct_data){
+          sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@data[gene1, ], seurat_object_condition_participant@assays$SCT@data[gene2, ])
+        }
+        else{
+          sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene1, ], seurat_object_condition_participant@assays$SCT@counts[gene2, ])
+        }
       }
       else{
-        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@scale.data[gene1, ], seurat_object_condition_participant@assays$RNA@scale.data[gene2, ])
+        DefaultAssay(seurat_object_condition_participant) <- 'RNA'
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@data[gene1, ], seurat_object_condition_participant@assays$RNA@data[gene2, ])
       }
       # remove the rownames, we don't need them
       rownames(sample.matrix) <- NULL
@@ -59,8 +66,12 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
         plot.matrix <- rbind(plot.matrix, sample.matrix)
       }
     }
-    max_y <- 20#max(plot.matrix$eqtl)
-    max_x <- 80#max(plot.matrix$interaction)
+    max_y <- max(plot.matrix$eqtl)
+    max_x <- max(plot.matrix$interaction)
+    # change the SNP into letters if possible
+    if(!is.null(snp_rename)){
+      plot.matrix$snp <- unlist(snp_rename[plot.matrix$snp])
+    }
     # turn the SNP into a factor
     plot.matrix$snp <- as.factor(plot.matrix$snp)
     print(head(plot.matrix))
@@ -90,6 +101,12 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
       if(set_axis_by_max){
         plots[[i]] <- plots[[i]] + xlim(c(0, max_x)) + ylim(0, max_y)
       }
+      if(!is.null(xlim)){
+        plots[[i]] <- plots[[i]] + xlim(xlim)
+      }
+      if(!is.null(ylim)){
+        plots[[i]] <- plots[[i]] + ylim(ylim)
+      }
     }
     title <- paste(gene1, "/", gene2, "/", snp.name, '/', condition, '/', version_chem)
     if(!is.null(remove_prepend)){
@@ -113,6 +130,12 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
     
     if(set_axis_by_max){
       plot.all <- plot.all + xlim(c(0, max_x)) + ylim(0, max_y)
+    }
+    if(!is.null(xlim)){
+      plot.all <- plot.all + xlim(xlim)
+    }
+    if(!is.null(ylim)){
+      plot.all <- plot.all + ylim(ylim)
     }
     
     if(!is.null(p.value)){
@@ -141,8 +164,167 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
   }
 }
 
+plot_boxplot_and_gt_interactions <- function(genotype_data, mapping_folder, dataset, seurat_object, gene_a, gene_b, snp, monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=NULL, plot_points=F, violin=F){
+  # subset to condition and cell type
+  seurat_object_condition <- seurat_object[, (seurat_object@meta.data[['timepoint']] == condition & seurat_object@meta.data[['cell_type_lowerres']] == cell_type)]
+  # create plot matrix
+  plot.matrix <- NULL
+  for(sample in unique(seurat_object_condition@meta.data$assignment)){
+    # subset to only this participant
+    seurat_object_condition_participant <- seurat_object_condition[, seurat_object_condition@meta.data$assignment == sample]
+    # grab the normalized counts
+    sample.matrix <- NULL
+    if(use_SCT){
+      DefaultAssay(seurat_object_condition_participant) <- 'SCT'
+      if(sct_data){
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@data[gene_a, ], seurat_object_condition_participant@assays$SCT@data[gene_b, ])
+      }
+      else{
+        sample.matrix <- data.frame(seurat_object_condition_participant@assays$SCT@counts[gene_a, ], seurat_object_condition_participant@assays$SCT@counts[gene_b, ])
+      }
+    }
+    else{
+      DefaultAssay(seurat_object_condition_participant) <- 'RNA'
+      sample.matrix <- data.frame(seurat_object_condition_participant@assays$RNA@data[gene_a, ], seurat_object_condition_participant@assays$RNA@data[gene_b, ])
+    }
+    # remove the rownames, we don't need them
+    rownames(sample.matrix) <- NULL
+    # set the new colnames
+    colnames(sample.matrix) <- c('eqtl', 'interaction')
+    # add the participant name
+    sample.matrix$sample.name <- sample
+    # add the genotype of the participant
+    sample.matrix$snp <- as.character(genotype_data[snp,sample])
+    if(is.null(plot.matrix)){
+      plot.matrix <- sample.matrix
+    }
+    else{
+      plot.matrix <- rbind(plot.matrix, sample.matrix)
+    }
+  }
+  max_y <- max(plot.matrix$eqtl)
+  max_x <- max(plot.matrix$interaction)
+  # change the SNP into letters if possible
+  if(!is.null(snp_rename)){
+    plot.matrix$snp <- unlist(snp_rename[plot.matrix$snp])
+  }
+  # turn the SNP into a factor
+  plot.matrix$snp <- as.factor(plot.matrix$snp)
+  print(head(plot.matrix))
+  # store separate plots
+  plots <- list()
+  # do the actual plotting
+  for (i in 1:length(levels(plot.matrix$snp))) {
+    genotype.to.plot <- plot.matrix[plot.matrix$snp == levels(plot.matrix$snp)[i],]
+    
+    color.high <- c("lightgreen", "orange", "lightblue")
+    color.low <- c("darkgreen", "red3", "blue")
+    
+    plots[[i]] <- ggplot(genotype.to.plot, aes(y=eqtl, x=interaction, color=snp, group = sample.name)) + theme_minimal()
+    if(!plot_points){
+      plots[[i]] <- plots[[i]] + geom_point(alpha = 0.0)
+    }
+    else{
+      plots[[i]] <- plots[[i]] + geom_point(size=0.3, alpha = 0.2)
+    }
+    
+      
+      plots[[i]] <- plots[[i]] + geom_smooth(method="lm", se=F, size = 0.5) +
+      #scale_colour_gradient(name = "sample.name", guide = F,
+      #                      low = color.low[i], high = color.high[i]) +
+      theme(panel.background = element_rect(fill = "white", colour = "grey"),
+            panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+            panel.border = element_rect(colour = "grey", fill=NA, size=2),
+            plot.title = element_text(colour = c("#57a350", "#fd7600", "#383bfe")[i], face='bold')) + 
+      #scale_x_continuous(breaks = round(seq(min(genotype.to.plot$interaction), max(genotype.to.plot$interaction), by = 0.1),1)) +
+      scale_color_manual(values=c(c("#57a350", "#fd7600", "#383bfe")[i]), guide = F) +
+      ylab("") + xlab("") +
+      ggtitle(levels(plot.matrix$snp)[i]) + 
+      geom_smooth(method='lm', data=genotype.to.plot, mapping=aes(y=eqtl, x=interaction), inherit.aes=F, color = "black", se=F)
+    if(!is.null(xlim)){
+      plots[[i]] <- plots[[i]] + xlim(xlim)
+    }
+    if(!is.null(ylim)){
+      plots[[i]] <- plots[[i]] + ylim(ylim)
+    }
+  }
+  cor_data <- NULL
+  if(!is.null(cor_table)){
+    cor_data <- data.frame(cor_table)
+  }
+  else{
+    # get the location of the correlated output
+    cor_data_loc <- paste(mapping_folder, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene_a, '.', dataset, '.txt', sep = '')
+    # read the correlation data
+    cor_data <- read.table(cor_data_loc, header = T, row.names = 1)
+  }
+  # get what we have data for in both
+  common_data <- intersect(colnames(cor_data), colnames(genotype_data))
+  # grab the data for the gene
+  cor_gene <- as.vector(unlist(cor_data[gene_b, common_data]))
+  print(cor_gene)
+  # set to zero if set so
+  if(na_to_zero){
+    cor_gene[is.na(cor_gene)] <- 0
+  }
+  # grab the data for the SNP
+  snps <- as.vector(unlist(genotype_data[snp, common_data]))
+  if(to_numeric){
+    #snps <- as.numeric(as.factor(snps))
+  }
+  # merge the SNP and correlation
+  plot_data <- data.frame(participant=common_data, snp=snps, correlation=cor_gene)
+  # rename SNPs if requested
+  if(!is.null(snp_rename)){
+    plot_data$snp <- unlist(snp_rename[plot_data$snp])
+    plot_data$snp <- as.factor(plot_data$snp)
+  }
+  # do plotting
+  p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp), pch=21, size=0.75, alpha=1)
+  if(violin){
+    p <- p + geom_violin(outlier.shape = NA)
+  }
+  else{
+    p <- p + geom_boxplot(outlier.shape = NA)
+  }
+  p <- p + theme_bw() + 
+    ggtitle(paste(snp, gene_a, gene_b, condition, sep = ' ')) +
+    scale_fill_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
+    ylab(paste(gene_a, '-', gene_b, ' Spearman correlation', sep='')) +
+    xlab('genotype') + ylim(c(-0.3, 0.7))
+  if(length(unique(plot_data$correlation)) > 1){
+    p <- p + geom_jitter(width = 0.1, alpha = 0.2)
+  }
+  if(!is.null(p.value)){
+    p <- p + annotation_custom(
+      grobTree(textGrob(
+        label = paste('P = ',p.value[[i]]), x=0.5, y=0.95, gp=gpar(col="gray", fontsize=13, just=0))
+      )
+    )
+  }
+  if(!is.null(r.value)){
+    p <- p + annotation_custom(
+      grobTree(textGrob(
+        label = paste('r = ',r.value[[i]]), x=0.5, y=0.92, gp=gpar(col="gray", fontsize=13, just=0))
+      )
+    )
+  }
+  if(!is.null(ylims)){
+    p <- p + ylim(ylims)
+  }
+  if (length(plots) == 3){
+    txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[3], 'correlation'])
+    top.row <- plot_grid(plots[[1]], plots[[2]], plots[[3]], nrow=1, ncol=3)
+    print(plot_grid(top.row, p, rel_heights  = c(1,2), nrow=2, ncol=1))
+  } else {
+    txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'])
+    top.row <- plot_grid(plots[[1]], plots[[2]], nrow=1, ncol=2)
+    print(plot_grid(top.row, p, rel_heights = c(1,2), nrow=2, ncol=1))
+  }
+}
 
-plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylims=NULL){
+
+plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp, monniker='_meta_', cell_type='monocyte', condition='UT', gene_b=NULL, na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylims=NULL, datasets=c(1,2)){
   # use the supplied gene if possible
   gene_to_use <- gene_b
   if(is.null(gene_to_use)){
@@ -160,7 +342,7 @@ plot_coexpression_qtl <- function(genotype_data, mapping_folder, gene_name, snp,
   # we have these per dataset
   plots <- list()
   # we have a meta-analysis of two sets
-  for(i in 1:2){
+  for(i in datasets){
     # get the location of the correlated output
     cor_data_loc <- paste(mapping_folder, 'correlationMatrices/', condition, '_', cell_type, '_correlation_matrix_', gene_name, '.', i, '.txt', sep = '')
     # read the correlation data
@@ -870,13 +1052,13 @@ get_r_values <- function(input_path_prepend, input_path_append, gene, snp, snps,
 }
 
 
-write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, snp_probe_mapping, snps, cell_type='monocyte', to_numeric=F, sig_only=T){
+write_r_values_per_gene_and_condition <- function(input_path_prepend, input_path_append, genes, snp_probe_mapping, snps, cell_type='monocyte', to_numeric=F, sig_only=T, cell_counts=NULL){
   # check each gene
   for(gene in genes){
     # get the matching snp
     snp <- snp_probe_mapping[!is.na(snp_probe_mapping$probe) & snp_probe_mapping$probe == gene, ]$snp[1]
     # do the r catching
-    r_values_per_per_cond <- get_r_values(input_path_prepend=input_path_prepend, input_path_append=input_path_append, gene=gene, snp=snp, snps=snps, cell_type=cell_type, to_numeric=to_numeric, sig_only=sig_only)
+    r_values_per_per_cond <- get_r_values(input_path_prepend=input_path_prepend, input_path_append=input_path_append, gene=gene, snp=snp, snps=snps, cell_type=cell_type, to_numeric=to_numeric, sig_only=sig_only, cell_counts=cell_counts)
     # build the output dir
     output_dir <- paste(input_path_prepend, gene, '_meta', input_path_append, sep = '')
     # check each condition
@@ -978,7 +1160,7 @@ get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_v
   return(most_varied)
 }
 
-coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, toppfun=T, reactome=F){
   # put all results in a shared DF
   pathway_df <- NULL
   # check each cell type
@@ -988,10 +1170,21 @@ coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_append, g
       #
       for(condition in conditions){
         try({
-          # paste the filepath together
-          filepath <- paste(output_path_prepend, '', gene, '_', condition, '_meta_', cell_type, output_path_append, sep = '')
-          # read the file
-          pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+          pathways <- NULL
+          if(toppfun){
+            # paste the filepath together
+            filepath <- paste(output_path_prepend, '', gene, '_', condition, '_meta_', cell_type, output_path_append, sep = '')
+            # read the file
+            pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+            pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
+          }
+          else if(reactome){
+            # paste the filepath together
+            filepath <- paste(output_path_prepend, '', gene, '_', condition, '_meta_', cell_type, output_path_append, sep = '')
+            # read the file
+            pathways <- read.table(filepath, header = T, sep = ',', stringsAsFactors = F, dec = '.') # , colClasses = c('character', 'character', 'character', 'double', 'double', 'double', 'double', 'double', 'double', 'character')
+            pathways$id_name <- paste('1', pathways$term_name, sep = '_')
+          }
           # create column name
           newcolname <- paste(gene, '_', condition, '_', cell_type, sep = '')
           # get the log2 of the significance value
@@ -1001,7 +1194,7 @@ coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_append, g
           else{
             pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
           }
-          pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
+          
           # reduce to the only two columns we care about
           pathways <- pathways[, c('id_name', newcolname)]
           # join with other pathway files
@@ -1120,9 +1313,9 @@ get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
   return(most_varied)
 }
 
-plot_pathway_sharing <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
+plot_pathway_sharing <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, toppfun=T, reactome=F){
   # get the pathways
-  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking)
+  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking, toppfun =toppfun, reactome = reactome)
   # set the zeroes to max+1
   pathways[pathways==0] <- max(pathways)+1
   # get most shared pathways
@@ -1152,12 +1345,12 @@ plot_pathway_unique <- function(output_path_prepend, output_path_append, gene, c
     colnames(pathways) <- gsub(paste('_', cell_types[1], sep=''), '', colnames(pathways))
   }
   # plot as heatmap
-  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,15))
+  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,20))
 }
 
-plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL){
+plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL, stringwrap=F, reactome = T, toppfun = F, margins = c(6,25.1)){
   # get the pathways
-  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking)
+  pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking, reactome = reactome, toppfun = toppfun)
   # set the zeroes to max+1
   pathways[pathways==0] <- max(pathways)+1
   if(length(cell_types) == 1){
@@ -1186,8 +1379,14 @@ plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell
     top_pathways <- unique(top_pathways)
     pathways <- pathways[top_pathways, ]
   }
+  colnames(pathways) <- gsub(paste(gene, '_', sep = ''), '', colnames(pathways))
+  colnames(pathways) <- gsub('^X', '', colnames(pathways))
+  rownames(pathways) <- gsub('^\\d+_', '', rownames(pathways))
+  if(stringwrap){
+    rownames(pathways) <- sapply(rownames(pathways),function(x){paste(strwrap(x,70), collapse="\n")})
+  }
   # plot as heatmap
-  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,15))
+  heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=margins, KeyValueName = 'ranking of pathway', main = paste('pathways in', gene, '\nco-expressionQTLs'), xlab = 'conditions', ylab = 'pathways')
 }
 
 plot_pathway_sharing_genes <- function(output_path_prepend, output_path_append, genes, plot_out_loc, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T){
@@ -1990,7 +2189,7 @@ do_unpermuted_coeqtl_mapping_from_dir <- function(folder_loc, gene, cell_type, g
   return(pval_df_full)
 }
 
-plot_coeqtl_numbers <- function(sigs_per_geneA){
+plot_coeqtl_numbers <- function(sigs_per_geneA, paper_style = F){
   # init the table
   coeqtl_numbers <- NULL
   # check each gene
@@ -2022,12 +2221,48 @@ plot_coeqtl_numbers <- function(sigs_per_geneA){
     }
   }
   # set the order
-  coeqtl_numbers$condition <- as.factor(coeqtl_numbers)
-  levels(coeqtl_numbers) <- c('-', 'UT', '3h', '24h')
+  coeqtl_numbers$timepoint <- factor(coeqtl_numbers$timepoint, levels=c('UT', '3h', '24h'))
   # make the plot
   p <- ggplot(data=coeqtl_numbers, aes(x=timepoint, y=number, fill=condition)) + geom_bar(position='stack', stat='identity') + ggtitle(paste('')) + facet_wrap(. ~ gene, ncol=ceiling(sqrt(length(unique(coeqtl_numbers$gene)))))
+  # create colour palette for conditions
+  cc <- get_color_coding_dict()
+  colScale <- scale_fill_manual(name = 'condition', values = unlist(cc[coeqtl_numbers$condition]))
+  p <- p + colScale
+  # add better labels
+  p <- p + labs(x =  'Timepoint', y = 'number of co-expressionQTLs')
+  # add the paper style (ugh)
+  if(paper_style){
+    p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+  }
   return(p)
 }
+
+get_genes_per_pathway_per_condition <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', '24hCA', '3hMTB', '24hMTB', 'X3hPA', 'X24hPA'), sig_col='q.value.Bonferroni', sig_cutoff=0.05){
+  all_lists <- list()
+  for(cell_type in cell_types){
+    list_ct <- list()
+    for(condition in conditions){
+      try({
+      # paste the filepath together
+      filepath <- paste(output_path_prepend, '', gene, '_', condition, '_meta_', cell_type, output_path_append, sep = '')
+      # read the table
+      pathways <- read.table(filepath, header=T, sep = '\t', quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+      # subset to significant stuff
+      pathways <- pathways[pathways[[sig_col]] < sig_cutoff, ]
+      # get the genes
+      genes <- apply(pathways, 1, function(x){as.vector(unlist(strsplit(x['Hit.in.Query.List'], split = ',')))})
+      # the pathways are the keys
+      names(genes) <- pathways$Name
+      # add to the list of condition
+      list_ct[[condition]] <- genes
+      })
+    }
+    # add to overarching list
+    all_lists[[cell_type]] <- list_ct
+  }
+  return(all_lists)
+}
+
 
 get_color_coding_dict <- function(){
   # set the condition colors
@@ -2055,10 +2290,52 @@ get_color_coding_dict <- function(){
   color_coding[["DC"]] <- "#965EC8"
   color_coding[["CD4+ T"]] <- "#153057"
   color_coding[["CD8+ T"]] <- "#009DDB"
+  color_coding[["CD4/CD8+ T"]] <- "#0B6799"
   # other cell type colors
   color_coding[["HSPC"]] <- "#009E94"
+  color_coding[["hemapoietic stem"]] <- "#009E94"
   color_coding[["platelet"]] <- "#9E1C00"
+  color_coding[["megakaryocyte"]] <- "#9E1C00"
   color_coding[["plasmablast"]] <- "#DB8E00"
+  color_coding[["plasma B"]] <- "#DB8E00"
+  color_coding[["other T"]] <- "#FF63B6"
+  return(color_coding)
+}
+
+get_color_coding_dict_darker <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[["UT"]] <- "lightgrey"
+  color_coding[["3hCA"]] <- "limegreen"
+  color_coding[["24hCA"]] <- "darkgreen"
+  color_coding[["3hMTB"]] <- "royalblue"
+  color_coding[["24hMTB"]] <- "darkblue"
+  color_coding[["3hPA"]] <- "chocolate"
+  color_coding[["24hPA"]] <- "brown"
+  color_coding[["X3hCA"]] <- "darkolivegreen2"
+  color_coding[["X24hCA"]] <- "forestgreen"
+  color_coding[["X3hMTB"]] <- "lightskyblue"
+  color_coding[["X24hMTB"]] <- "deepskyblue3"
+  color_coding[["X3hPA"]] <- "sandybrown"
+  color_coding[["X24hPA"]] <- "darkorange1"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  color_coding[["CD4+ T"]] <- "#153057"
+  color_coding[["CD8+ T"]] <- "#009DDB"
+  color_coding[["CD4/CD8+ T"]] <- "#0B6799"
+  # other cell type colors
+  color_coding[["HSPC"]] <- "#009E94"
+  color_coding[["hemapoietic stem"]] <- "#009E94"
+  color_coding[["platelet"]] <- "#9E1C00"
+  color_coding[["megakaryocyte"]] <- "#9E1C00"
+  color_coding[["plasmablast"]] <- "#DB8E00"
+  color_coding[["plasma B"]] <- "#DB8E00"
   color_coding[["other T"]] <- "#FF63B6"
   return(color_coding)
 }
@@ -2078,8 +2355,11 @@ get_text_colour_dict <- function(){
   color_coding[["CD8+ T"]] <- "black"
   # other cell type colors
   color_coding[["HSPC"]] <- "black"
+  color_coding[["hemapoietic stem"]] <- "black"
   color_coding[["platelet"]] <- "black"
+  color_coding[["megakaryocyte"]] <- "black"
   color_coding[["plasmablast"]] <- "black"
+  color_coding[["plasma B"]] <- "black"
   color_coding[["other T"]] <- "black"
   return(color_coding)
 }
@@ -2108,8 +2388,11 @@ label_dict <- function(){
   label_dict[["B"]] <- "B"
   label_dict[["DC"]] <- "DC"
   label_dict[["HSPC"]] <- "HSPC"
+  label_dict[["hemapoietic stem"]] <- "hemapoietic stem"
   label_dict[["plasmablast"]] <- "plasmablast"
+  label_dict[["plasma B"]] <- "plasma B"
   label_dict[["platelet"]] <- "platelet"
+  label_dict[["megakaryocyte"]] <- "megakaryocyte"
   label_dict[["T_other"]] <- "other T"
   # minor cell types
   label_dict[["CD4_TCM"]] <- "CD4 TCM"
@@ -2145,14 +2428,14 @@ label_dict <- function(){
 # location of the coeqtl output
 coeqtl_out_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/'
 # the coeqtl 'geneA' genes we looked at
-coeqtl_genes <- c('HLA-DQA1', 'TMEM176B','TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26')
+coeqtl_genes <- c('HLA-DQA1', 'TMEM176B','TMEM176A', 'CTSC', 'CLEC12A', 'NDUFA12', 'DNAJC15', 'RPS26', 'HLA-DQA2')
 # we need to paste together the whole thing
 prepend <- coeqtl_out_loc
 append <- '_meta_monocyte_p.tsv'
 # get the sigs per geneA
 sigs_per_geneA <- get_gene_list_geneAs(prepend, append, coeqtl_genes)
 # set the location of where to store the significant genes
-significant_coeqtl_genes_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/significant_genes_20210208/'
+significant_coeqtl_genes_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/significant_genes_20210208_numeric_snps/'
 # write these genes
 significant_coeqtl_genes_to_file(prepend, append, significant_coeqtl_genes_loc, '_meta_monocyte', coeqtl_genes)
 
@@ -2229,7 +2512,7 @@ for(coeqtl_gene in coeqtl_genes){
   plot_save_location_v3 <- paste('~/Desktop/', coeqtl_gene, '_per_gt_avg_correlations_v3.png', sep='')
   p4 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/')
   p5 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_neg_only = T)
-  p6 <- plot_coeqtl_baseline_correlations_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
+  p6 <- plot_coeqtl_baseline_correlatioxns_per_gt(coeqtl_gene, paste('/data/scRNA/eQTL_mapping/coexpressionQTLs/numerical/', coeqtl_gene, '_meta_monocyte_p.tsv', sep = ''), 2, '/data/scRNA/eQTL_mapping/coexpressionQTLs/avg_cors_coeqtls/', avg_pos_only = T)
   ggsave(plot_save_location_v3, arrangeGrob(grobs = list(p4, p5, p6)), width=9, height=9)
 }
 

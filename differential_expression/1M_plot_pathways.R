@@ -783,6 +783,26 @@ pathways_to_hm_colors <- function(expression_heatmap, pathways_named_lists){
   return(colors_m)
 }
 
+get_color_coding_dict <- function(){
+  # set the condition colors
+  color_coding <- list()
+  color_coding[['UT']] <- 'lightgrey'
+  color_coding[["3hCA"]] <- "darkolivegreen2"
+  color_coding[["24hCA"]] <- "forestgreen"
+  color_coding[["3hMTB"]] <- "lightskyblue"
+  color_coding[["24hMTB"]] <- "deepskyblue3"
+  color_coding[["3hPA"]] <- "sandybrown"
+  color_coding[["24hPA"]] <- "darkorange1"
+  # set the cell type colors
+  color_coding[["Bulk"]] <- "black"
+  color_coding[["CD4T"]] <- "#153057"
+  color_coding[["CD8T"]] <- "#009DDB"
+  color_coding[["monocyte"]] <- "#EDBA1B"
+  color_coding[["NK"]] <- "#E64B50"
+  color_coding[["B"]] <- "#71BC4B"
+  color_coding[["DC"]] <- "#965EC8"
+  return(color_coding)
+}
 
 # this is the reactome ID for the immune system
 immune_system_reactome_id <- 'R-HSA-168256'
@@ -877,6 +897,11 @@ colors_pathways_v2_de_hm <- pathways_to_hm_colors(t(v2_expression_mono_de_hm), p
 heatmap.3(v2_expression_mono_de_hm, col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v2_de_hm)
 
 
+# show pathways
+cc <- get_color_coding_dict()
+colors_cond <- rep(c(cc[['UT']],cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 1)
+colors_m <- cbind(colors_cond)
+colnames(colors_m) <- c('condition')
 
 
 # now with all DE genes
@@ -892,10 +917,18 @@ heatmap.3(t(v2_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margi
 v3_expression <- read.table(v3_exp_loc, header = T, sep = '\t')
 v3_expression_mono_de_all <- v3_expression[v3_expression$gene %in% rownames(lfc_de_df) & v3_expression$cell_type == 'monocyte', ]
 v3_expression_mono_de_all_hm <- avg_exp_table_to_hm_table(v3_expression_mono_de_all)
-v3_expression_mono_de_all_hm <- data.frame(t(apply(v3_expression_mono_de_all_hm, 1, function(x){x <- x/max(x)})))
+#v3_expression_mono_de_all_hm <- data.frame(t(apply(v3_expression_mono_de_all_hm, 1, function(x){x <- x/max(x)})))
+# scale by UT expression
+v3_expression_mono_de_all_hm <- data.frame(t(apply(v3_expression_mono_de_all_hm, 1, function(x){x <- log2(x/(x['UT']))})))
+# flip sign so that it is more clear that a positive number means upregulated
+#v3_expression_mono_de_all_hm <- v3_expression_mono_de_all_hm * -1
+# remove UT
 colnames(v3_expression_mono_de_all_hm) <- gsub('X', '', colnames(v3_expression_mono_de_all_hm))
 colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_hm, pathways_list)
-heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression')
+# plot all
+heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression', RowSideColors = t(colors_m))
+# exclude UT
+heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('blue', 'white', 'red'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
 
 
 

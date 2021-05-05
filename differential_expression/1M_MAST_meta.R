@@ -663,6 +663,162 @@ get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F,
   return(deg_meta_combined)
 }
 
+plot_loose_overlap_cell_types <- function(mast_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), pval_column='metap_bonferroni', lfc_column='metafc', pval_significance_threshold=0.05, pval_column_other='metap_bonferroni', pval_significance_threshold_other=0.1){
+  # get the overlaps
+  loose_overlaps <- get_loose_overlap_cell_types(mast_output_loc, cell_types=cell_types, stims=stims, pval_column=pval_column, lfc_column=lfc_column, pval_significance_threshold=pval_significance_threshold, pval_column_other=pval_column_other, pval_significance_threshold_other=pval_significance_threshold_other)
+  # create the plot df
+  plot_df <- NULL
+  # go through the non-unique ones
+  for(number in unique(loose_overlaps$count[loose_overlaps$count > 1])){
+    # get the number of genes with that number of overlap
+    number_of_genes <- nrow(loose_overlaps[loose_overlaps$count == number, ])
+    # create the row
+    plot_row <- data.frame(number=c(number), number_of_genes=c(number_of_genes), cell_type=c('mixed'), stringsAsFactors = F)
+    # add to the dataframe
+    if(is.null(plot_df)){
+      plot_df <- plot_row
+    }
+    else{
+      plot_df <- rbind(plot_df, plot_row)
+    }
+  }
+  # add the unique ones as well
+  for(ct in unique(loose_overlaps[loose_overlaps$count == 1, 'specificity'])){
+    # get number of genes specific to that cell type
+    number_of_genes <- nrow(loose_overlaps[loose_overlaps$specificity == ct, ])
+    # create the row
+    plot_row <- data.frame(number=c(1), number_of_genes=c(number_of_genes), cell_type=c(ct), stringsAsFactors = F)
+    # add to the dataframe
+    if(is.null(plot_df)){
+      plot_df <- plot_row
+    }
+    else{
+      plot_df <- rbind(plot_df, plot_row)
+    }
+  }
+  # grab the colours
+  cc <- get_color_coding_dict()
+  # add the 'mixed' condition
+  cc[['mixed']] <- 'gray'
+  fillScale <- scale_fill_manual(name = "cell type",values = unlist(cc[plot_df$cell_type]))
+  # make the plot finally
+  p <- ggplot(plot_df, aes(fill=cell_type, y=number_of_genes, x=number)) +
+    geom_bar(position='stack', stat='identity') +
+    labs(x='number', y='number of DE genes') +
+    ggtitle(paste('DE genes and cell type specificity')) +
+    labs(fill = "Found in") +
+    fillScale
+  return(p)
+}
+
+get_loose_overlap_cell_types <- function(mast_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), pval_column='metap_bonferroni', lfc_column='metafc', pval_significance_threshold=0.05, pval_column_other='metap_bonferroni', pval_significance_threshold_other=0.1){
+  # get the output
+  all_output <- get_mast_per_cell_type_and_condition(mast_output_loc = mast_output_loc, cell_types = cell_types, stims = stims)
+  # get the truly significant and loosely significant entries
+  sig_per_ct_truly <- get_significant_genes_per_cell_type_and_condition(all_output, pval_column=pval_column, pval_significance_threshold=pval_significance_threshold, cell_types=cell_types, stims=stims)
+  sig_per_ct_loose <- get_significant_genes_per_cell_type_and_condition(all_output, pval_column=pval_column_other, pval_significance_threshold=pval_significance_threshold_other, cell_types=cell_types, stims=stims)
+  # reduce the conditions
+  sig_per_ct_truly_red <- list()
+  sig_per_ct_loose_red <- list()
+  for(cell_type in intersect(cell_types, names(sig_per_ct_truly))){
+    # create a vector to put the genes in, regardless of condition
+    truly_vector_all_conds <- c()
+    loose_vector_all_conds <- c()
+    # add for this condition
+    for(condition in intersect(stims, names(sig_per_ct_loose[[cell_type]]))){
+      truly_vector_all_conds <- c(truly_vector_all_conds, sig_per_ct_truly[[cell_type]][[condition]])
+      loose_vector_all_conds <- c(loose_vector_all_conds, sig_per_ct_loose[[cell_type]][[condition]])
+    }
+    # make unique
+    truly_vector_all_conds <- unique(truly_vector_all_conds)
+    loose_vector_all_conds <- unique(loose_vector_all_conds)
+    # add to the lists
+    sig_per_ct_truly_red[[cell_type]] <- truly_vector_all_conds
+    sig_per_ct_loose_red[[cell_type]] <- loose_vector_all_conds
+  }
+  # initialize the dataframe
+  count_df <- NULL
+  # now check each gene, and see if it is in any other sets
+  for(cell_type in names(sig_per_ct_truly_red)){
+    # we only need to check genes we havent't already done
+    for(gene in setdiff(sig_per_ct_truly_red[[cell_type]], count_df$gene)){
+      # we start counting at 1
+      count <- 1
+      # check the other cell types
+      for(cell_type_2 in setdiff(names(sig_per_ct_loose_red), c(cell_type))){
+        # it it's also loosely found, increase the count
+        if(gene %in% sig_per_ct_loose_red[[cell_type_2]]){
+          count <- count + 1
+        }
+      }
+      # create the row
+      count_row <- data.frame(gene=c(gene), count=c(count), stringsAsFactors = F)
+      # depending on if the count is one, set the type
+      if(count == 1){
+        count_row$specificity <- cell_type
+      }
+      else if(count > 1){
+        count_row$specificity <- 'mixed'
+      }
+      # add the count for this gene
+      if(is.null(count_df)){
+        count_df <- count_row
+      }
+      else{
+        count_df <- rbind(count_df, count_row)
+      }
+    }
+  }
+  return(count_df)
+}
+
+
+get_significant_genes_per_cell_type_and_condition <- function(output_per_ct_and_condition, pval_column='metap_bonferroni', pval_significance_threshold=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
+  # get the truly significant and loosely significant entries
+  sig_per_ct <- list()
+  # check specificity per cell type
+  for(cell_type in intersect(names(output_per_ct_and_condition), cell_types)){
+    # list per condition
+    sig_per_cond <- list()
+    # for each stimulation
+    for(stim in intersect(names(output_per_ct_and_condition[[cell_type]]), stims)){
+      # grab the entry
+      output <- output_per_ct_and_condition[[cell_type]][[stim]]
+      # grab the significant ones
+      sigs <- rownames(output[output[[pval_column]] < pval_significance_threshold, ])
+      # add this to list
+      sig_per_cond[[stim]] <- sigs
+    }
+    # add to list of lists
+    sig_per_ct[[cell_type]] <- sig_per_cond
+  }
+  return(sig_per_ct)
+}
+
+get_mast_per_cell_type_and_condition <- function(mast_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
+  # create list per cell type
+  mast_per_ct <- list()
+  # read each cell_type
+  for(cell_type in cell_types){
+    # create list per condition
+    mast_per_condition <- list()
+    # read each condition
+    for(condition in stims){
+      try({
+        # paste together the location
+        mast_loc <- paste(mast_output_loc, cell_type, 'UT', condition, '.tsv', sep = '')
+        # read the table
+        mast_output <- read.table(mast_loc, header = T, row.names = 1)
+        # put it in the list
+        mast_per_condition[[condition]] <- mast_output
+      })
+    }
+    # put in the list
+    mast_per_ct[[cell_type]] <- mast_per_condition
+  }
+  return(mast_per_ct)
+}
+
 create_overlap_pathway_df_cell_type <- function(cell_type, locations, use_ranking=T){
   # put all results in a list
   pathways_analysis <- list()
