@@ -853,6 +853,8 @@ v2_expression_mono_de_hm <- apply(v2_expression_mono_de_hm, 1, function(x){x <- 
 
 # grab some pathway genes to use for annotation
 pathways_list <- list()
+# 24hCA specific?
+#pathways_list[['Interferon alpha or beta_signaling']] <- "/data/scRNA/pathways/REACTOME_Interferon_alpha_or_beta_signaling.txt"
 # 3h
 pathways_list[['Interferon Signalling']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
 # 3h
@@ -928,7 +930,7 @@ colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_
 # plot all
 heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression', RowSideColors = t(colors_m))
 # exclude UT
-heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('blue', 'white', 'red'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
+heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
 
 
 

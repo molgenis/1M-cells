@@ -240,6 +240,50 @@ egenes_shared_and_unique_to_numbers_plot <- function(eqtl_output_loc_1, eqtl_out
   return(final_plot)
 }
 
+filter_unconfined_emp_mapping_to_top_effect <- function(eqtl_output_loc, filtered_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')){
+  # don't want to accidently overwrite anything
+  if(eqtl_output_loc == filtered_output_loc){
+    print('in and output location are the same, you do not want to overwrite original')
+  }
+  else{
+    # check each cell type
+    for(cell_type in cell_types){
+      # for each stlim
+      for(stim in stims){
+        try({
+          # grab the first one
+          eQTLs_1_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR0.05-ProbeLevel.txt.gz', sep = '')
+          eQTLs_1 <- read.table(eQTLs_1_ct_loc, sep = '\t', header = T)
+          eQTLs_1_sig <- unique(eQTLs_1[!is.na(eQTLs_1$FDR) & eQTLs_1$FDR < 0.05, ]$HGNCName)
+          # create new dataframe to store result
+          top_hits_table <- NULL
+          # check each probe/gene
+          for(gene in unique(eQTLs_1_sig$ProbeName)){
+            # grab hits with that probe
+            hits_gene <- eQTLs_1_sig[eQTLs_1_sig$ProbeName == gene, ]
+            # order by the absolute Z score
+            hits_gene <- hits_gene[order(abs(hits_gene$OverallZScore), decreasing = T), ]
+            # grab the top row
+            top_hit_row <- hits_gene[1, ]
+            # add to the top hits
+            if(is.null(top_hits_table)){
+              top_hits_table <- top_hit_row
+            }
+            else{
+              top_hits_table <- rbind(top_hits_table, top_hit_row)
+            }
+          }
+          # create output path
+          top_hits_out_loc <- paste(filtered_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR0.05-ProbeLevel.txt.gz', sep = '')
+          # write the table
+          write.table(top_hits_table, top_hits_out_loc, sep = '\t', row.names = F, col.names = T, quote = F)
+        })
+      }
+    }
+  }
+}
+
+
 coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_appends, set_names=NULL, cell_types=c('monocyte'), conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), use_ranking=T, toppfun=T, reactome=F){
   # put all results in a shared DF
   pathway_df <- NULL

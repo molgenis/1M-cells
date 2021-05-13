@@ -16,6 +16,8 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
     eqtl_stim_lost_numbers <- c()
     # eqtls gained after stim
     eqtl_stim_gained_numbers <- c()
+    # eqtls that are common
+    eqtl_shared_numbers <- c()
     
     # paste the eqtl output loc together
     eQTL_ut_loc <- paste(eqtl_output_loc, 'UT', '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
@@ -55,11 +57,13 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
       # add to list
       all_eqtl_genes <- c(all_eqtl_genes, eQTL_genes)
       # number as well
-      eqtl_genes_numbers <- c(eqtl_genes_numbers, (ct_ut_eqtl_number - length(eQTL_genes)))
+      eqtl_genes_numbers <- c(eqtl_genes_numbers, (length(eQTL_genes) - ct_ut_eqtl_number))
       # what is gained
       eqtl_genes_gained <- setdiff(eQTL_genes, eQTL_ut)
       # what is lost
       eqtl_genes_lost <- setdiff(eQTL_ut, eQTL_genes)
+      # what is common
+      eqtl_genes_common <- intersect(eQTL_ut, eQTL_genes)
       # add to list and divide if necessary
       if(divide_by_stim){
         eqtl_stim_gained_numbers <- c(eqtl_stim_gained_numbers, length(eqtl_genes_gained)/length(eQTL_genes))
@@ -69,6 +73,7 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
         eqtl_stim_gained_numbers <- c(eqtl_stim_gained_numbers, length(eqtl_genes_gained))
         eqtl_stim_lost_numbers <- c(eqtl_stim_lost_numbers, length(eqtl_genes_lost))
       }
+      eqtl_shared_numbers <- c(eqtl_shared_numbers, length(eqtl_genes_common))
     }
     # make unique
     all_de_genes <- unique(all_de_genes)
@@ -79,11 +84,11 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
     # turn into row depending on the summary method (looking at the outer join or the averages)
     ct_row <- NULL
     if(outer_join_method){
-      ct_row <- data.frame(cell_type=c(cell_type), de_number=c(ct_de_number), eqtl_diff=c(ct_ut_eqtl_number - ct_stim_eqtl_number), stringsAsFactors = F)
+      ct_row <- data.frame(cell_type=c(cell_type), de_number=c(ct_de_number), eqtl_diff=c(ct_stim_eqtl_number - ct_ut_eqtl_number ), stringsAsFactors = F)
     }
     else if(use_loss_and_gain_method){
       mean_difference_lost_and_gained <- mean(eqtl_stim_gained_numbers + eqtl_stim_lost_numbers)
-      ct_row <- data.frame(cell_type=c(cell_type), de_number=c(ct_de_number), eqtl_diff=mean_difference_lost_and_gained, stringsAsFactors = F)
+      ct_row <- data.frame(cell_type=c(cell_type), de_number=c(ct_de_number), eqtl_diff=mean_difference_lost_and_gained, gain=c(mean(eqtl_stim_gained_numbers)), loss=c(mean(eqtl_stim_lost_numbers)), common=c(mean(eqtl_shared_numbers)), stringsAsFactors = F)
     }
     else{
       ct_row <- data.frame(cell_type=c(cell_type), de_number=c(mean(de_genes_numbers)), eqtl_diff=c(mean(eqtl_genes_numbers)), stringsAsFactors = F)
@@ -96,6 +101,7 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
       numbers_table <- rbind(numbers_table, ct_row)
     }
   }
+  print(numbers_table)
   # the label is different depending on whether we show the proportion or not
   xlab <- 'Number of DE genes'
   cc <- get_color_coding_dict()
@@ -354,7 +360,7 @@ get_reqtls_weaker_vs_strong <- function(eqtl_output_loc, cell_types=c('B', 'CD4T
 }
 
 
-plot_per_condition <- function(reqtl_summary, ggpubr=F, to_pct=F, remove_classifications=c(), plot_classifications=NULL, plot_order=NULL, paper_style = F, use_label_dict=F, text_size=3){
+plot_per_condition <- function(reqtl_summary, ggpubr=F, to_pct=F, remove_classifications=c(), plot_classifications=NULL, plot_order=NULL, paper_style = F, use_label_dict=F, text_size=3, add_n=F){
   reqtl_summary <- reqtl_summary[reqtl_summary$reqtls > 0, ]
   # remove classifications we are not interested in for calculating the totals
   reqtl_summary <- reqtl_summary[!(reqtl_summary$classification %in% remove_classifications), ]
@@ -403,8 +409,12 @@ plot_per_condition <- function(reqtl_summary, ggpubr=F, to_pct=F, remove_classif
       # create fill for cell types
       colScale <- scale_fill_manual(name = "cell type",values = unlist(cc[unique(reqtl_summary$cell_type)]))
       # make plot
-      p <- ggplot(data=reqtl_summary, aes(x=cell_type, y=reqtls, fill=cell_type)) + geom_bar(stat='identity') + ggtitle(paste('effect change of eQTLs in reQTLs')) + facet_wrap(. ~ condition, ncol=ceiling(sqrt(length(unique(reqtl_summary$condition))))) +
-        geom_text(label = paste('n=',reqtl_summary$total, sep=''), group = cell_type, color = td[reqtl_summary$cell_type], vjust='bottom', y=5, size=text_size) + ylim(c(0, 100))
+      p <- ggplot(data=reqtl_summary, aes(x=cell_type, y=reqtls, fill=cell_type)) + geom_bar(stat='identity') + ggtitle(paste('effect change of eQTLs in reQTLs')) + facet_wrap(. ~ condition, ncol=ceiling(sqrt(length(unique(reqtl_summary$condition)))))
+      # add the n if requested
+      if(add_n){
+        p <- p + geom_text(label = paste('n=',reqtl_summary$total, sep=''), group = cell_type, color = td[reqtl_summary$cell_type], vjust='bottom', y=5, size=text_size)
+      }
+      p <- p + ylim(c(0, 100))
       # add colour and y label
       p <- p + labs(x = 'cell type', y = paste('percentage of reQTLs of which eQTL', unique(reqtl_summary$classification)[1])) + colScale
       # remove x ticks and test, as these are also in the legend
@@ -420,6 +430,216 @@ plot_per_condition <- function(reqtl_summary, ggpubr=F, to_pct=F, remove_classif
     return(p)
   }
 }
+
+get_eqtls_per_ct_and_condition <- function(eqtl_output_loc, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')){
+  condition_list <- list()
+  for(condition in conditions){
+    
+    cell_type_list <- list()
+    
+    for(cell_type in cell_types){
+      
+      full_loc <- paste(eqtl_output_loc, condition, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+      # read the table
+      eqtls <- read.table(full_loc, sep = '\t', header = T, stringsAsFactors = F)
+      # subset to significant ones
+      eqtls <- eqtls[eqtls[['FDR']] < 0.05, ]
+      # get the snp_probe combos 
+      snp_probe <- paste(eqtls[['SNPName']], eqtls[['ProbeName']], sep = '_')
+      # add to the list
+      cell_type_list[[cell_type]] <- snp_probe
+    }
+    # add to the condition list
+    condition_list[[condition]] <- cell_type_list
+  }
+  return(condition_list)
+}
+
+plot_eqtl_sharing_cell_type <- function(eqtls_per_condition_and_cell_type, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), use_label_dict=T, use_color_dict=T){
+  plot_per_condition <- list()
+  for(condition in intersect(conditions, names(eqtls_per_condition_and_cell_type))){
+    eqtls_per_ct <- eqtls_per_condition_and_cell_type[[condition]]
+    if(use_label_dict){
+      names(eqtls_per_ct) <- label_dict()[names(eqtls_per_ct)]
+    }
+    queries <- list()
+    sets.bar.color <- 'black'
+    if(use_color_dict){
+      # create df to store the number of each set, so we know how to order
+      nrs_df <- NULL
+      # add the colors for the cell types
+      for(i in 1:length(names(eqtls_per_ct))){
+        cell_type <- names(eqtls_per_ct)[i]
+        # add for the singles in the intersection sizes
+        ct_list <- list(
+          query = intersects,
+          params = list(cell_type),
+          color = get_color_coding_dict()[[cell_type]],
+          active = T)
+        queries[[i]] <- ct_list
+        # add for the DF to order the set sizes
+        numbers_row <- data.frame(ct=c(cell_type), nr=c(length(eqtls_per_ct[[cell_type]])), stringsAsFactors = F)
+        if(is.null(nrs_df)){
+          nrs_df <- numbers_row
+        }
+        else{
+          nrs_df <- rbind(nrs_df, numbers_row)
+        }
+      }
+      # get the order of the sets
+      ordered_cts <- nrs_df[order(nrs_df$nr, decreasing = T), 'ct']
+      # add the colors for the sets
+      sets.bar.color <- unlist(get_color_coding_dict()[ordered_cts])
+    }
+    upset_plot <- upset(fromList(eqtls_per_ct), order.by = 'freq', nsets = length(eqtls_per_ct), queries = queries, sets.bar.color=sets.bar.color	)
+    plot_per_condition[[condition]] <- (upset_plot)
+  }
+  return(plot_per_condition)
+}
+
+
+plot_eqtl_sharing_condition <- function(eqtls_per_condition_and_cell_type, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), use_label_dict=T, use_color_dict=T){
+  plot_per_cell_type <- list()
+  for(cell_type in cell_types){
+    eqtls_per_cond <- list()
+    for(condition in intersect(conditions, names(eqtls_per_condition_and_cell_type))){
+      if(cell_type %in% names(eqtls_per_condition_and_cell_type[[condition]])){
+        eqtls_per_cond[[condition]] <- eqtls_per_condition_and_cell_type[[condition]][[cell_type]]
+      }
+    }
+    if(use_label_dict){
+      names(eqtls_per_cond) <- label_dict()[names(eqtls_per_cond)]
+    }
+    queries <- list()
+    sets.bar.color <- 'black'
+    if(use_color_dict){
+      # create df to store the number of each set, so we know how to order
+      nrs_df <- NULL
+      # add the colors for the cell types
+      for(i in 1:length(names(eqtls_per_cond))){
+        condition <- names(eqtls_per_cond)[i]
+        # add for the singles in the intersection sizes
+        cond_list <- list(
+          query = intersects,
+          params = list(condition),
+          color = get_color_coding_dict()[[condition]],
+          active = T)
+        queries[[i]] <- cond_list
+        # add for the DF to order the set sizes
+        numbers_row <- data.frame(condition=c(condition), nr=c(length(eqtls_per_cond[[condition]])), stringsAsFactors = F)
+        if(is.null(nrs_df)){
+          nrs_df <- numbers_row
+        }
+        else{
+          nrs_df <- rbind(nrs_df, numbers_row)
+        }
+      }
+      # get the order of the sets
+      ordered_conds <- nrs_df[order(nrs_df$nr, decreasing = T), 'condition']
+      # add the colors for the sets
+      sets.bar.color <- unlist(get_color_coding_dict()[ordered_conds])
+    }
+    upset_plot <- upset(fromList(eqtls_per_cond), order.by = 'freq', nsets = length(names(eqtls_per_cond)), queries = queries, sets.bar.color=sets.bar.color	)
+    plot_per_cell_type[[cell_type]] <- (upset_plot)
+  }
+  return(plot_per_cell_type)
+}
+
+plot_eqtl_sharing_condition_ctmixed <- function(eqtls_per_condition_and_cell_type, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), use_label_dict=T, use_color_dict=T){
+  eqtls_per_cond <- list()
+  for(condition in intersect(conditions, names(eqtls_per_condition_and_cell_type))){
+    eqtls_this_cond <- c()
+    for(cell_type in intersect(cell_types, names(eqtls_per_condition_and_cell_type[[condition]]))){
+      eqtls_this_cond <- c(eqtls_this_cond, eqtls_per_condition_and_cell_type[[condition]][[cell_type]])
+    }
+    eqtls_per_cond[[condition]] <- unique(eqtls_this_cond)
+  }
+  if(use_label_dict){
+    names(eqtls_per_cond) <- label_dict()[names(eqtls_per_cond)]
+  }
+  queries <- list()
+  sets.bar.color <- 'black'
+  if(use_color_dict){
+    # create df to store the number of each set, so we know how to order
+    nrs_df <- NULL
+    # add the colors for the cell types
+    for(i in 1:length(names(eqtls_per_cond))){
+      condition <- names(eqtls_per_cond)[i]
+      # add for the singles in the intersection sizes
+      cond_list <- list(
+        query = intersects,
+        params = list(condition),
+        color = get_color_coding_dict()[[condition]],
+        active = T)
+      queries[[i]] <- cond_list
+      # add for the DF to order the set sizes
+      numbers_row <- data.frame(condition=c(condition), nr=c(length(eqtls_per_cond[[condition]])), stringsAsFactors = F)
+      if(is.null(nrs_df)){
+        nrs_df <- numbers_row
+      }
+      else{
+        nrs_df <- rbind(nrs_df, numbers_row)
+      }
+    }
+    # get the order of the sets
+    ordered_conds <- nrs_df[order(nrs_df$nr, decreasing = T), 'condition']
+    # add the colors for the sets
+    sets.bar.color <- unlist(get_color_coding_dict()[ordered_conds])
+  }
+  upsetplot <- upset(fromList(eqtls_per_cond), order.by = 'freq', nsets = length(names(eqtls_per_cond)), queries = queries, sets.bar.color=sets.bar.color	)
+  return(upsetplot)
+}
+
+plot_eqtl_sharing_cell_type_condmixed <- function(eqtls_per_condition_and_cell_type, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), use_label_dict=T, use_color_dict=T){
+  eqtls_per_ct <- list()
+  for(condition in intersect(conditions, names(eqtls_per_condition_and_cell_type))){
+    for(cell_type in intersect(cell_types, names(eqtls_per_condition_and_cell_type[[condition]]))){
+      eqtls <- eqtls_per_condition_and_cell_type[[condition]][[cell_type]]
+      if(cell_type %in% names(eqtls_per_ct)){
+        eqtls_per_ct[[cell_type]] <- c(eqtls_per_ct[[cell_type]], eqtls)
+      }
+      else{
+        eqtls_per_ct[[cell_type]] <- eqtls
+      }
+    }
+  }
+    if(use_label_dict){
+      names(eqtls_per_ct) <- label_dict()[names(eqtls_per_ct)]
+    }
+    queries <- list()
+    sets.bar.color <- 'black'
+    if(use_color_dict){
+      # create df to store the number of each set, so we know how to order
+      nrs_df <- NULL
+      # add the colors for the cell types
+      for(i in 1:length(names(eqtls_per_ct))){
+        cell_type <- names(eqtls_per_ct)[i]
+        # add for the singles in the intersection sizes
+        ct_list <- list(
+          query = intersects,
+          params = list(cell_type),
+          color = get_color_coding_dict()[[cell_type]],
+          active = T)
+        queries[[i]] <- ct_list
+        # add for the DF to order the set sizes
+        numbers_row <- data.frame(ct=c(cell_type), nr=c(length(eqtls_per_ct[[cell_type]])), stringsAsFactors = F)
+        if(is.null(nrs_df)){
+          nrs_df <- numbers_row
+        }
+        else{
+          nrs_df <- rbind(nrs_df, numbers_row)
+        }
+      }
+      # get the order of the sets
+      ordered_cts <- nrs_df[order(nrs_df$nr, decreasing = T), 'ct']
+      # add the colors for the sets
+      sets.bar.color <- unlist(get_color_coding_dict()[ordered_cts])
+    }
+    upset_plot <- upset(fromList(eqtls_per_ct), order.by = 'freq', nsets = length(eqtls_per_ct), queries = queries, sets.bar.color=sets.bar.color	)
+    return(upset_plot)
+  return(plot_per_condition)
+}
+
 
 get_color_coding_dict <- function(){
   # set the condition colors

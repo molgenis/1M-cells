@@ -2263,6 +2263,64 @@ get_genes_per_pathway_per_condition <- function(output_path_prepend, output_path
   return(all_lists)
 }
 
+plot_ng2018_rps26 <- function(ng2018_loc, coeqtl_output_loc, gene, cell_type, set, condition='UT', allele_dif=F, paper_style=F, verbose=T){
+  # paste together the coeqtl output loc for p
+  coeqtl_1m_p_loc <- paste(coeqtl_output_loc, gene, '_meta_', cell_type, '_p.tsv', sep = '')
+  coeqtl_1m_r_loc <- paste(coeqtl_output_loc, gene, '_', cell_type, '_', condition, '_rs.tsv', sep = '')
+  # read both tables
+  coeqtl_1m_p <- read.table(coeqtl_1m_p_loc, header = T, sep = '\t', row.names = 1)
+  coeqtl_1m_r <- read.table(coeqtl_1m_r_loc, header = T, sep = '\t', row.names = 1)
+  # grab the r values
+  sig_genes_1m <- rownames(coeqtl_1m_p[!is.na(coeqtl_1m_p[[condition]]) & coeqtl_1m_p[[condition]] < coeqtl_1m_p['significance_threshold', condition], , drop = F])
+  # then grab those r values
+  coeqtl_1m_r <- coeqtl_1m_r[sig_genes_1m, ]
+  # change direction if other allele assessed
+  if(allele_dif){
+    coeqtl_1m_r <- coeqtl_1m_r * -1
+  }
+  # read the ng2018 file
+  coeqtl_ng2018 <- read.table(ng2018_loc, header = T, sep = '\t', row.names = 1)
+  # get the genes that are in both
+  genes_both <- intersect(rownames(coeqtl_1m_r), rownames(coeqtl_ng2018))
+  # create a dataframe with both
+  coeqtl_r_both <- data.frame(ng2018=coeqtl_ng2018[genes_both, 'r'], m1=coeqtl_1m_r[genes_both, set], row.names = genes_both)
+  # calculate the concordance
+  concordance <- nrow(coeqtl_r_both[(coeqtl_r_both$ng2018 > 0 & coeqtl_r_both$m1 > 0) | (coeqtl_r_both$ng2018 < 0 & coeqtl_r_both$m1 < 0), ]) / nrow(coeqtl_r_both)
+  # order by the first column
+  coeqtl_r_both <- coeqtl_r_both[order(coeqtl_r_both$ng2018), ]
+  # print verbose if requested
+  if(verbose){
+    print(paste('ng2018 coeqtls: ', nrow(coeqtl_ng2018), ', ',
+                '1M coeqtls: ', nrow(coeqtl_1m_r), ', ',
+                'coeqtls in both: ', nrow(coeqtl_r_both), ', ',
+                'coeqtls concordant: ', nrow(coeqtl_r_both[(coeqtl_r_both$ng2018 > 0 & coeqtl_r_both$m1 > 0) | (coeqtl_r_both$ng2018 < 0 & coeqtl_r_both$m1 < 0), ]),
+                sep = ''
+          )
+    )
+  }
+  # plot
+  p <- ggplot(data=coeqtl_r_both, aes(x=ng2018, y=m1)) + 
+    xlim(c(-1, 1)) + ylim(c(-1, 1)) +
+    xlab('r Nature 2018 CD4+ T') + ylab(paste('r 1M', cell_type, condition)) +
+    ggtitle(paste('concordance of ', gene, ' co-eQTLs', sep = '')) +
+    annotate("rect", xmin=-Inf, xmax=0, ymin=-Inf, ymax=0, fill="green", alpha=0.1) + 
+    annotate("rect", xmin=0, xmax=Inf, ymin=0, ymax=Inf, fill="green", alpha=0.1) +
+    annotate("rect", xmin=-Inf, xmax=0, ymin=0, ymax=Inf, fill="red", alpha=0.1) + 
+    annotate("rect", xmin=0, xmax=Inf, ymin=-Inf, ymax=0, fill="red", alpha=0.1) +
+    geom_hline(yintercept=0, linetype="dashed", color = "black") +
+    geom_vline(xintercept=0, linetype="dashed", color = "black") +
+    geom_point() +
+    annotate("rect", xmin=0.5, xmax=1.0, ymin=-1, ymax=-0.75, fill="white", alpha=1) +
+    annotate("segment", x = 0.5, xend = 1, y = -0.75, yend = -0.75, colour = "black") +
+    annotate("segment", x = 0.5, xend = 1, y = -1, yend = -1, colour = "black") +
+    annotate("segment", x = 0.5, xend = 0.5, y = -0.75, yend = -1, colour = "black") +
+    annotate("segment", x = 1, xend = 1, y = -0.75, yend = -1, colour = "black") +
+    annotate("text", x = 0.75, y = -0.875, label = paste('', round(concordance*100, digits = 1), "% concordance", sep=''), fontface='bold')
+  if(paper_style){
+    p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+  }
+  return(p)
+}
 
 get_color_coding_dict <- function(){
   # set the condition colors
