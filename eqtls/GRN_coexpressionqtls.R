@@ -363,7 +363,7 @@ determine_significance_threshold <- function(interaction.result, fdr.thresh=0.05
     for (current.p.value.thresh in p.values){
       # check how many 'real' p values are smaller than this threshold
       signif.interactions <- length(which(p.values.unsorted <= current.p.value.thresh))
-      # get the permuted p values for this snp/geneA pair
+      # get the permuted p values for every snp/geneA pair
       permuted_p_values <- interaction.result[interaction.result$permuted == T, ]$p
       # get the number of permuted p values that were smaller than the threshold
       permuted_sig_p_values_number <- length(which(permuted_p_values <= current.p.value.thresh))
@@ -446,7 +446,7 @@ do_interaction_analysis_prepared_correlations_per_dataset <- function(prepared_c
   return(results_all)
 }
 
-meta_analyse_interaction_analysis <- function(interaction_analysis){
+meta_analyse_interaction_analysis <- function(interaction_analysis, use_n.e=F){
   # create somewhere to store the results
   interaction_results_meta <- NULL
   # create a unique combination of snp probe1 probe2
@@ -463,7 +463,7 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
     # then subset to the actual ones
     interaction_result_combination_true <- interaction_result_combination[interaction_result_combination$permuted == F, , drop = F]
     # get that p value
-    interaction_result_true <- meta_analyse_interaction(interaction_result_combination_true)
+    interaction_result_true <- meta_analyse_interaction(interaction_result_combination_true, use_n.e = use_n.e)
     # add the p value
     pvals <- c(pvals, interaction_result_true)
     # add the fact that this one was a permutation
@@ -480,7 +480,7 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
       # get this subset of permutations
       interaction_result_combination_permuted_i <- interaction_result_combination_permuted[indices, , drop = F]
       # do the interaction
-      interaction_result_permuted <- meta_analyse_interaction(interaction_result_combination_permuted_i)
+      interaction_result_permuted <- meta_analyse_interaction(interaction_result_combination_permuted_i, use_n.e = use_n.e)
       # add the p value
       pvals <- c(pvals, interaction_result_permuted)
       # add the fact that this one was a permutation
@@ -507,7 +507,7 @@ meta_analyse_interaction_analysis <- function(interaction_analysis){
   return(interaction_results_meta)
 }
 
-meta_analyse_interaction <- function(interaction){
+meta_analyse_interaction <- function(interaction, use_n.e=F){
   # grab betas
   betas <- interaction$beta.estimate
   # grab standard errors
@@ -515,7 +515,13 @@ meta_analyse_interaction <- function(interaction){
   # grab datasets
   datasets <- interaction$dataset
   # do the metaanalysis
-  metaAnalysis <- metagen(TE=c(betas), seTE = c(stdEs), studlab = datasets)
+  metaAnalysis <- NULL
+  if(use_n.e){
+    metaAnalysis <- metagen(TE=c(betas), seTE = c(stdEs), studlab = datasets)
+  }
+  else{
+    metaAnalysis <- metagen(TE=c(betas), seTE = c(stdEs), n.e = c(interaction$n_part), studlab = datasets)
+  }
   pval <- metaAnalysis$pval.random
   return(pval)
 }
@@ -634,6 +640,93 @@ create_correlations_from_genes <- function(seurat_object, geneAs, geneBs, assign
     }
   }
   return(correlation_table)
+}
+
+
+plot_dataset_p_vs_meta_p <- function(full_dataset, meta_dataset, dataset_column='dataset', full_dataset_p_column='p', meta_dataset_p_column='p', no_permuted=T, full_dataset_is_permuted_column='permuted', meta_dataset_is_permuted_column='permuted', meta_name='meta'){
+  # we'll create a plot list
+  plot_list <- list()
+  # check each dataset
+  for(dataset in unique(full_dataset[[dataset_column]])){
+    # subset the full dataset to that dataset
+    subset_dataset <- full_dataset[full_dataset[[dataset_column]] == dataset, ]
+    # subset to only unpermuted if requested
+    if(no_permuted){
+      subset_dataset <- subset_dataset[subset_dataset[[full_dataset_is_permuted_column]] == F, ]
+      meta_dataset <- meta_dataset[meta_dataset[[meta_dataset_is_permuted_column]] == F, ]
+    }
+    # get the genes that in both
+    genes_both <- intersect(subset_dataset$geneB, meta_dataset$geneB)
+    # grab the p values from both
+    subset_dataset_p <- -log10(subset_dataset[match(genes_both, subset_dataset$geneB), full_dataset_p_column])
+    meta_dataset_p <- -log10(meta_dataset[match(genes_both, meta_dataset$geneB), meta_dataset_p_column])
+    # turn into a dataframe
+    combined_ps <- data.frame(gene=genes_both, meta=meta_dataset_p, dataset=subset_dataset_p, stringsAsFactors = F)
+    # order by the meta p values
+    combined_ps <- combined_ps[order(combined_ps$meta), ]
+    # turn into a plot
+    p <- ggplot(data=combined_ps, mapping=aes(x=meta, y=dataset)) + geom_point() + ggtitle(paste('-log10 p values of co-eQTL', meta_name, 'vs', dataset)) + geom_smooth() +xlab(meta_name)
+    # put in the list
+    plot_list[[dataset]] <- p
+  }
+  combined_plots <- ggarrange(plotlist = plot_list)
+  return(combined_plots)
+}
+
+
+plot_datasets_against_each_other <- function(full_dataset,dataset_column='dataset', p_column='p', no_permuted=T, is_permuted_column='permuted', plot_r_instead=F, r_column='r', significance_threshold=NULL){
+  # we'll create a plot list
+  plot_list <- list()
+  # check each dataset
+  for(dataset in unique(full_dataset[[dataset_column]])){
+    # against each dataset
+    for(dataset_other in setdiff(unique(full_dataset[[dataset_column]]), dataset)){
+      # subset the full dataset to that dataset
+      subset_dataset <- full_dataset[full_dataset[[dataset_column]] == dataset, ]
+      subset_dataset_other <- full_dataset[full_dataset[[dataset_column]] == dataset_other, ]
+      # subset to only unpermuted if requested
+      if(no_permuted){
+        subset_dataset <- subset_dataset[subset_dataset[[is_permuted_column]] == F, ]
+        subset_dataset_other <- subset_dataset_other[subset_dataset_other[[is_permuted_column]] == F, ]
+      }
+      # get the genes that in both
+      genes_both <- intersect(as.character(subset_dataset$geneB), as.character(subset_dataset_other$geneB))
+      # subset to significant ones if requested
+      if(!is.null(significance_threshold)){
+        # grab significant genes
+        subset_dataset_sig_genes <- as.character(subset_dataset[subset_dataset[[p_column]] < significance_threshold, 'geneB'])
+        subset_dataset_other_sig_genes <- as.character(subset_dataset_other[subset_dataset_other[[p_column]] < significance_threshold, 'geneB'])
+        # significant in either
+        sig_either <- unique(c(subset_dataset_sig_genes, subset_dataset_other_sig_genes))
+        # intersect with the common ones
+        genes_both <- intersect(genes_both, sig_either)
+      }
+      # grab the p values from both
+      subset_dataset_p <- -log10(subset_dataset[match(genes_both, subset_dataset$geneB), p_column])
+      subset_dataset_other_p <- -log10(subset_dataset_other[match(genes_both, subset_dataset_other$geneB), p_column])
+      # plot the r instead if requested
+      if(plot_r_instead){
+        subset_dataset_p <- (subset_dataset[match(genes_both, subset_dataset$geneB), r_column])
+        subset_dataset_other_p <- (subset_dataset_other[match(genes_both, subset_dataset_other$geneB), r_column])
+      }
+      # turn into a dataframe
+      combined_ps <- data.frame(gene=genes_both, a=subset_dataset_p, b=subset_dataset_other_p, stringsAsFactors = F)
+      # order by the meta p values
+      combined_ps <- combined_ps[order(combined_ps$a), ]
+      # turn into a plot
+      p <- ggplot(data=combined_ps, mapping=aes(x=a, y=b)) + geom_point() + geom_smooth(method = 'lm') +xlab(dataset) + ylab(dataset_other)
+      if(plot_r_instead){
+        p <- p + ggtitle(paste('r values of co-eQTL', dataset, 'vs', dataset_other)) + xlim(c(-1, 1)) + ylim(c(-1, 1))
+      }
+      else{
+        p <- p + ggtitle(paste('-log10 p values of co-eQTL', dataset, 'vs', dataset_other))
+      }
+      # put in the list
+      plot_list[[paste(dataset, dataset_other, sep='')]] <- p
+    }
+  }
+  combined_plots <- ggarrange(plotlist = plot_list)
+  return(combined_plots)
 }
 
 # location of which SNP to use for each probe (gene)

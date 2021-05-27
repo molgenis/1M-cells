@@ -3,7 +3,9 @@ library(ggplot2)
 
 expand_ld_table <- function(ld){
   # double the ld table, so we can easily select just from the left or right
-  ld <- rbind(ld, ld[, c('CHR_B', 'BP_B', 'SNP_B', 'CHR_A', 'BP_A', 'SNP_A', 'R2')])
+  ld_copy <- ld[, c('CHR_B', 'BP_B', 'SNP_B', 'CHR_A', 'BP_A', 'SNP_A', 'R2')]
+  colnames(ld_copy) <- c('CHR_A', 'BP_A', 'SNP_A', 'CHR_B', 'BP_B', 'SNP_B', 'R2')
+  ld <- rbind(ld, ld_copy)
   # add each SNP in max LD with itself by copying the unique snps on the left and right
   ld_left <- ld[, c('CHR_A', 'BP_A', 'SNP_A')]
   ld_right <- ld[, c('CHR_B', 'BP_B', 'SNP_B')]
@@ -20,7 +22,7 @@ expand_ld_table <- function(ld){
 }
 
 
-prepare_mtb_file <- function(ld, mtb, eqtls, ld_cutoff=0.9){
+prepare_mtb_file <- function(ld, mtb, eqtls, ld_cutoff=0.8){
   # we need some regex
   mtb_variants <- str_extract(mtb$variant, '(\\d+|X|Y):\\d+')
   # add those variants to the mtb table for ease of use later
@@ -55,7 +57,7 @@ prepare_mtb_file <- function(ld, mtb, eqtls, ld_cutoff=0.9){
   return(ld_eqtl_and_mtb_top_effect)
 }
 
-prepare_ibd_file <- function(ld, ibd, eqtls, ld_cutoff=0.9){
+prepare_ibd_file <- function(ld, ibd, eqtls, ld_cutoff=0.8){
   # subset to the SNPs we have possible eQTLs for
   ld_eqtl <- ld[ld$SNP_A %in% eqtls$V1, ]
   # grab the LD for which we also have ibd variants
@@ -86,7 +88,7 @@ prepare_ibd_file <- function(ld, ibd, eqtls, ld_cutoff=0.9){
   return(ld_eqtl_and_ibd_top_effect)
 }
 
-add_eqtl_data <- function(gwas, eqtl_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), unsig_to_zero=F){
+add_eqtl_data <- function(gwas, eqtl_output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), unsig_to_zero=F, no_full_available=F){
   # combined data
   enriched_gwas <- NULL
   # check each cell type
@@ -95,7 +97,13 @@ add_eqtl_data <- function(gwas, eqtl_output_loc, cell_types=c('B', 'CD4T', 'CD8T
     for(stim in stims){
       try({
         # paste location
-        eQTLs_1_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+        eQTLs_1_ct_loc <- NULL
+        if(no_full_available){
+          eQTLs_1_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR0.05-ProbeLevel.txt.gz', sep = '')
+        }
+        else{
+          eQTLs_1_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+        }
         # read table
         eQTLs_1 <- read.table(eQTLs_1_ct_loc, sep = '\t', header = T, stringsAsFactors = F)
         # the unsignificant ones to zero if requested
@@ -111,6 +119,7 @@ add_eqtl_data <- function(gwas, eqtl_output_loc, cell_types=c('B', 'CD4T', 'CD8T
         gwas_ct_and_condition$Z <- eQTLs_1[match(as.character(gwas_ct_and_condition$SNP_A), as.character(eQTLs_1$SNPName)), 'OverallZScore']
         gwas_ct_and_condition$FDR <- eQTLs_1[match(as.character(gwas_ct_and_condition$SNP_A), as.character(eQTLs_1$SNPName)), 'FDR']
         gwas_ct_and_condition$P <- eQTLs_1[match(as.character(gwas_ct_and_condition$SNP_A), as.character(eQTLs_1$SNPName)), 'PValue']
+        gwas_ct_and_condition$allele <- eQTLs_1[match(as.character(gwas_ct_and_condition$SNP_A), as.character(eQTLs_1$SNPName)), 'AlleleAssessed']
         # add to the overal table
         if(is.null(enriched_gwas)){
           enriched_gwas <- gwas_ct_and_condition
@@ -208,7 +217,14 @@ get_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_c
       # grab the p values
       pvals <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition ==condition, gwas_cutoff_column]
       # calculate inflation
-      lambda <- median(qchisq(pvals, df=1, lower.tail=FALSE)) / qchisq(0.5, 1)
+      # Roy Method
+      #lambda <- median(qchisq(pvals, df=1, lower.tail=FALSE)) / qchisq(0.5, 1)
+      # Lude method
+      #lambda <- median(pvals)/qchisq(1/2, df = 1)
+      # internet method
+      # For p-values, calculate chi-squared statistic
+      chisq <- qchisq(1-pvals,1)
+      lambda <- median(chisq)/qchisq(0.5,1)
       # create row
       inflations_row <- data.frame(cell_type=c(cell_type), condition=c(condition), lambda=c(lambda))
       # add to df
@@ -345,6 +361,66 @@ fisher_test_enrichment_difference <- function(numbers_table, cell_type_column='c
   }
   return(numbers_table_enriched)
 }
+
+get_plottable_effect_frame <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_cutoff_value=0.05, gwas_cutoff_column='gwas_p', gwas_cutoff_value=0.05, significant_in='both'){
+  # create the plottable frame
+  plottable_frame <- NULL
+  # get the SNPs that were significant and that were tested as eQTLs
+  gwas_and_eqtls_gwassig <- gwas_and_eqtls[!is.na(gwas_and_eqtls[[gwas_cutoff_column]]) & gwas_and_eqtls[[gwas_cutoff_column]] < gwas_cutoff_value & !is.na(gwas_and_eqtls[[eqtl_cutoff_column]]), ]
+  # check each cell type
+  for(cell_type in unique(gwas_and_eqtls_gwassig$cell_type)){
+    # we will reuse the UT conditions, so lets' just grab that one
+    gwas_and_eqtls_gwassig_ut <- gwas_and_eqtls_gwassig[gwas_and_eqtls_gwassig$condition == 'UT' & gwas_and_eqtls_gwassig$cell_type == cell_type, ]
+    # check each condition that is not UT
+    for(condition in setdiff(unique(gwas_and_eqtls_gwassig$condition), 'UT')){
+      # check the stim condition
+      gwas_and_eqtls_gwassig_stim <- gwas_and_eqtls_gwassig[gwas_and_eqtls_gwassig$condition == condition & gwas_and_eqtls_gwassig$cell_type == cell_type, ]
+      # get eQTL snps tested in both
+      snps_both_conditions <- intersect(gwas_and_eqtls_gwassig_ut$SNP_A, gwas_and_eqtls_gwassig_stim$SNP_A)
+      # there is not really anything to do if there are no SNPs
+      if(length(snps_both_conditions) > 0){
+        # grab them from both dataframes in the same order, with the values we want
+        gwas_and_eqtls_gwassig_ut_both <- gwas_and_eqtls_gwassig_ut[match(snps_both_conditions, gwas_and_eqtls_gwassig_ut$SNP_A), c('SNP_A', 'allele', 'gwas_p', 'cell_type',  'condition', 'Z', 'FDR', 'P')]
+        gwas_and_eqtls_gwassig_stim_both <- gwas_and_eqtls_gwassig_stim[match(snps_both_conditions, gwas_and_eqtls_gwassig_stim$SNP_A), c('condition', 'Z', 'FDR', 'P' ,'allele')]
+        # rename the columns so we can find them back after cbinding
+        colnames(gwas_and_eqtls_gwassig_ut_both) <- c('SNP', 'allele', 'gwas_p', 'cell_type', 'condition_1', 'UT_Z', 'UT_FDR', 'UT_P')
+        colnames(gwas_and_eqtls_gwassig_stim_both) <- c('condition_2', 'stim_Z', 'stim_FDR', 'stim_P' ,'stim_allele')
+        # combine the dataframes
+        gwas_and_eqtls_gwassig_both <- cbind(gwas_and_eqtls_gwassig_ut_both, gwas_and_eqtls_gwassig_stim_both)
+        # flip allelic directions where needed
+        gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both$allele != gwas_and_eqtls_gwassig_both$stim_allele, 'stim_Z'] <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both$allele != gwas_and_eqtls_gwassig_both$stim_allele, 'stim_Z'] * -1
+        # filter by significance
+        if(significant_in == 'both'){
+          gwas_and_eqtls_gwassig_both <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both[[paste('UT', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value & gwas_and_eqtls_gwassig_both[[paste('stim', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value, ]
+        }
+        else if(significant_in =='either'){
+          gwas_and_eqtls_gwassig_both <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both[[paste('UT', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value | gwas_and_eqtls_gwassig_both[[paste('stim', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value, ]
+        }
+        else if(significant_in == 'UT'){
+          gwas_and_eqtls_gwassig_both <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both[[paste('UT', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value, ]
+        }
+        else if(significant_in == 'stim'){
+          gwas_and_eqtls_gwassig_both <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both[[paste('stim', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value, ]
+        }
+        else{
+          print('unknown option, doing both')
+          gwas_and_eqtls_gwassig_both <- gwas_and_eqtls_gwassig_both[gwas_and_eqtls_gwassig_both[[paste('UT', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value & gwas_and_eqtls_gwassig_both[[paste('stim', eqtl_cutoff_column, sep = '_')]] < eqtl_cutoff_value, ]
+        }
+        # we don't need the stim allele anymore, since we corrected for that one
+        gwas_and_eqtls_gwassig_both$stim_allele <- NULL
+        # add to the plottable frame
+        if(is.null(plottable_frame)){
+          plottable_frame <- gwas_and_eqtls_gwassig_both
+        }
+        else{
+          plottable_frame <- rbind(plottable_frame, gwas_and_eqtls_gwassig_both)
+        }
+      }
+    }
+  }
+  return(plottable_frame)
+}
+
 
 get_color_coding_dict <- function(){
   # set the condition colors
@@ -507,7 +583,7 @@ label_dict <- function(){
 }
 
 # location of the LD file
-ld_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/LD_DB/genotypes_eur/EUR.chr1-22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.RSID.plink1.ld'
+ld_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/LD_DB/genotypes_eur/EUR.chrAll.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.positions_plus_RSID.plink1.ldwindow10000.r2_075.ld'
 # location of the eQTL confinement file
 eqtls_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/eqtl_v1013_lead_esnps.txt'
 # location of the GWASes
@@ -515,6 +591,9 @@ mtb_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enri
 ibd_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/ibd_build37_59957_20161107_formatted.txt.gz'
 ms_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/multiple_sclerosis_2013_24076602_hg19.txt.gz'
 ra_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/RA_GWASmeta_TransEthnic_v2_formatted.txt.gz'
+t1d_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/onengut_2015_25751624_t1d_meta_formatted.txt.gz'
+cd_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/TrynkaG_2011_formatted.txt.gz'
+ca_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/summary_stats/GC_assoc_nohetero_relatives_outliers_hwe1minus6_maf0.05_noMono_US_discovery_cohort_imputed_candida_Feb2017new.assoc'
 
 # read the ld table
 ld <- read.table(ld_loc, header=T, stringsAsFactors = F)
@@ -523,6 +602,9 @@ ld <- expand_ld_table(ld)
 
 # read the confinement file
 eqtls <- read.table(eqtls_loc, sep = '\t', header = F, stringsAsFactors = F)
+
+# confine the ld table to eQTL snps on the left
+ld <- ld[ld$SNP_A %in% eqtls$V1, ]
 
 # read the MTB table
 mtb <- read.table(mtb_loc, sep = '\t', header=T, stringsAsFactors = F)
@@ -548,7 +630,8 @@ ibd_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ibd_to
 # do lamba inflation
 ibd_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ibd_top_hit_per_esnp_z)
 ibd_top_hit_per_esnp_z_inflations_plots <- plot_lamba_inflation(ibd_top_hit_per_esnp_z)
-
+# get a plottable frame
+ibd_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(ibd_top_hit_per_esnp_z)
 
 # read the MS table
 ms <- read.table(ms_loc, sep = '\t', header=T, stringsAsFactors = F)
@@ -564,7 +647,8 @@ plot_gwas_vs_eqtls(ms_top_hit_per_esnp_z)
 ms_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ms_top_hit_per_esnp_z)
 # do fisher exact tests
 ms_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ms_top_hit_per_esnp_z_stats)
-
+# do lamba inflation
+ms_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ms_top_hit_per_esnp_z)
 
 # read the IBD table
 ra <- read.table(ra_loc, sep = '\t', header=T, stringsAsFactors = F)
@@ -578,4 +662,68 @@ plot_gwas_vs_eqtls(ra_top_hit_per_esnp_z)
 ra_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ra_top_hit_per_esnp_z)
 # do fisher exact tests
 ra_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ra_top_hit_per_esnp_z_stats)
+# do lamba inflation
+ra_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ra_top_hit_per_esnp_z)
+
+
+# read the IBD table
+t1d <- read.table(t1d_loc, sep = '\t', header=T, stringsAsFactors = F)
+# add top GWAS hit to each eqtlgen SNP
+t1d_top_hit_per_esnp <- prepare_ibd_file(ld, t1d, eqtls)
+# enrich with eQTL data
+t1d_top_hit_per_esnp_z <- add_eqtl_data(t1d_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+# plot
+plot_gwas_vs_eqtls(t1d_top_hit_per_esnp_z)
+# get the numbers
+t1d_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(t1d_top_hit_per_esnp_z)
+# do fisher exact tests
+t1d_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(t1d_top_hit_per_esnp_z_stats)
+# do lamba inflation
+t1d_top_hit_per_esnp_z_inflations <- get_lamba_inflation(t1d_top_hit_per_esnp_z)
+
+
+# read the IBD table
+cd <- read.table(cd_loc, sep = '\t', header=T, stringsAsFactors = F)
+# add top GWAS hit to each eqtlgen SNP
+cd_top_hit_per_esnp <- prepare_ibd_file(ld, cd, eqtls)
+# enrich with eQTL data
+cd_top_hit_per_esnp_z <- add_eqtl_data(cd_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+# plot
+plot_gwas_vs_eqtls(cd_top_hit_per_esnp_z)
+# get the numbers
+cd_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(cd_top_hit_per_esnp_z)
+# do fisher exact tests
+cd_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(cd_top_hit_per_esnp_z_stats)
+# do lamba inflation
+cd_top_hit_per_esnp_z_inflations <- get_lamba_inflation(cd_top_hit_per_esnp_z)
+
+
+# read the IBD table
+ca <- read.table(ca_loc, header=T, stringsAsFactors = F)
+# add another column
+ca$p <- ca$P
+# add top GWAS hit to each eqtlgen SNP
+ca_top_hit_per_esnp <- prepare_ibd_file(ld, ca, eqtls)
+# enrich with eQTL data
+ca_top_hit_per_esnp_z <- add_eqtl_data(ca_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+# plot
+plot_gwas_vs_eqtls(ca_top_hit_per_esnp_z)
+# get the numbers
+ca_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ca_top_hit_per_esnp_z)
+# do fisher exact tests
+ca_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ca_top_hit_per_esnp_z_stats)
+# do lamba inflation
+ca_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ca_top_hit_per_esnp_z)
+
+
+# paste everything together and then check what it looks like
+all_top_hit_per_esnp_z <- rbind(ibd_top_hit_per_esnp_z, ms_top_hit_per_esnp_z, ra_top_hit_per_esnp_z, t1d_top_hit_per_esnp_z, cd_top_hit_per_esnp_z, ca_top_hit_per_esnp_z)
+# and check the numbers there
+all_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(all_top_hit_per_esnp_z)
+# do fisher exact tests
+all_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(all_top_hit_per_esnp_z_stats)
+# check lambda inflation
+all_top_hit_per_esnp_z_inflations <- get_lamba_inflation(all_top_hit_per_esnp_z)
+# plot
+plot_gwas_vs_eqtls(all_top_hit_per_esnp_z)
 
