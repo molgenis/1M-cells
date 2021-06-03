@@ -214,25 +214,28 @@ get_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_c
   for(cell_type in unique(gwas_and_eqtls$cell_type)){
     # check each condition
     for(condition in unique(gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type, 'condition'])){
-      # grab the p values
-      pvals <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition ==condition, gwas_cutoff_column]
-      # calculate inflation
-      # Roy Method
-      #lambda <- median(qchisq(pvals, df=1, lower.tail=FALSE)) / qchisq(0.5, 1)
-      # Lude method
-      #lambda <- median(pvals)/qchisq(1/2, df = 1)
-      # internet method
-      # For p-values, calculate chi-squared statistic
-      chisq <- qchisq(1-pvals,1)
-      lambda <- median(chisq)/qchisq(0.5,1)
-      # create row
-      inflations_row <- data.frame(cell_type=c(cell_type), condition=c(condition), lambda=c(lambda))
-      # add to df
-      if(is.null(inflations_df)){
-        inflations_df <- inflations_row
-      }
-      else{
-        inflations_df <- rbind(inflations_df, inflations_row)
+      if(nrow(gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, ] > 0)){
+        # grab the p values
+        pvals <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, gwas_cutoff_column]
+        # calculate inflation
+        # Roy Method
+        lambda <- median(qchisq(pvals, df=1, lower.tail=FALSE)) / qchisq(0.5, 1)
+        # Lude method
+        #lambda <- median(pvals)/qchisq(1/2, df = 1)
+        # internet method
+        #chisq <- qchisq(1-pvals,1)
+        #lambda <- median(chisq)/qchisq(0.5,1) # same as Roy method
+        # QCEWAS method
+        #lambda <- P_lambda(pvals) # same result as internet method
+        # create row
+        inflations_row <- data.frame(cell_type=c(cell_type), condition=c(condition), nsnps=c(length(pvals)), lambda=c(lambda))
+        # add to df
+        if(is.null(inflations_df)){
+          inflations_df <- inflations_row
+        }
+        else{
+          inflations_df <- rbind(inflations_df, inflations_row)
+        }
       }
     }
   }
@@ -240,7 +243,7 @@ get_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_c
 }
 
 
-plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_cutoff_value=0.05, eqtl_cutoff_larger=F, gwas_cutoff_column='gwas_p'){
+plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_cutoff_value=0.05, eqtl_cutoff_larger=F, gwas_cutoff_column='gwas_p', mark_reqtl=F){
   # create inflations df
   inflations_list <- NULL
   # remove SNPs not in the GWAS
@@ -261,11 +264,26 @@ plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_
       min_p <- min(gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type, gwas_cutoff_column])
       min_log_p <- -log10(min_p)
       # grab the p values
-      observedPValues <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition ==condition, gwas_cutoff_column]
+      observedPValues <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, gwas_cutoff_column]
       # calculate inflation
       lambda <- median(qchisq(observedPValues, df=1, lower.tail=FALSE)) / qchisq(0.5, 1)
+      # create the plot data
+      snps <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, 'SNP_A']
+      plot_data <- data.frame(snp=snps, observed=observedPValues)
+      plot_data <- plot_data[order(plot_data$observed), ]
+      plot_data$observed <- -log10(plot_data$observed)
+      plot_data$predicted <- -log10(1:length(observedPValues)/length(observedPValues))
       # create plot
-      p <- ggplot(data=data.frame(x=-log10(1:length(observedPValues)/length(observedPValues)), y=-log10(sort(observedPValues))), aes(x=x, y=y)) + geom_point() +
+      p <- NULL
+      if(mark_reqtl){
+        gwas_and_eqtls_cond_ct <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, ]
+        plot_data$reqtl <- gwas_and_eqtls_cond_ct[match(plot_data$snp, gwas_and_eqtls_cond_ct$SNP_A), 'is_reqtl']
+        p <- ggplot(data=plot_data, aes(x=predicted, y=observed, fill=reqtl)) + geom_point()
+      }
+      else{
+        p <- ggplot(data=plot_data, aes(x=predicted, y=observed)) + geom_point()
+      }
+      p <- p +
            xlim(c(0,min_log_p)) +
            ylim(c(0,min_log_p)) +
            labs(title=paste(cell_type, condition)) + 
@@ -419,6 +437,204 @@ get_plottable_effect_frame <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR',
     }
   }
   return(plottable_frame)
+}
+
+
+get_weaker_vs_stronger_eqtl_effects <- function(comparison_df, gwas_cutoff=0.05){
+  # init df to store results
+  result_df <- NULL
+  # check each cell type
+  for(cell_type in unique(comparison_df$cell_type)){
+    # check each condition
+    for(condition1 in unique(comparison_df[comparison_df$cell_type == cell_type, ]$condition_1)){
+      # check each stimulation condition that was compared
+      for(condition2 in unique(comparison_df[comparison_df$cell_type == cell_type & comparison_df$condition_1 == condition1, ]$condition_2)){
+        # get the significant ones to compare
+        significant_comparisons <- comparison_df[comparison_df$cell_type == cell_type & comparison_df$condition_1 == condition1 & comparison_df$condition_2 == condition2 & comparison_df$gwas_p < gwas_cutoff, ]
+        # check how many flipped direction
+        dir_flips <- nrow(significant_comparisons[(significant_comparisons$UT_Z < 0 & significant_comparisons$stim_Z > 0) | (significant_comparisons$UT_Z > 0 & significant_comparisons$stim_Z < 0), ])
+        # remove these for the rest of the analyses
+        significant_comparisons <- significant_comparisons[!(significant_comparisons$UT_Z < 0 & significant_comparisons$stim_Z > 0) & !(significant_comparisons$UT_Z > 0 & significant_comparisons$stim_Z < 0), ]
+        # get the stronger and weaker, we can check absolute, since we removed direction flips
+        stronger <- nrow(significant_comparisons[abs(significant_comparisons$UT_Z) < abs(significant_comparisons$stim_Z), ])
+        weaker <- nrow(significant_comparisons[abs(significant_comparisons$UT_Z) > abs(significant_comparisons$stim_Z), ])
+        # turn into dataframe
+        result_row <- data.frame(cell_type=c(cell_type), condition_1=c(condition1), condition_2=c(condition2), flips=c(dir_flips), stronger=c(stronger), weaker=c(weaker))
+        # add to the rest of the dataframe
+        if(is.null(result_df)){
+          result_df <- result_row
+        }
+        else{
+          result_df <- rbind(result_df, result_row)
+        }
+      }
+    }
+  }
+  return(result_df)
+}
+
+
+create_fisher_tables <- function(list_of_fisher_results, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stim_order=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), compare_condition='UT', output_dir=NULL){
+  # check each fisher result
+  for(gwas_name in names(list_of_fisher_results)){
+    # init table
+    fisher_table <- data.frame(cell_type=cell_types, stringsAsFactors = F)
+    # grab that specific GWAS
+    fisher_gwas <- list_of_fisher_results[[gwas_name]]
+    # grab each fisher result
+    for(stim in intersect(stim_order, fisher_gwas$condition)){
+      # add column
+      fisher_table[[stim]] <- NA
+      # subset to stim
+      fisher_gwas_stim <- fisher_gwas[fisher_gwas$condition == stim, ]
+      # check each cell type
+      for(cell_type in intersect(cell_types, fisher_gwas_stim$cell_type)){
+        # get the fisher P value
+        pval <- fisher_gwas_stim[fisher_gwas_stim$cell_type == cell_type, paste('fisher', compare_condition, sep = '_')]
+        # add it to the table
+        fisher_table[fisher_table$cell_type == cell_type, stim] <- pval
+      }
+    }
+    list_of_fisher_results[[gwas_name]] <- fisher_table
+    # write the table if requested
+    if(!is.null(output_dir)){
+      # paste output location together
+      out_full <- paste(output_dir, gsub(' ', '_', gwas_name), '.tsv', sep = '')
+      # write the table
+      write.table(fisher_table, out_full, sep = '\t', row.names = F, col.names = T, quote = F)
+    }
+  }
+  return(list_of_fisher_results)
+}
+
+get_re_and_non_reqtl_eqtls <- function(eqtl_output_folder, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stim_order=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), confine_to_testable=T){
+  list_conditions <- list()
+  # each stim
+  for(stim in stim_order){
+    # create a list for the condition
+    list_condition <- list()
+    # each cell type
+    for(cell_type in cell_types){
+      # set up the locations
+      ut_location <- paste(eqtl_output_folder, 'UT/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+      stim_location <- paste(eqtl_output_folder, stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+      vs_location <- paste(eqtl_output_folder, 'UT_vs_', stim, '/', cell_type, '_expression/eQTLsFDR-ProbeLevel.txt.gz', sep = '')
+      # read the tables
+      ut_eqtls <- read.table(ut_location, header=T, sep = '\t', stringsAsFactors = F)
+      stim_eqtls <- read.table(stim_location, header=T, sep = '\t', stringsAsFactors = F)
+      vs_reqtls <- read.table(vs_location, header=T, sep = '\t', stringsAsFactors = F)
+      # add a nunique identifier
+      ut_eqtls$snp_probe <- paste(ut_eqtls$SNPName, ut_eqtls$HGNCName, sep = '_')
+      stim_eqtls$snp_probe <- paste(stim_eqtls$SNPName, stim_eqtls$HGNCName, sep = '_')
+      vs_reqtls$snp_probe <- paste(vs_reqtls$SNPName, vs_reqtls$HGNCName, sep = '_')
+      # only compare what we could at least test
+      if(confine_to_testable){
+        # get the intersect
+        testable <- intersect(intersect(ut_eqtls$snp_probe, stim_eqtls$snp_probe), vs_reqtls$snp_probe)
+        # subset to that
+        ut_eqtls <- ut_eqtls[ut_eqtls$snp_probe %in% testable, ]
+        stim_eqtls <- stim_eqtls[stim_eqtls$snp_probe %in% testable, ]
+        vs_reqtls <- vs_reqtls[vs_reqtls$snp_probe %in% testable, ]
+      }
+      # join the ut and stim
+      joined_ut_stim_snps <- unique(c(ut_eqtls[ut_eqtls$FDR < 0.05, 'SNPName'], stim_eqtls[stim_eqtls$FDR < 0.05, 'SNPName']))
+      # get which are a reqtl at some point
+      reqtl_eqtl_yes <- joined_ut_stim_snps[joined_ut_stim_snps %in% vs_reqtls[vs_reqtls$FDR < 0.05, 'SNPName']]
+      reqtl_eqtl_no <- joined_ut_stim_snps[!(joined_ut_stim_snps %in% vs_reqtls[vs_reqtls$FDR < 0.05, 'SNPName'])]
+      # add to the list
+      list_this_ct <- list()
+      list_this_ct[['yes']] <- reqtl_eqtl_yes
+      list_this_ct[['no']] <- reqtl_eqtl_no
+      list_condition[[cell_type]] <- list_this_ct
+    }
+    list_conditions[[stim]] <- list_condition
+  }
+  return(list_conditions)
+}
+
+add_reqtl_status <- function(gwas_and_eqtls, reqtl_yes_no){
+  # init column
+  gwas_and_eqtls$is_reqtl <- NA
+  # check each condition
+  for(condition in unique(gwas_and_eqtls$condition)){
+    # check each cell type
+    for(cell_type in unique(gwas_and_eqtls[gwas_and_eqtls$condition == condition, 'cell_type'])){
+      # check if there is data on whether it is a reqtl
+      if(condition %in% names(reqtl_yes_no) & cell_type %in% names(reqtl_yes_no[[condition]])){
+        gwas_and_eqtls[gwas_and_eqtls$condition == condition &
+                         gwas_and_eqtls$cell_type == cell_type &
+                         gwas_and_eqtls$SNP_A %in% reqtl_yes_no[[condition]][[cell_type]][['yes']], 'is_reqtl'] <- T
+        gwas_and_eqtls[gwas_and_eqtls$condition == condition &
+                         gwas_and_eqtls$cell_type == cell_type &
+                         gwas_and_eqtls$SNP_A %in% reqtl_yes_no[[condition]][[cell_type]][['no']], 'is_reqtl'] <- F
+      }
+    }
+  }
+  return(gwas_and_eqtls)
+}
+
+create_lamba_inflation_tables <- function(list_of_lambda_results, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stim_order=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), gsub_remove=NULL, output_dir=NULL, reqtls=F){
+  # check each fisher result
+  for(gwas_name in names(list_of_lambda_results)){
+    # init table
+    lambda_table <- data.frame(cell_type=cell_types, stringsAsFactors = F)
+    # grab that specific GWAS
+    lambda_gwas <- list_of_lambda_results[[gwas_name]]
+    # grab each fisher result
+    for(stim in intersect(stim_order, lambda_gwas$condition)){
+      # add column
+      if(!reqtls){
+        lambda_table[[paste('nsnps', stim, sep = '_')]] <- NA
+        lambda_table[[paste('lambda', stim, sep = '_')]] <- NA
+      }
+      else{
+        lambda_table[[paste('reqtl_nsnps', stim, sep = '_')]] <- NA
+        lambda_table[[paste('reqtl_lambda', stim, sep = '_')]] <- NA
+        lambda_table[[paste('nonreqtl_nsnps', stim, sep = '_')]] <- NA
+        lambda_table[[paste('nonreqtl_lambda', stim, sep = '_')]] <- NA
+      }
+      # subset to stim
+      lambda_gwas_stim <- lambda_gwas[lambda_gwas$condition == stim, ]
+      # check each cell type
+      for(cell_type in intersect(cell_types, lambda_gwas_stim$cell_type)){
+        if(!reqtls){
+          # get the fisher P value
+          lambda <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'lambda']
+          nsnps <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'nsnps']
+          # add it to the table
+          lambda_table[lambda_table$cell_type == cell_type, paste('lambda', stim, sep = '_')] <- lambda
+          lambda_table[lambda_table$cell_type == cell_type, paste('nsnps', stim, sep = '_')] <- nsnps
+        }
+        else{
+          # get the fisher P value
+          lambda.x <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'lambda.x']
+          nsnps.x <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'nsnps.x']
+          # add it to the table
+          lambda_table[lambda_table$cell_type == cell_type, paste('reqtl_lambda', stim, sep = '_')] <- lambda.x
+          lambda_table[lambda_table$cell_type == cell_type, paste('reqtl_nsnps', stim, sep = '_')] <- nsnps.x
+          # get the fisher P value
+          lambda.y <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'lambda.y']
+          nsnps.y <- lambda_gwas_stim[lambda_gwas_stim$cell_type == cell_type, 'nsnps.y']
+          # add it to the table
+          lambda_table[lambda_table$cell_type == cell_type, paste('nonreqtl_lambda', stim, sep = '_')] <- lambda.y
+          lambda_table[lambda_table$cell_type == cell_type, paste('nonreqtl_nsnps', stim, sep = '_')] <- nsnps.y
+        }
+      }
+    }
+    # clean up column names if requested
+    if(!is.null(gsub_remove)){
+      colnames(lambda_table) <- gsub(gsub_remove, '', colnames(lambda_table))
+    }
+    list_of_lambda_results[[gwas_name]] <- lambda_table
+    # write the table if requested
+    if(!is.null(output_dir)){
+      # paste output location together
+      out_full <- paste(output_dir, gsub(' ', '_', gwas_name), '.tsv', sep = '')
+      # write the table
+      write.table(lambda_table, out_full, sep = '\t', row.names = F, col.names = T, quote = F)
+    }
+  }
+  return(list_of_lambda_results)
 }
 
 
@@ -603,6 +819,9 @@ ld <- expand_ld_table(ld)
 # read the confinement file
 eqtls <- read.table(eqtls_loc, sep = '\t', header = F, stringsAsFactors = F)
 
+# get reqtl status of eQTLs
+reqtls_yes_no <- get_re_and_non_reqtl_eqtls('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+
 # confine the ld table to eQTL snps on the left
 ld <- ld[ld$SNP_A %in% eqtls$V1, ]
 
@@ -627,11 +846,20 @@ plot_gwas_vs_eqtls(ibd_top_hit_per_esnp_z)
 ibd_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ibd_top_hit_per_esnp_z)
 # do fisher exact tests
 ibd_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ibd_top_hit_per_esnp_z_stats)
+# add reqtl info
+ibd_top_hit_per_esnp_z <- add_reqtl_status(ibd_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 ibd_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ibd_top_hit_per_esnp_z)
+ibd_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(ibd_top_hit_per_esnp_z[!is.na(ibd_top_hit_per_esnp_z$is_reqtl) & ibd_top_hit_per_esnp_z$is_reqtl == T, ])
+ibd_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(ibd_top_hit_per_esnp_z[!is.na(ibd_top_hit_per_esnp_z$is_reqtl) & ibd_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+ibd_top_hit_per_esnp_z_inflations_reqtl <- merge(x=ibd_top_hit_per_esnp_z_inflations_reqtl_yes, y=ibd_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# plots
 ibd_top_hit_per_esnp_z_inflations_plots <- plot_lamba_inflation(ibd_top_hit_per_esnp_z)
 # get a plottable frame
 ibd_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(ibd_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+ibd_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(ibd_top_hit_per_esnp_z_plottable)
 
 # read the MS table
 ms <- read.table(ms_loc, sep = '\t', header=T, stringsAsFactors = F)
@@ -647,8 +875,18 @@ plot_gwas_vs_eqtls(ms_top_hit_per_esnp_z)
 ms_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ms_top_hit_per_esnp_z)
 # do fisher exact tests
 ms_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ms_top_hit_per_esnp_z_stats)
+# add reqtl info
+ms_top_hit_per_esnp_z <- add_reqtl_status(ms_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 ms_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ms_top_hit_per_esnp_z)
+ms_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(ms_top_hit_per_esnp_z[!is.na(ms_top_hit_per_esnp_z$is_reqtl) & ms_top_hit_per_esnp_z$is_reqtl == T, ])
+ms_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(ms_top_hit_per_esnp_z[!is.na(ms_top_hit_per_esnp_z$is_reqtl) & ms_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+ms_top_hit_per_esnp_z_inflations_reqtl <- merge(x=ms_top_hit_per_esnp_z_inflations_reqtl_yes, y=ms_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# get a plottable frame
+ms_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(ms_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+ms_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(ms_top_hit_per_esnp_z_plottable)
 
 # read the IBD table
 ra <- read.table(ra_loc, sep = '\t', header=T, stringsAsFactors = F)
@@ -662,8 +900,18 @@ plot_gwas_vs_eqtls(ra_top_hit_per_esnp_z)
 ra_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ra_top_hit_per_esnp_z)
 # do fisher exact tests
 ra_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ra_top_hit_per_esnp_z_stats)
+# add reqtl info
+ra_top_hit_per_esnp_z <- add_reqtl_status(ra_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 ra_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ra_top_hit_per_esnp_z)
+ra_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(ra_top_hit_per_esnp_z[!is.na(ra_top_hit_per_esnp_z$is_reqtl) & ra_top_hit_per_esnp_z$is_reqtl == T, ])
+ra_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(ra_top_hit_per_esnp_z[!is.na(ra_top_hit_per_esnp_z$is_reqtl) & ra_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+ra_top_hit_per_esnp_z_inflations_reqtl <- merge(x=ra_top_hit_per_esnp_z_inflations_reqtl_yes, y=ra_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# get a plottable frame
+ra_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(ra_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+ra_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(ra_top_hit_per_esnp_z_plottable)
 
 
 # read the IBD table
@@ -678,8 +926,18 @@ plot_gwas_vs_eqtls(t1d_top_hit_per_esnp_z)
 t1d_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(t1d_top_hit_per_esnp_z)
 # do fisher exact tests
 t1d_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(t1d_top_hit_per_esnp_z_stats)
+# add reqtl info
+t1d_top_hit_per_esnp_z <- add_reqtl_status(t1d_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 t1d_top_hit_per_esnp_z_inflations <- get_lamba_inflation(t1d_top_hit_per_esnp_z)
+t1d_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(t1d_top_hit_per_esnp_z[!is.na(t1d_top_hit_per_esnp_z$is_reqtl) & t1d_top_hit_per_esnp_z$is_reqtl == T, ])
+t1d_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(t1d_top_hit_per_esnp_z[!is.na(t1d_top_hit_per_esnp_z$is_reqtl) & t1d_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+t1d_top_hit_per_esnp_z_inflations_reqtl <- merge(x=t1d_top_hit_per_esnp_z_inflations_reqtl_yes, y=t1d_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# get a plottable frame
+t1d_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(t1d_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+t1d_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(t1d_top_hit_per_esnp_z_plottable)
 
 
 # read the IBD table
@@ -694,8 +952,18 @@ plot_gwas_vs_eqtls(cd_top_hit_per_esnp_z)
 cd_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(cd_top_hit_per_esnp_z)
 # do fisher exact tests
 cd_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(cd_top_hit_per_esnp_z_stats)
+# add reqtl info
+cd_top_hit_per_esnp_z <- add_reqtl_status(cd_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 cd_top_hit_per_esnp_z_inflations <- get_lamba_inflation(cd_top_hit_per_esnp_z)
+cd_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(cd_top_hit_per_esnp_z[!is.na(cd_top_hit_per_esnp_z$is_reqtl) & cd_top_hit_per_esnp_z$is_reqtl == T, ])
+cd_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(cd_top_hit_per_esnp_z[!is.na(cd_top_hit_per_esnp_z$is_reqtl) & cd_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+cd_top_hit_per_esnp_z_inflations_reqtl <- merge(x=cd_top_hit_per_esnp_z_inflations_reqtl_yes, y=cd_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# get a plottable frame
+cd_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(cd_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+cd_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(cd_top_hit_per_esnp_z_plottable)
 
 
 # read the IBD table
@@ -712,8 +980,18 @@ plot_gwas_vs_eqtls(ca_top_hit_per_esnp_z)
 ca_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(ca_top_hit_per_esnp_z)
 # do fisher exact tests
 ca_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(ca_top_hit_per_esnp_z_stats)
+# add reqtl info
+ca_top_hit_per_esnp_z <- add_reqtl_status(ca_top_hit_per_esnp_z, reqtls_yes_no)
 # do lamba inflation
 ca_top_hit_per_esnp_z_inflations <- get_lamba_inflation(ca_top_hit_per_esnp_z)
+ca_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(ca_top_hit_per_esnp_z[!is.na(ca_top_hit_per_esnp_z$is_reqtl) & ca_top_hit_per_esnp_z$is_reqtl == T, ])
+ca_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(ca_top_hit_per_esnp_z[!is.na(ca_top_hit_per_esnp_z$is_reqtl) & ca_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+ca_top_hit_per_esnp_z_inflations_reqtl <- merge(x=ca_top_hit_per_esnp_z_inflations_reqtl_yes, y=ca_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+# get a plottable frame
+ca_top_hit_per_esnp_z_plottable <- get_plottable_effect_frame(ca_top_hit_per_esnp_z)
+# get number of stronger vs weaker
+ca_top_hit_per_esnp_z_stronger_weaker <- get_weaker_vs_stronger_eqtl_effects(ca_top_hit_per_esnp_z_plottable)
 
 
 # paste everything together and then check what it looks like
@@ -722,8 +1000,69 @@ all_top_hit_per_esnp_z <- rbind(ibd_top_hit_per_esnp_z, ms_top_hit_per_esnp_z, r
 all_top_hit_per_esnp_z_stats <- get_eqtl_gwas_hit_numbers(all_top_hit_per_esnp_z)
 # do fisher exact tests
 all_top_hit_per_esnp_z_stats_fishers <- fisher_test_enrichment_difference(all_top_hit_per_esnp_z_stats)
+# add reqtl info
+ca_top_hit_per_esnp_z <- add_reqtl_status(all_top_hit_per_esnp_z, reqtls_yes_no)
 # check lambda inflation
 all_top_hit_per_esnp_z_inflations <- get_lamba_inflation(all_top_hit_per_esnp_z)
+all_top_hit_per_esnp_z_inflations_reqtl_yes <- get_lamba_inflation(all_top_hit_per_esnp_z[!is.na(all_top_hit_per_esnp_z$is_reqtl) & all_top_hit_per_esnp_z$is_reqtl == T, ])
+all_top_hit_per_esnp_z_inflations_reqtl_no <- get_lamba_inflation(all_top_hit_per_esnp_z[!is.na(all_top_hit_per_esnp_z$is_reqtl) & all_top_hit_per_esnp_z$is_reqtl == F, ])
+# merge reqtl lambda inflations
+all_top_hit_per_esnp_z_inflations_reqtl <- merge(x=all_top_hit_per_esnp_z_inflations_reqtl_yes, y=all_top_hit_per_esnp_z_inflations_reqtl_no, by=c('cell_type', 'condition'))
+
 # plot
 plot_gwas_vs_eqtls(all_top_hit_per_esnp_z)
 
+# make a list with all the fisher tables
+result_list <- list()
+#result_list[['tuberculosis']] <- mtb_top_hit_per_esnp_z_fishers
+result_list[['Candida']] <- ca_top_hit_per_esnp_z_stats_fishers
+result_list[['Celiac']] <- cd_top_hit_per_esnp_z_stats_fishers
+result_list[['IBD']] <- ibd_top_hit_per_esnp_z_stats_fishers
+result_list[['Multiple Sclerosis']] <- ms_top_hit_per_esnp_z_stats_fishers
+result_list[['Rheumatoid Arthritis']] <- ra_top_hit_per_esnp_z_stats_fishers
+result_list[['Type 1 Diabetes']] <- t1d_top_hit_per_esnp_z_stats_fishers
+
+fisher_supplementary <- create_fisher_tables(result_list, output_dir = '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/fisher_exact/')
+
+write.table(ca_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/Candida.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+write.table(cd_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/Celiac.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+write.table(ibd_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/IBD.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+write.table(ms_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/Multiple_Sclerosis.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+write.table(ra_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/Rheumatoid_Arthritis.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+write.table(t1d_top_hit_per_esnp_z_stats, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/eqtl_gwas_overlap/Type_1_Diabetes.tsv', sep = '\t', row.names=F, col.names = T, quote = F)
+
+# do some analyses with the reqtls
+ca_top_hit_per_resnp_z <- add_eqtl_data(ca_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+ca_top_hit_per_resnp_z_inflations <- get_lamba_inflation(ca_top_hit_per_resnp_z)
+cd_top_hit_per_resnp_z <- add_eqtl_data(cd_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+cd_top_hit_per_resnp_z_inflations <- get_lamba_inflation(cd_top_hit_per_resnp_z)
+ibd_top_hit_per_resnp_z <- add_eqtl_data(ibd_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+ibd_top_hit_per_resnp_z_inflations <- get_lamba_inflation(ibd_top_hit_per_resnp_z)
+ms_top_hit_per_resnp_z <- add_eqtl_data(ms_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+ms_top_hit_per_resnp_z_inflations <- get_lamba_inflation(ms_top_hit_per_resnp_z)
+ra_top_hit_per_resnp_z <- add_eqtl_data(ra_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+ra_top_hit_per_resnp_z_inflations <- get_lamba_inflation(ra_top_hit_per_resnp_z)
+t1d_top_hit_per_resnp_z <- add_eqtl_data(t1d_top_hit_per_esnp, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', stims = c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'))
+t1d_top_hit_per_resnp_z_inflations <- get_lamba_inflation(t1d_top_hit_per_resnp_z)
+
+# make a list with all the fisher tables
+lambda_list <- list()
+#result_list[['tuberculosis']] <- mtb_top_hit_per_esnp_z_fishers
+lambda_list[['Candida']] <- ca_top_hit_per_resnp_z_inflations
+lambda_list[['Celiac']] <- cd_top_hit_per_resnp_z_inflations
+lambda_list[['IBD']] <- ibd_top_hit_per_resnp_z_inflations
+lambda_list[['Multiple Sclerosis']] <- ms_top_hit_per_resnp_z_inflations
+lambda_list[['Rheumatoid Arthritis']] <- ra_top_hit_per_resnp_z_inflations
+lambda_list[['Type 1 Diabetes']] <- t1d_top_hit_per_resnp_z_inflations
+create_lamba_inflation_tables(lambda_list, stim_order=c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'), gsub_remove = 'UT_vs_', output_dir = '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/lambda_inflations/')
+
+# make a list with all the fisher tables
+lambda_list_re <- list()
+#result_list[['tuberculosis']] <- mtb_top_hit_per_esnp_z_fishers
+lambda_list_re[['Candida']] <- ca_top_hit_per_esnp_z_inflations_reqtl
+lambda_list_re[['Celiac']] <- cd_top_hit_per_esnp_z_inflations_reqtl
+lambda_list_re[['IBD']] <- ibd_top_hit_per_esnp_z_inflations_reqtl
+lambda_list_re[['Multiple Sclerosis']] <- ms_top_hit_per_esnp_z_inflations_reqtl
+lambda_list_re[['Rheumatoid Arthritis']] <- ra_top_hit_per_esnp_z_inflations_reqtl
+lambda_list_re[['Type 1 Diabetes']] <- t1d_top_hit_per_esnp_z_inflations_reqtl
+create_lamba_inflation_tables(lambda_list_re, stim_order=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), output_dir = '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/lambda_inflations/', reqtls = T)
