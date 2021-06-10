@@ -4,6 +4,7 @@
 
 library(MAST)
 library(Seurat)
+library(Matrix)
 
 ####################
 # Functions        #
@@ -87,6 +88,157 @@ get_top_expressed_features <- function(seurat_object, top_genes_number){
   return(seurat_object_top_expressed)
 }
 
+
+get_background_genes <- function(seurat_object, min.pct=0.1, assay='RNA', output_loc=NULL, symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv", slot = 'data'){
+  # set to the correct assay
+  DefaultAssay(seurat_object) <- assay
+  # grab all the genes
+  genes <- rownames(seurat_object[[assay]]@data)
+  # grab the expression
+  exp <- NULL
+  if(slot == 'counts'){
+    exp <- seurat_object@assays[[assay]]@counts
+  }
+  else if(slot == 'data'){
+    exp <- seurat_object@assays[[assay]]@data
+  }
+  else if(slot == 'scaled.data'){
+    exp <- seurat_object@assays[[assay]]@scaled.data
+  }
+  else{
+    print('unknown slot')
+  }
+  # get the percentages
+  pcts <- as.matrix(rowMeans(exp  > 0))
+  print(head(pcts))
+  # now get only those expressed at more than the given minimal expression
+  background <- names(pcts[pcts[,1] > min.pct, ])
+  # change to Ensemble IDs if required
+  if(symbols.to.ensg){
+    # this is the 10X genes file with the gene symbols and the ensemble IDs
+    genes_mapping <- read.table(symbols.to.ensg.mapping, header = F, stringsAsFactors = F)
+    # do the same replacement of characters that Seurat did, or the mapping does not work
+    genes_mapping$V2 <- gsub("_", "-", make.unique(genes_mapping$V2))
+    background <- genes_mapping[match(background, genes_mapping$V2),"V1"]
+  }
+  # write to file if a path was supplied
+  if(!is.null(output_loc)){
+    write.table(background, output_loc, col.names = F, row.names = F, quote = F)
+  }
+  return(background)
+}
+
+get_background_genes_per_cell_type <- function(seurat_object, output_loc, split.column = 'timepoint', cell.type.column = 'cell_type', assay = 'RNA', stims = NULL, min.pct = 0.1, symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv"){
+  stims_to_do <- c('CA', 'MTB', 'PA')
+  # overwrite if user supplied stims themselves
+  if(!is.null(stims)){
+    stims_to_do <- stims
+  }
+  # go through the cell types
+  for(cell_type in unique(seurat_object@meta.data[[cell.type.column]])){
+    # make a more specific path
+    output_loc_cell_type <- paste(output_loc, cell_type, sep = '')
+    # grab the subset
+    seurat_object_cell_type <- seurat_object[,seurat_object@meta.data[cell.type.column] == cell_type]
+    # for the three stims (looping here, so don't have to subset the celltype multiple times)
+    for(stim in stims_to_do){
+      # paste together the conditions
+      tp3h <- paste('X3h', stim, sep = '')
+      tp24h <- paste('X24h', stim, sep = '')
+      tryCatch({
+        # get the object
+        seurat_object_UT_3h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp3h]
+        output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
+        # do background check
+        get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
+      }, error=function(error_condition) {
+        print(paste("Could not read file:", tp3h, cell_type, error_condition))
+      })
+      tryCatch({
+        # now the same thing for the 24h condition
+        seurat_object_UT_24h <- seurat_object_cell_type[, seurat_object_cell_type@meta.data[split.column] == 'UT' | seurat_object_cell_type@meta.data[split.column] == tp24h]
+        output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
+        get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+      }, error=function(error_condition) {
+        print(paste("Could not read file:", tp24h, cell_type, error_condition))
+      })
+    }
+  }
+
+  # finally do a bulk analysis as well
+  # make a more specific path
+  output_loc_cell_type <- paste(output_loc, 'bulk', sep = '')
+  for(stim in stims_to_do){
+    # paste together the conditions
+    tp3h <- paste('X3h', stim, sep = '')
+    tp24h <- paste('X24h', stim, sep = '')
+    tryCatch({
+      # get the object
+      seurat_object_UT_3h <- seurat_object[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp3h]
+      output_loc_cell_type_UT_3h <- paste(output_loc_cell_type, '_UT_', tp3h, '_', as.character(min.pct), '.txt', sep = '')
+      # do background check
+      get_background_genes(seurat_object_UT_3h, min.pct, assay, output_loc_cell_type_UT_3h)
+    }, error=function(error_condition) {
+      print(paste("Could not read file:", tp3h, 'bulk', error_condition))
+    })
+    tryCatch({
+    # now the same thing for the 24h condition
+      seurat_object_UT_24h <- seurat_object[, seurat_object@meta.data[split.column] == 'UT' | seurat_object@meta.data[split.column] == tp24h]
+      output_loc_cell_type_UT_24h <- paste(output_loc_cell_type, '_UT_', tp24h, '_', as.character(min.pct), '.txt', sep = '')
+      get_background_genes(seurat_object_UT_24h, min.pct, assay, output_loc_cell_type_UT_24h)
+    }, error=function(error_condition) {
+      print(paste("Could not read file:", tp3h, 'bulk', error_condition))
+    })
+  }
+}
+
+get_pct <- function(seurat_object, output_loc=NULL, slot='data', assay='RNA', symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv"){
+  # set to the correct assay
+  DefaultAssay(seurat_object) <- assay
+  # grab all the genes
+  genes <- rownames(seurat_object[[assay]]@data)
+  # grab the expression
+  exp <- NULL
+  if(slot == 'counts'){
+    exp <- seurat_object@assays[[assay]]@counts
+  }
+  else if(slot == 'data'){
+    exp <- seurat_object@assays[[assay]]@data
+  }
+  else if(slot == 'scaled.data'){
+    exp <- seurat_object@assays[[assay]]@scaled.data
+  }
+  else{
+    print('unknown slot')
+  }
+  # get the percentages
+  pcts <- as.matrix(rowMeans(exp  > 0))
+  if(symbols.to.ensg){
+    # this is the 10X genes file with the gene symbols and the ensemble IDs
+    genes_mapping <- read.table(symbols.to.ensg.mapping, header = F, stringsAsFactors = F)
+    # do the same replacement of characters that Seurat did, or the mapping does not work
+    genes_mapping$V2 <- gsub("_", "-", make.unique(genes_mapping$V2))
+    ensemble_ids <- genes_mapping[match(rownames(pcts), genes_mapping$V2),"V1"]
+    # set new names
+    rownames(pcts) <- ensemble_ids
+  }
+  # write the output if required
+  write.table(pcts, output_loc, sep = '\t', row.names = T, col.names = F)
+  return(pcts)
+}
+
+get_pct_per_cell_type <- function(seurat_object, output_loc, cell.type.column = 'cell_type', slot='data', assay='RNA', symbols.to.ensg=F, symbols.to.ensg.mapping = "genes.tsv"){
+  # go through the cell types
+  for(cell_type in unique(seurat_object@meta.data[[cell.type.column]])){
+    # make a more specific path
+    output_loc_cell_type <- paste(output_loc, cell_type, '.tsv', sep = '')
+    # grab the subset
+    seurat_object_cell_type <- seurat_object[,seurat_object@meta.data[cell.type.column] == cell_type]
+    # get the table
+    get_pct(seurat_object_cell_type, output_loc_cell_type, slot = slot, assay = assay, symbols.to.ensg = symbols.to.ensg, symbols.to.ensg.mapping = symbols.to.ensg.mapping)
+  }
+}
+
 ####################
 # Main Code        #
 ####################
@@ -122,6 +274,14 @@ mast_output_paired_lores_loc_v3_rna <- paste(mast_output_paired_lores_loc_v3, 'r
 mast_output_paired_lores_loc_v2_sct <- paste(mast_output_paired_lores_loc_v2, 'sct/', sep = '')
 mast_output_paired_lores_loc_v3_sct <- paste(mast_output_paired_lores_loc_v3, 'sct/', sep = '')
 
+# for pathway analysis we may want some background genes
+background_gene_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/background_genes/'
+background_gene_loc_v2 <- paste(background_gene_loc, 'v2/', sep = '')
+background_gene_loc_v3 <- paste(background_gene_loc, 'v3/', sep = '')
+
+# some pathway analysis tools prefer Ensemble IDs, so we need to map to those
+gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
+
 
 # put in the work for v2
 v2 <- readRDS(object_loc_v2)
@@ -131,6 +291,8 @@ v2 <- readRDS(object_loc_v2)
 perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, latent.vars=c('nCount_RNA'))
 #perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_loc_v2_sct, cell.type.column = 'cell_type', assay = 'SCT')
 #perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_loc_v2_rna, cell.type.column = 'cell_type', assay = 'RNA')
+get_background_genes_per_cell_type(seurat_object = v2, output_loc = background_gene_loc_v2, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_background_genes_per_cell_type(seurat_object = v2, output_loc = background_gene_loc_v2, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.01, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 rm(v2)
 
 # put in the work for v3
@@ -141,4 +303,6 @@ v3 <- readRDS(object_loc_v3)
 perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, latent.vars=c('nCount_RNA'))
 #perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_loc_v3_sct, cell.type.column = 'cell_type', assay = 'SCT')
 #perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_loc_v3_rna, cell.type.column = 'cell_type', assay = 'RNA')
+get_background_genes_per_cell_type(seurat_object = v3, output_loc = background_gene_loc_v3, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+get_background_genes_per_cell_type(seurat_object = v3, output_loc = background_gene_loc_v3, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.01, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 rm(v3)
