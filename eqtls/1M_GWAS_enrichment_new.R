@@ -236,6 +236,10 @@ get_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_c
         else{
           inflations_df <- rbind(inflations_df, inflations_row)
         }
+        print(paste(cell_type, condition, length(pvals)))
+        print(head((sort(pvals))))
+        print(tail((sort(pvals))))
+        print((lambda))
       }
     }
   }
@@ -277,8 +281,13 @@ plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_
       p <- NULL
       if(mark_reqtl){
         gwas_and_eqtls_cond_ct <- gwas_and_eqtls[gwas_and_eqtls$cell_type == cell_type & gwas_and_eqtls$condition == condition, ]
-        plot_data$reqtl <- gwas_and_eqtls_cond_ct[match(plot_data$snp, gwas_and_eqtls_cond_ct$SNP_A), 'is_reqtl']
-        p <- ggplot(data=plot_data, aes(x=predicted, y=observed, fill=reqtl)) + geom_point()
+        plot_data$is_reqtl <- gwas_and_eqtls_cond_ct[match(plot_data$snp, gwas_and_eqtls_cond_ct$SNP_A), 'is_reqtl']
+        plot_data$reqtl <- 'untested'
+        plot_data[!is.na(plot_data$is_reqtl) & plot_data$is_reqtl, 'reqtl'] <- 'reqtl'
+        plot_data[!is.na(plot_data$is_reqtl) & plot_data$is_reqtl == F, 'reqtl'] <- 'not reqtl'
+        plot_data$reqtl <- as.factor(plot_data$reqtl)
+        
+        p <- ggplot(data=plot_data, aes(x=predicted, y=observed, color=reqtl)) + geom_point()
       }
       else{
         p <- ggplot(data=plot_data, aes(x=predicted, y=observed)) + geom_point()
@@ -300,6 +309,20 @@ plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_
   }
   return(inflations_list)
 }
+
+
+plot_inflations <- function(top_hit_per_esnp_z_per_gwas, plot_output_loc){
+  # check each GWAS
+  for(gwas in names(top_hit_per_esnp_z_per_gwas)){
+    # get plots for this specific gwas
+    plots_list <- plot_lamba_inflation(gwas_and_eqtls = top_hit_per_esnp_z_per_gwas[[gwas]], mark_reqtl = T)
+    # check each condition
+    for(condition in names(plots_list)){
+      # get for this 
+    }
+  }
+}
+
 
 get_eqtl_gwas_hit_numbers <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_cutoff_value=0.05, eqtl_cutoff_larger=F, gwas_cutoff_column='gwas_p', gwas_cutoff_value=0.05){
   # create a dataframe with all the numbers
@@ -1055,6 +1078,18 @@ lambda_list[['Multiple Sclerosis']] <- ms_top_hit_per_resnp_z_inflations
 lambda_list[['Rheumatoid Arthritis']] <- ra_top_hit_per_resnp_z_inflations
 lambda_list[['Type 1 Diabetes']] <- t1d_top_hit_per_resnp_z_inflations
 create_lamba_inflation_tables(lambda_list, stim_order=c('UT_vs_3hCA', 'UT_vs_24hCA', 'UT_vs_3hMTB', 'UT_vs_24hMTB', 'UT_vs_3hPA', 'UT_vs_24hPA'), gsub_remove = 'UT_vs_', output_dir = '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/lambda_inflations/')
+
+# make a list with all the fisher tables
+lambda_list <- list()
+#result_list[['tuberculosis']] <- mtb_top_hit_per_esnp_z_fishers
+lambda_list[['Candida']] <- ca_top_hit_per_esnp_z_inflations
+lambda_list[['Celiac']] <- cd_top_hit_per_esnp_z_inflations
+lambda_list[['IBD']] <- ibd_top_hit_per_esnp_z_inflations
+lambda_list[['Multiple Sclerosis']] <- ms_top_hit_per_esnp_z_inflations
+lambda_list[['Rheumatoid Arthritis']] <- ra_top_hit_per_esnp_z_inflations
+lambda_list[['Type 1 Diabetes']] <- t1d_top_hit_per_esnp_z_inflations
+create_lamba_inflation_tables(lambda_list, stim_order=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), gsub_remove = 'UT_vs_', output_dir = '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/GWAS_enrichment/lambda_inflations/eqtls_')
+
 
 # make a list with all the fisher tables
 lambda_list_re <- list()

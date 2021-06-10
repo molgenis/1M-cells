@@ -104,3 +104,52 @@ write.table(genes_down_3h, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/o
 genes_down_3h_either_ensid <- unique(super_table_sigeither_3hreqtleither_and_eqtl_zdown$ProbeName)
 write.table(genes_down_3h_either_ensid, '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/down_reqtl_3h_either_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
 
+# all significant reQTLs
+super_table_sig <- super_table[super_table$fdr_UT_vs_24h == '*' | super_table$fdr_UT_vs_3h == '*', ]
+# get the unique probes
+genes_sig <- unique(super_table_sig$ProbeName)
+write.table(genes_sig, '~/Desktop/reqtl_sig_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+# check for positive or negative Z scores
+genes_sig_zup_3h <- unique(super_table_sig[super_table_sig$z_UT_vs_3h > 0, ]$ProbeName)
+write.table(genes_sig_zup_3h, '~/Desktop/reqtl_sig_zup_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_zup_24h <- unique(super_table_sig[super_table_sig$z_UT_vs_24h > 0, ]$ProbeName)
+write.table(genes_sig_zup_24h, '~/Desktop/reqtl_sig_zup_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_zdown_3h <- unique(super_table_sig[super_table_sig$z_UT_vs_3h < 0, ]$ProbeName)
+write.table(genes_sig_zdown_3h, '~/Desktop/reqtl_sig_zdown_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_zdown_24h <- unique(super_table_sig[super_table_sig$z_UT_vs_24h < 0, ]$ProbeName)
+write.table(genes_sig_zdown_24h, '~/Desktop/reqtl_sig_zdown_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+# check specifically for monocytes
+super_table_sig_monocyte <- super_table[((!is.na(super_table$fdr_UT_vs_24h) & super_table$fdr_UT_vs_24h == '*') | (!is.na(super_table$fdr_UT_vs_3h)) & super_table$fdr_UT_vs_3h == '*') & super_table$cell_type == 'monocyte', ]
+# get the unique probes
+genes_sig_monocyte <- unique(super_table_sig_monocyte$ProbeName)
+write.table(genes_sig_monocyte, '~/Desktop/reqtl_sig_monocyte_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+#check for positive or negative Z scores
+genes_sig_monocyte_zup_3h <- unique(super_table_sig_monocyte[super_table_sig_monocyte$z_UT_vs_3h > 0, ]$ProbeName)
+write.table(genes_sig_monocyte_zup_3h, '~/Desktop/reqtl_sig_monocyte_zup_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_monocyte_zup_24h <- unique(super_table_sig_monocyte[super_table_sig_monocyte$z_UT_vs_24h > 0, ]$ProbeName)
+write.table(genes_sig_monocyte_zup_24h, '~/Desktop/reqtl_sig_monocyte_zup_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_monocyte_zdown_3h <- unique(super_table_sig_monocyte[super_table_sig_monocyte$z_UT_vs_3h < 0, ]$ProbeName)
+write.table(genes_sig_monocyte_zdown_3h, '~/Desktop/reqtl_sig_monocyte_zdown_3h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+genes_sig_monocyte_zdown_24h <- unique(super_table_sig_monocyte[super_table_sig_monocyte$z_UT_vs_24h < 0, ]$ProbeName)
+write.table(genes_sig_monocyte_zdown_24h, '~/Desktop/reqtl_sig_monocyte_zdown_24h_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+# now check monocyte reQTLs with significant eQTLs in both conditions for 3h
+super_table_sig_monocyte_3heqtl_both_sig <- super_table_sig_monocyte[!is.na(super_table_sig_monocyte$fdr_UT) & super_table_sig_monocyte$fdr_UT == '*' & !is.na(super_table_sig_monocyte$fdr_3h) & super_table_sig_monocyte$fdr_3h == '*', ]
+# check weaker
+super_table_weaker_both_sig_monocyte_3h <- super_table_sig_monocyte_3heqtl_both_sig[(super_table_sig_monocyte_3heqtl_both_sig$z_UT > 0 & super_table_sig_monocyte_3heqtl_both_sig$z_3h > 0 & super_table_sig_monocyte_3heqtl_both_sig$z_UT > super_table_sig_monocyte_3heqtl_both_sig$z_3h) | super_table_sig_monocyte_3heqtl_both_sig$z_UT < 0 & super_table_sig_monocyte_3heqtl_both_sig$z_3h < 0 & super_table_sig_monocyte_3heqtl_both_sig$z_UT < super_table_sig_monocyte_3heqtl_both_sig$z_3h, ]
+write.table(super_table_weaker_both_sig_monocyte_3h$ProbeName, '~/Desktop/reqtl_sig_monocyte_zdown_3hsig_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+# check 24h
+super_table_sig_monocyte_24heqtl_both_sig <- super_table_sig_monocyte[!is.na(super_table_sig_monocyte$fdr_UT) & super_table_sig_monocyte$fdr_UT == '*' & !is.na(super_table_sig_monocyte$fdr_24h) & super_table_sig_monocyte$fdr_24h == '*', ]
+# check weaker
+super_table_weaker_both_sig_monocyte_24h <- super_table_sig_monocyte_24heqtl_both_sig[(super_table_sig_monocyte_24heqtl_both_sig$z_UT > 0 & super_table_sig_monocyte_24heqtl_both_sig$z_24h > 0 & super_table_sig_monocyte_24heqtl_both_sig$z_UT > super_table_sig_monocyte_24heqtl_both_sig$z_24h) | super_table_sig_monocyte_24heqtl_both_sig$z_UT < 0 & super_table_sig_monocyte_24heqtl_both_sig$z_24h < 0 & super_table_sig_monocyte_24heqtl_both_sig$z_UT < super_table_sig_monocyte_24heqtl_both_sig$z_24h, ]
+write.table(super_table_weaker_both_sig_monocyte_24h$ProbeName, '~/Desktop/reqtl_sig_monocyte_zdown_24hsig_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+# check stronger
+super_table_stronger_both_sig_monocyte_3h <- super_table_sig_monocyte_3heqtl_both_sig[(super_table_sig_monocyte_3heqtl_both_sig$z_UT > 0 & super_table_sig_monocyte_3heqtl_both_sig$z_3h > 0 & super_table_sig_monocyte_3heqtl_both_sig$z_UT < super_table_sig_monocyte_3heqtl_both_sig$z_3h) | super_table_sig_monocyte_3heqtl_both_sig$z_UT < 0 & super_table_sig_monocyte_3heqtl_both_sig$z_3h < 0 & super_table_sig_monocyte_3heqtl_both_sig$z_UT > super_table_sig_monocyte_3heqtl_both_sig$z_3h, ]
+write.table(super_table_stronger_both_sig_monocyte_3h$ProbeName, '~/Desktop/reqtl_sig_monocyte_zup_3hsig_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+# 24h
+super_table_stronger_both_sig_monocyte_24h <- super_table_sig_monocyte_24heqtl_both_sig[(super_table_sig_monocyte_24heqtl_both_sig$z_UT > 0 & super_table_sig_monocyte_24heqtl_both_sig$z_24h > 0 & super_table_sig_monocyte_24heqtl_both_sig$z_UT < super_table_sig_monocyte_24heqtl_both_sig$z_24h) | super_table_sig_monocyte_24heqtl_both_sig$z_UT < 0 & super_table_sig_monocyte_24heqtl_both_sig$z_24h < 0 & super_table_sig_monocyte_24heqtl_both_sig$z_UT > super_table_sig_monocyte_24heqtl_both_sig$z_24h, ]
+write.table(super_table_stronger_both_sig_monocyte_24h$ProbeName, '~/Desktop/reqtl_sig_monocyte_zup_24hsig_20200729_ensid.txt', row.names = F, col.names = F, quote = F)
+
+
+

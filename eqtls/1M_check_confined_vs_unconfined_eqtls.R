@@ -142,6 +142,33 @@ egenes_shared_and_unique_to_numbers_table <- function(eqtl_output_loc_1, eqtl_ou
   return(numbers_df)
 }
 
+
+egenes_shared_and_unique_numbers_table_add_percentage <- function(numbers_table){
+  # add an extra column to the table
+  numbers_table$pct <- NA
+  # check each cell type
+  for(cell_type in unique(numbers_table$cell_type)){
+    # check each condition for that cell type
+    for(condition in unique(numbers_table[numbers_table$cell_type == cell_type, 'condition'])){
+      # grab that subset of data
+      numbers_table_ct_condition <- numbers_table[numbers_table$cell_type == cell_type & numbers_table$condition == condition, ]
+      # get the total number of eQTLs
+      numbers_combined <- sum(numbers_table_ct_condition$number)
+      # check each state
+      for(state in unique(numbers_table_ct_condition$state)){
+        # get percentage by dividing by all
+        pct_state <- numbers_table_ct_condition[numbers_table_ct_condition$state == state, 'number'] / numbers_combined * 100
+        # set as the value in the dataframe
+        numbers_table[numbers_table$cell_type == cell_type & 
+                                      numbers_table$condition == condition &
+                                      numbers_table$state == state, 'pct'] <- pct_state
+      }
+    }
+  }
+  return(numbers_table)
+}
+
+
 egenes_shared_and_unique_to_numbers_plot <- function(eqtl_output_loc_1, eqtl_output_loc_2, name_1, name_2, condition_split=T, use_label_dict=T, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), ggarrange_method=F, paper_style=F){
   # get a numbers table
   egenes_table <- egenes_shared_and_unique_to_numbers_table(eqtl_output_loc_1, eqtl_output_loc_2, name_1, name_2, cell_types, stims)
@@ -254,7 +281,7 @@ filter_unconfined_emp_mapping_to_top_effect <- function(eqtl_output_loc, filtere
           # grab the first one
           eQTLs_1_ct_loc <- paste(eqtl_output_loc, stim, '/', cell_type, '_expression/eQTLsFDR0.05-ProbeLevel.txt.gz', sep = '')
           eQTLs_1 <- read.table(eQTLs_1_ct_loc, sep = '\t', header = T)
-          eQTLs_1_sig <- unique(eQTLs_1[!is.na(eQTLs_1$FDR) & eQTLs_1$FDR < 0.05, ]$HGNCName)
+          eQTLs_1_sig <- eQTLs_1[!is.na(eQTLs_1$FDR) & eQTLs_1$FDR < 0.05, ]
           # create new dataframe to store result
           top_hits_table <- NULL
           # check each probe/gene
@@ -282,6 +309,9 @@ filter_unconfined_emp_mapping_to_top_effect <- function(eqtl_output_loc, filtere
     }
   }
 }
+
+
+
 
 
 coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_appends, set_names=NULL, cell_types=c('monocyte'), conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), use_ranking=T, toppfun=T, reactome=F){

@@ -213,7 +213,128 @@ v3_ut_3hpa@meta.data[!(v3_ut_3hpa@meta.data$assignment %in% c('LLDeep_1133','LLD
 DimPlot(v3_ut_3hpa[, !is.na(v3_ut_3hpa@meta.data$participant_timepoint_specific)], reduction='umap', group.by='participant_timepoint_specific')
 ggsave('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v3_ut_3hpa_parttp_unsuspect_x3hpa.png', width = 10, height = 10)
 
+# grab the v2 3hCA unintegrated object I made
+v2_ut_3hca <- readRDS(paste(object_loc, '1M_v2_UTX3hCA_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_3hca_utonly <- subset(v2_ut_3hca, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hca_utonly_i <- DimPlot(v2_ut_3hca_utonly[, v2_ut_3hca_utonly@meta.data$assignment %in% unique(v2_ut_3hca_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hca_utonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab the v2 3hCA unintegrated object I made
+v2_ut_3hpa <- readRDS(paste(object_loc, '1M_v2_UTX3hPA_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_3hpa_utonly <- subset(v2_ut_3hpa, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hpa_utonly_i <- DimPlot(v2_ut_3hpa_utonly[, v2_ut_3hpa_utonly@meta.data$assignment %in% unique(v2_ut_3hpa_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hpa_utonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab the v2 3hCA unintegrated object I made
+v2_ut_3hmtb <- readRDS(paste(object_loc, '1M_v2_UTX3hMTB_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_3hmtb_utonly <- subset(v2_ut_3hmtb, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hmtb_utonly_i <- DimPlot(v2_ut_3hpa_utonly[, v2_ut_3hmtb_utonly@meta.data$assignment %in% unique(v2_ut_3hmtb_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hmtb_utonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab the v2 24hCA unintegrated object I made
+v2_ut_24hca <- readRDS(paste(object_loc, '1M_v2_UTX24hCA_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_24hca_utonly <- subset(v2_ut_24hca, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hca_utonly_i <- DimPlot(v2_ut_24hca_utonly[, v2_ut_24hca_utonly@meta.data$assignment %in% unique(v2_ut_24hca_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hca_utonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab the v2 24hCA unintegrated object I made
+v2_ut_24hpa <- readRDS(paste(object_loc, '1M_v2_UTX24hPA_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_24hpa_utonly <- subset(v2_ut_24hpa, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hpa_utonly_i <- DimPlot(v2_ut_24hpa_utonly[, v2_ut_24hpa_utonly@meta.data$assignment %in% unique(v2_ut_24hpa_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hpa_utonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab the v2 24hCA unintegrated object I made
+v2_ut_24hmtb <- readRDS(paste(object_loc, '1M_v2_UTX24hMTB_mediumQC_ctd_rnanormed_demuxids_20201027.rds', sep = ''))
+# grab only the UT
+v2_ut_24hmtb_utonly <- subset(v2_ut_24hmtb, subset = timepoint == 'UT')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hmtb_utonly_i <- DimPlot(v2_ut_24hpa_utonly[, v2_ut_24hmtb_utonly@meta.data$assignment %in% unique(v2_ut_24hmtb_utonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hmtb_utonly_',i,'.png', sep=''), width=10, height=10)
+}
 
+# grab only the UT
+v2_ut_3hca_3hcaonly <- subset(v2_ut_3hca, subset = timepoint == 'X3hCA')
+# do this per lane
+for(i in 1:10){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hca_3hca_i <- DimPlot(v2_ut_3hca_3hcaonly[, v2_ut_3hca_3hcaonly@meta.data$assignment %in% unique(v2_ut_3hca_3hcaonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hca_3hca_',i,'.png', sep=''), width=10, height=10)
+}
+# grab only the UT
+v2_ut_3hpa_3hpaonly <- subset(v2_ut_3hpa, subset = timepoint == 'X3hPA')
+# do this per lane
+for(i in 1:11){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hpa_3hpa_i <- DimPlot(v2_ut_3hpa_3hpaonly[, v2_ut_3hpa_3hpaonly@meta.data$assignment %in% unique(v2_ut_3hpa_3hpaonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hpa_3hpaonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab only the UT
+v2_ut_3hmtb_3hmtbonly <- subset(v2_ut_3hmtb, subset = timepoint == 'X3hMTB')
+# do this per lane
+for(i in 1:9){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_3hmtb_3hmtb_i <- DimPlot(v2_ut_3hmtb_3hmtbonly[, v2_ut_3hmtb_3hmtbonly@meta.data$assignment %in% unique(v2_ut_3hmtb_3hmtbonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_3hmtb_3hmtbonly_',i,'.png', sep=''), width=10, height=10)
+}
+
+# grab only the UT
+v2_ut_24hca_24hcaonly <- subset(v2_ut_24hca, subset = timepoint == 'X24hCA')
+# do this per lane
+for(i in 1:10){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hca_24hca_i <- DimPlot(v2_ut_24hca_24hcaonly[, v2_ut_24hca_24hcaonly@meta.data$assignment %in% unique(v2_ut_24hca_24hcaonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hca_24hca_',i,'.png', sep=''), width=10, height=10)
+}
+# grab only the UT
+v2_ut_24hpa_24hpaonly <- subset(v2_ut_24hpa, subset = timepoint == 'X24hPA')
+# do this per lane
+for(i in 1:10){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hpa_24hpa_i <- DimPlot(v2_ut_24hpa_24hpaonly[, v2_ut_24hpa_24hpaonly@meta.data$assignment %in% unique(v2_ut_24hpa_24hpaonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hpa_24hpaonly_',i,'.png', sep=''), width=10, height=10)
+}
+# grab only the UT
+v2_ut_24hmtb_24hmtbonly <- subset(v2_ut_24hmtb, subset = timepoint == 'X24hMTB')
+# do this per lane
+for(i in 1:10){
+  from <- (i*8)-7
+  to <- i*8
+  v2_ut_24hmtb_24hmtb_i <- DimPlot(v2_ut_24hmtb_24hmtbonly[, v2_ut_24hmtb_24hmtbonly@meta.data$assignment %in% unique(v2_ut_24hmtb_24hmtbonly@meta.data$assignment)[from:to]], reduction = 'umap', group.by = 'assignment')
+  ggsave(paste('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/swap_check/clustering/plots/v2_ut_24hmtb_24hmtbonly_',i,'.png', sep=''), width=10, height=10)
+}
 
 
 # get the local output folder of the per participant output

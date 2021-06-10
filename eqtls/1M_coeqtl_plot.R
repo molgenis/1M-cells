@@ -159,7 +159,7 @@ object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_202010
 object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
 
 # where to save the plots
-plot_output_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/'
+plot_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/'
 
 # where the genotypes are saved
 genotype_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/genotypes/1M/table/eqtlgen_snps.genotypes.txt'

@@ -495,8 +495,8 @@ condition_concordance_v2 <- ggarrange(concordances_plots_ribo_per_chem[['v2_X3hC
 condition_concordance_v3 <- ggarrange(concordances_plots_ribo_per_chem[['v3_X3hCA_X3hMTB']], concordances_plots_ribo_per_chem[['v3_X3hCA_X3hPA']], concordances_plots_ribo_per_chem[['v3_X3hMTB_X3hPA']], concordances_plots_ribo_per_chem[['v3_X24hCA_X24hPA']], concordances_plots_ribo_per_chem[['v3_X24hCA_X24hMTB']], concordances_plots_ribo_per_chem[['v3_X24hMTB_X24hPA']])
 
 # meta interactions
-meta_3h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_3h_meta_allcutoff_interactions_filtered.tsv'
-meta_24h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_24h_meta_allcutoff_interactions_filtered.tsv'
+meta_3h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_3h_meta_rs1131017_allcutoff_interactions_filtered.tsv'
+meta_24h_loc <- '/data/scRNA/eQTL_mapping/coexpressionQTLs/RPS26_mono_all_24h_meta_rs1131017_allcutoff_interactions_filtered.tsv'
 meta_3h <- read.table(meta_3h_loc, sep = '\t', header = T)
 meta_24h <- read.table(meta_24h_loc, sep = '\t', header = T)
 
