@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_co-expression_QTLs.R
+# Function: perform co-expressionQTL mapping
+############################################################################################################################
+
+
 ###########################################################################################################################
 #
 # Libraries
@@ -66,7 +73,7 @@ plot_possible_eQTLs <- function(seurat_object, eqtl_result_base_path, genotypes,
     genes$V2 <- gsub("_", "-", make.unique(genes$V2))
     versus_genes <- genes[match(versus_genes, genes$V1),"V2"]
     eqtl_genes <- genes[match(eqtl_genes, genes$V1),"V2"]
-    
+
     # get a list of genes to check, so we can subset and speed up our analysis
     genes_to_check_at_all <- unique(c(eqtl_genes, versus_genes))
     # loop through the conditions again to get the expression matrices
@@ -105,22 +112,22 @@ plot_possible_eQTLs <- function(seurat_object, eqtl_result_base_path, genotypes,
             snp_genotype <- genotypes_matched[snp,]
             # plot
             #plot_data <- data.frame(genotype=snp_genotype, correlation=unlist(correlations))
-            
+
             plot_data <- data.frame(t(snp_genotype))
             colnames(plot_data) <- c('genotype')
-            
+
             plot_data$correlation <- as.vector(unlist(correlations))
-            
+
             ggplot(plot_data, aes(x=genotype, y=correlation, group=genotype)) +
               geom_boxplot(notch=F, color = "black", outlier.shape=NA, lwd=0.6, alpha=1)
             # save the plot
             plot_save_loc <- paste(plot_output_loc, cell_type, '_', condition, '_', snp, '_', gene1, '_', gene2, '.png', sep = '')
             ggsave(plot_save_loc)
-            
+
             # calculate the fit of the interaction model where the SNP predicts the correlation
             #model <- lm(formula = correlation~snp, data = plot_data)
-            # 
-            
+            #
+
           }
         }
       }
@@ -188,12 +195,12 @@ plot_module_correlation <- function(seurat_object, genotypes, snp, plot_output_l
       snp_genotype <- genotypes_matched[snp,]
       # plot
       #plot_data <- data.frame(genotype=snp_genotype, correlation=unlist(correlations))
-      
+
       plot_data <- data.frame(t(snp_genotype))
       colnames(plot_data) <- c('genotype')
-      
+
       plot_data$correlation <- as.vector(unlist(correlations))
-      
+
       ggplot(plot_data, aes(x=genotype, y=correlation, group=genotype)) +
         geom_boxplot(notch=F, color = "black", outlier.shape=NA, lwd=0.6, alpha=1)
       # save the plot
@@ -215,7 +222,7 @@ plot_module_correlation <- function(seurat_object, genotypes, snp, plot_output_l
 
 get.snp <- function(snp.id) {
   snp <- unlist(genotypes[snp.id,])
-  
+
   #Refactor the genotypes to be consistent in all samples.
   snp[snp == "C/A"] <- "A/C"
   snp[snp == "T/A"] <- "A/T"
@@ -259,7 +266,7 @@ create.cor.matrix <- function(exp.matrices, sample.names, eqtl.gene, cor.method 
   }
   #Combine all correlations within a single matrix. Since order of genes is different we can't just cbind them
   genes <- unique(unlist(lapply(cor.vectors, rownames)))
-  cor.matrix <- matrix(NA, nrow = length(genes), ncol = length(cor.vectors), 
+  cor.matrix <- matrix(NA, nrow = length(genes), ncol = length(cor.vectors),
                        dimnames = list(genes, sample.names))
   for (i in seq_along(cor.vectors)) {
     cor.matrix[rownames(cor.vectors[[i]]), i] <- cor.vectors[[i]]
@@ -293,7 +300,7 @@ create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.d
   #pb <- txtProgressBar(min = 0, max = nrow(eqtl.data), style = 3)
   pb <- txtProgressBar(min = 0, max = length(snp_probes), style = 3)
   setTxtProgressBar(pb, 0)
-  
+
   #for (i in 1:nrow(eqtl.data)) {
   for (i in 1:length(snp_probes)) {
     snp_probe <- snp_probes[[i]]
@@ -307,7 +314,7 @@ create.cor.matrices <- function(snp_probes, exp.matrices, sample.names, output.d
     write.table(cor.matrix, file=paste0(output.dir, "correlation_matrix_", eqtl.name, dataset, ".txt"), row.names=T, col.names=T, quote=F)
     setTxtProgressBar(pb, i)
   }
-}  
+}
 
 # Name: interaction.regression
 # Function: calculate the interaction for every gene in the correlation matrix with the eQTL gene
@@ -325,7 +332,7 @@ interaction.regression <- function(cor.matrix, eqtl.gene, snp, cell.counts) {
     model <- lm(formula = x~snp, weights = sqrt(cell.counts))
     return(tidy(model)[2,])
   }))
-  
+
   return(interaction.statistics)
 }
 
@@ -419,50 +426,50 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
       perm.sample.orders[[i]] <- sample(1:length(exp.matrices), length(exp.matrices), replace = F)
     }
   }
-  
+
   r.matrix <- NULL
   p.value.matrix <- NULL
   p.value.permuted <- list()
   p.value.thresholds <- NULL
-  
+
   eqtl.genes <- NULL
   #pb <- txtProgressBar(min = 0, max = nrow(eqtl.data), style = 3)
   pb <- txtProgressBar(min = 0, max = length(snp_probes), style = 3)
   setTxtProgressBar(pb, 0)
-  
+
   #for (i in 1:nrow(eqtl.data)) {
   for(snp_probe in snp_probes){
     #eqtl <- eqtl.data[i,]
     #eqtl <- unlist(eqtl)
-    
+
     # split snp-probe
     snp_probe_split <- strsplit(snp_probe, '_')
     snp_name <- snp_probe_split[[1]][1]
-    
+
     #snp <- as.numeric(get.snp(eqtl["SNPName"]))
     genotype <- unlist(genotypes[snp_name,])
     snp <- as.factor(genotype)
     #eqtl.name <- eqtl["ProbeName"]
     eqtl.name <- snp_probe_split[[1]][2]
     cor.matrix <- read.table(paste0(cor.dir, "correlation_matrix_", eqtl.name, ".txt"), row.names=1, header=T, stringsAsFactors=F)
-    
+
     #Remove all rows for which a correlation cannot be calculated within 1 or more individuals
     cor.matrix <- cor.matrix[apply(cor.matrix, 1, function(x){!any(is.na(x))}),]
-    
+
     print(dim(cor.matrix))
-    
+
     if (nrow(cor.matrix) == 0){
       p.value.permuted[[i]] <- matrix(NA, ncol=n.perm)
       next
     } else {
       eqtl.genes <- c(eqtl.genes, eqtl.name)
     }
-    
+
     interaction.statistics <- interaction.regression(cor.matrix = cor.matrix, eqtl.gene = eqtl.name, snp = snp, cell.counts = cell.counts)
     #Calculate the R value from the T statistic
     r.matrix <- cbind(r.matrix, interaction.statistics$statistic / sqrt(length(snp) - 2 + interaction.statistics$statistic ** 2))
     p.value.matrix <- cbind(p.value.matrix, interaction.statistics$p.value)
-    
+
     if (permutations) {
       for (current.perm in 1:n.perm) {
         permuted.snp <- snp[perm.sample.orders[[current.perm]]]
@@ -492,17 +499,17 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
       }
     }
     setTxtProgressBar(pb, i)
-    
+
   }
-  
+
   print(head(r.matrix))
-  
+
   rownames(p.value.matrix) <- rownames(cor.matrix)
   rownames(r.matrix) <- rownames(cor.matrix)
-  
+
   colnames(p.value.matrix) <- eqtl.genes
   colnames(r.matrix) <- eqtl.genes
-  
+
   if (permutations & perm.type == "gene"){
     p.value.matrix <- rbind(p.value.thresholds, p.value.matrix)
     rownames(p.value.matrix)[1] = "significance_threshold"
@@ -526,10 +533,10 @@ do.interaction.analysis <- function(snp_probes, exp.matrices, genotypes, cell.co
   } else {
     interaction.list <- list(r.matrix, p.value.matrix)
   }
-  
-  
+
+
   close(pb)
-  
+
   return(interaction.list)
 }
 
@@ -545,26 +552,26 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
       perm.sample.orders.2[[i]] <- sample(1:length(exp.matrices.2), length(exp.matrices.2), replace = F)
     }
   }
-  
+
   r.matrix <- NULL
   p.value.matrix <- NULL
   p.value.permuted <- list()
   p.value.thresholds <- NULL
-  
+
   eqtl.genes <- NULL
   #pb <- txtProgressBar(min = 0, max = nrow(eqtl.data), style = 3)
   pb <- txtProgressBar(min = 0, max = length(snp_probes), style = 3)
   setTxtProgressBar(pb, 0)
-  
+
   #for (i in 1:nrow(eqtl.data)) {
   for(snp_probe in snp_probes){
     #eqtl <- eqtl.data[i,]
     #eqtl <- unlist(eqtl)
-    
+
     # split snp-probe
     snp_probe_split <- strsplit(snp_probe, '_')
     snp_name <- snp_probe_split[[1]][1]
-    
+
     #snp <- as.numeric(get.snp(eqtl["SNPName"]))
     #genotype <- unlist(genotypes[snp_name,])
     #snp <- as.factor(genotype)
@@ -583,17 +590,17 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
       cor.matrix.1 <- cor.matrix.1[apply(cor.matrix.1, 1, function(x){sum(is.na(x))/length(x) <= allowed_missingness}),]
       cor.matrix.2 <- cor.matrix.2[apply(cor.matrix.2, 1, function(x){sum(is.na(x))/length(x) <= allowed_missingness}),]
     }
-    
+
     print(dim(cor.matrix.1))
     print(dim(cor.matrix.2))
-    
+
     if (nrow(cor.matrix.1) == 0 | nrow(cor.matrix.2) == 0){
       p.value.permuted[[i]] <- matrix(NA, ncol=n.perm)
       next
     } else {
       eqtl.genes <- c(eqtl.genes, eqtl.name)
     }
-    
+
     interaction.statistics <- interaction.regression.meta(cor.matrix.1 = cor.matrix.1, cor.matrix.2 = cor.matrix.2, eqtl.gene = eqtl.name, snp = snp, cell.counts.1 = cell.counts.1, cell.counts.2 = cell.counts.2, replace_na = replace_na)
     #Calculate the R value from the T statistic
     # FIXTHIS >> r.matrix <- cbind(r.matrix, interaction.statistics$statistic / sqrt(length(snp) - 2 + interaction.statistics$statistic ** 2))
@@ -631,17 +638,17 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
       }
     }
     setTxtProgressBar(pb, i)
-    
+
   }
-  
+
   # FIXTHIS >> print(head(r.matrix))
   # setting rownames the same way we obtained them in the p value calculation
   rownames(p.value.matrix) <- intersect(rownames(cor.matrix.1), rownames(cor.matrix.2))
   # FIXTHIS >> rownames(r.matrix) <- rownames(cor.matrix)
-  
+
   colnames(p.value.matrix) <- eqtl.genes
   # FIXTHIS >> colnames(r.matrix) <- eqtl.genes
-  
+
   if (permutations & perm.type == "gene"){
     p.value.matrix <- rbind(p.value.thresholds, p.value.matrix)
     rownames(p.value.matrix)[1] = "significance_threshold"
@@ -667,10 +674,10 @@ do.interaction.analysis.meta <- function(snp_probes, exp.matrices.1, exp.matrice
     # FIXTHIS >> interaction.list <- list(r.matrix, p.value.matrix)
     interaction.list <- list(p.value.matrix)
   }
-  
-  
+
+
   close(pb)
-  
+
   return(interaction.list)
 }
 
@@ -690,7 +697,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
       exp.matrices <- list()
       cell.counts <- c()
       sample.names <- vector()
-      
+
       #dir.path <- "/groups/umcg-wijmenga/tmp03/projects/scRNAseq_10X_pilot/data/expression/thCellsPerSample/"
       #dir <- list.dirs(path=dir.path, full.names=T, recursive=FALSE)
       sample.names <- unique(cells_cell_type@meta.data$assignment)
@@ -701,7 +708,7 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
         print(i)
         #print(paste0(dir[[i]], "/matrix.mtx"))
         #sample.names <- c(sample.names, tools::file_path_sans_ext(basename(folder)))
-        
+
         #sample.raw <- readMM(paste0(dir[[i]], "/matrix.mtx"))
         #rownames(sample.raw) <- read.table(paste0(dir[[i]], "/genes.tsv"), stringsAsFactors = F)$V1
         #colnames(sample.raw) <- read.table(paste0(dir[[i]], "/barcodes.tsv"), stringsAsFactors = F)$V1
@@ -709,34 +716,34 @@ do_coexqtl <- function(seurat_object, snp_probes, output_loc, genotypes, conditi
         exp.matrices[[i]] <- t(as.matrix(cells_participant@assays$SCT@counts))
         #cell.counts <- c(cell.counts, ncol(sample.raw))
         cell.counts <- c(cell.counts, nrow(cells_participant@meta.data))
-        
+
         i <- i + 1
       }
-      
+
       genotypes <- genotypes[,match(sample.names, colnames(genotypes))]
-      
+
       #cor.dir = "/groups/umcg-wijmenga/tmp03/projects/scRNAseq_10X_pilot/interactionAnalysis/nonImputed/correlationMatrices/"
       cor.dir = paste(output_loc,"/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
       #cor.dir = paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
       #output.dir = "/groups/umcg-wijmenga/tmp03/projects/scRNAseq_10X_pilot/interactionAnalysis/nonImputed/"
       output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
       #output.dir = paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '_', sep = '')
-      
+
       #if (!file.exists(paste0(output.dir, "/permutations"))){
       #  dir.create(paste0(output.dir, "/permutations"))
       #}
       #if (!file.exists(cor.dir)){
       #  dir.create(cor.dir)
       #}
-      
+
       create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir, remove_any_zero_expressions=remove_any_zero_expressions)
       interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = exp.matrices, genotypes = genotypes, cell.counts = cell.counts, output.dir = output.dir, cor.dir = cor.dir, permutations = T, n.perm=n.perm)
-      
+
       saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
       #saveRDS(interaction.output, paste("/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output/", condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
   }
-  
+
 }
 
 do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, genotypes, conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), dataset='', n.perm=n.perm){
@@ -801,22 +808,22 @@ do_coeqtl_response_style <- function(seurat_object, snp_probes, output_loc, geno
       }
       # exp.matrices is only used for the permutations, so supplying the participants has the same effect
       interaction.output <- do.interaction.analysis(snp_probes = snp_probes, exp.matrices = as.character(cell_counts_both$participant), genotypes = genotypes[, as.character(cell_counts_both$participant)], cell.counts = as.vector(cell_counts_both$cell_count), output.dir = output_loc, cor.dir = paste(output_loc, "/correlationMatrices/", 'UT', '_', condition, '_', cell_type_to_check, '_', sep=''), permutations = T, n.perm=n.perm)
-      
+
       saveRDS(interaction.output, paste(output_loc, 'UT', '_', condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
   }
-  
+
 }
 
 create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, condition, cell_type_to_check, remove_any_zero_expressions=F){
-  
+
   exp.matrices <- list()
   cell.counts <- c()
   sample.names <- vector()
-  
+
   sample.names <- unique(cells_cell_type@meta.data$assignment)
   i <- 1
-  
+
   for(participant in sample.names){
     cells_participant <- subset(cells_cell_type, assignment == participant)
     print(i)
@@ -824,15 +831,15 @@ create_cor_matrix_condition <- function(cells_cell_type, genotypes, output_loc, 
     cell.counts <- c(cell.counts, nrow(cells_participant@meta.data))
     i <- i + 1
   }
-  
+
   genotypes <- genotypes[,match(sample.names, colnames(genotypes))]
-  
+
   cor.dir = paste(output_loc,"/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
-  
+
   output.dir = paste(output_loc, condition, '_', cell_type_to_check, '_', sep = '')
-  
+
   create.cor.matrices(snp_probes = snp_probes, exp.matrices = exp.matrices, sample.names = sample.names,  output.dir = cor.dir, remove_any_zero_expressions=remove_any_zero_expressions)
-  
+
   # create the cell_counts
   cell_counts_df <- data.frame(participant=sample.names, cell_count=cell.counts)
   write.table(cell_counts_df, paste(output_loc, condition, '_', cell_type_to_check, '_cells.tsv', sep = ''), sep='\t', row.names=F, col.names=T, quote=F)
@@ -877,8 +884,8 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
       both.sample.names <- c(sample.names.1, sample.names.2)
       # grab the genotypes
       genotypes <- genotypes[,match(both.sample.names, colnames(genotypes))]
-      
-      # write correlation matrices one folder deeper      
+
+      # write correlation matrices one folder deeper
       cor.dir = paste(output_loc,"/correlationMatrices/", condition, '_', cell_type_to_check, '_', sep = '')
 
       # output is in the top folder
@@ -893,7 +900,7 @@ do_coexqtl.meta <- function(seurat_object.1, seurat_object.2, snp_probes, output
       saveRDS(interaction.output, paste(output_loc, condition, '_', cell_type_to_check, '.rds', sep = ''))
     }
   }
-  
+
 }
 
 create_correlation_matrix_files <- function(seurat_object, geneAs, geneBs, output_loc, cell_type_column='cell_type_lowerres', condition_column='timepoint', assignment_column='assignment', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'NK', 'monocyte'), filter_geneB_zeroes=F){
@@ -1081,7 +1088,7 @@ summarize_coeqtl_tsvs <- function(parent_output_dir_prepend, parent_output_dir_a
         print(paste('cant do', gene, cell_type))
         message(cond)
       })
-      
+
     }
     # add this 'complete' summary to the list
     summary_matrices[[cell_type]] <- summary_matrix
@@ -1216,7 +1223,7 @@ write_significant_genes <- function(parent_output_dir_prepend, parent_output_dir
       print(paste('cant do', gene, cell_type))
       message(cond)
     })
-    
+
   }
   }
 }

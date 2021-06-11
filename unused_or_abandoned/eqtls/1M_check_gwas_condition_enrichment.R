@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_check_gwas_condition_enrichment.R
+# Function: check for enrichment or inflation of GWAS associated SNPs in the eSNPs
+############################################################################################################################
+
+
 ###########################################################################################################################
 #
 # Libraries
@@ -29,7 +36,7 @@ gwas.filter <- function(input.set, traits, threshold=0.05){
     }
   }
   input.set <- data.frame(input.set, to.add)
-  
+
   output.set <- input.set[min.immune.specific.gwas.pvals < threshold | nchar(input.set$TraitP) > 0,]
   return(output.set)
 }
@@ -74,13 +81,13 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
       output <- read.table(output_loc, header = T, sep = '\t')
       # grab the SNPs
       snps <- unique(output$SNPName)
-      
+
       other_GWAS_to_use <- NULL
       # subset the other GWAS to only the SNPs we have
       if(!is.null(other_GWAS)){
         other_GWAS_to_use <- other_GWAS[other_GWAS$SNP %in% snps | (!is.na(other_GWAS$SNP_ld) & other_GWAS$SNP_ld %in% snps), ]
       }
-      
+
       # we care about the number of SNPs
       nr_snps <- length(snps)
       if(verbose){
@@ -116,7 +123,7 @@ plot_gwas_enrichment <- function(eQTL_output_loc, GWAS, traits_to_use=NULL, thre
       else{
         counts_df <- rbind(counts_df, c(cell_type, condition, nr_snps, nr_snps_associated))
       }
-      
+
     }
     rownames(counts_df) <- NULL
     print((counts_df))
@@ -146,13 +153,13 @@ plot_gwas_enrichment_SNPs <- function(snp_list, GWAS, traits_to_use=NULL, thresh
     }
     # grab the SNPs
     snps <- unique(snp_list[snp_list$direction == direction, ]$SNP)
-    
+
     other_GWAS_to_use <- NULL
     # subset the other GWAS to only the SNPs we have
     if(!is.null(other_GWAS)){
       other_GWAS_to_use <- other_GWAS[other_GWAS$SNP %in% snps | (!is.na(other_GWAS$SNP_ld) & other_GWAS$SNP_ld %in% snps), ]
     }
-    
+
     # we care about the number of SNPs
     nr_snps <- length(snps)
     if(verbose){
@@ -188,7 +195,7 @@ plot_gwas_enrichment_SNPs <- function(snp_list, GWAS, traits_to_use=NULL, thresh
     else{
       counts_df <- rbind(counts_df, c('any', direction, nr_snps, nr_snps_associated))
     }
-    
+
   }
   rownames(counts_df) <- NULL
   print((counts_df))
@@ -348,7 +355,7 @@ plot_gwas_enrichment_reQTL_snps <- function(eqtl_table, stims=c('3hCA', '24hCA',
       plot_per_stim[[stim]] <- plot
     }
     # plot all condition combinations
-    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']], 
+    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']],
               ncol = 3, nrow = 2)
     plot_per_ct[[cell_type]] <- plot_ct
   }
@@ -403,7 +410,7 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
       weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
       stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='stronger\nreqtls', 'numbers']
       # check the co-eQTL gene?
-      
+
       # create the dataframe
       perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, reqtl_snp_perc, weaker_snp_perc, stronger_snp_perc))
       colnames(perc_df_ct_stim) <- c('numbers')
@@ -412,7 +419,7 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
       perc_df_ct_stim$stim <- stim
       # round to two digits
       perc_df_ct_stim$numbers <- round(perc_df_ct_stim$numbers, digits = 2)
-      
+
       # make plot
       plot <- NULL
       if(use_ct_color){
@@ -454,13 +461,13 @@ plot_gwas_enrichment_eQTL_snp_percentages <- function(eqtl_table, stims=c('3hCA'
             scale_fill_manual(values = colors_list) +
             theme(legend.position = "none")
         }
-        
+
       }
       # put into plot list
       plot_per_stim[[stim]] <- plot
     }
     # plot all condition combinations
-    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']], 
+    plot_ct <- ggarrange(plot_per_stim[['3hCA']], plot_per_stim[['24hCA']], plot_per_stim[['3hMTB']], plot_per_stim[['24hMTB']], plot_per_stim[['3hPA']], plot_per_stim[['24hPA']],
                          ncol = 3, nrow = 2)
     plot_per_ct[[cell_type]] <- plot_ct
   }
@@ -486,7 +493,7 @@ plot_gwas_enrichment_eQTL_snp_percentages_combined <- function(eqtl_table, stims
       weaker_snp_perc <- plot_df[plot_df$labels =='gwas\nweaker\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
       stronger_snp_perc <- plot_df[plot_df$labels =='gwas\nstronger\nreqtls', 'numbers'] / plot_df[plot_df$labels =='weaker\nreqtls', 'numbers']
       # check the co-eQTL gene?
-      
+
       # create the dataframe
       perc_df_ct_stim <- data.frame(c(ut_snp_perc, stim_snp_perc, reqtl_snp_perc, weaker_snp_perc, stronger_snp_perc))
       colnames(perc_df_ct_stim) <- c('numbers')
@@ -499,7 +506,7 @@ plot_gwas_enrichment_eQTL_snp_percentages_combined <- function(eqtl_table, stims
       perc_df_ct_stim$numbers <- round(perc_df_ct_stim$numbers, digits = 2)
       perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], get_color_coding_dict()[[stim]], 'chocolate', 'green4', 'red4')
       perc_df_ct_stim$color <- c(get_color_coding_dict()[['UT']], 'navyblue', 'chocolate', 'green4', 'red4')
-      
+
       if(is.null(stim_plot_df)){
         stim_plot_df <- perc_df_ct_stim
       }
@@ -603,4 +610,3 @@ plots <- plot_gwas_enrichment_reQTL_snps(eqtl_table)
 plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table)
 plots_percentages <- plot_gwas_enrichment_eQTL_snp_percentages(eqtl_table, use_ct_color = F)
 plots_percentages_combined <- plot_gwas_enrichment_eQTL_snp_percentages_combined(eqtl_table)
-

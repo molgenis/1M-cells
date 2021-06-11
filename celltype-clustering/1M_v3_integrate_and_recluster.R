@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_v3_integrate_and_recluster.R
+# Function: integrate and cluster stimulation conditions for cell type classification
+############################################################################################################################
+
+
 library(Seurat)
 library(ggplot2)
 
@@ -39,13 +46,13 @@ add_imputed_meta_data <- function(seurat_object, column_to_transform, column_to_
 plot_celltype_markers <- function(seurat_object, assay = "RNA", slot="data", plot_dir = "./"){
   # set correct assay
   DefaultAssay(seurat_object) <- assay
-  # these are the markers used for 
+  # these are the markers used for
   celltype_marker_genes <- c("CCR7","S100A4","CD3E","CD4","CD8A","FCGR3A","NKG7","GNLY","GZMB","PRF1","KLRC1","CD79A","MS4A1","CD14","LYZ","S100A9","CSF3R","LYN","CSF1R","CD1C","ITGAX","CLEC4C","PF4","GP9","PPBP","ITGA2B","CD34")
   for(gene in celltype_marker_genes){
     if(gene %in% rownames(seurat_object)){
       p <- FeaturePlot(seurat_object, features = c(gene), slot=slot)
       # replace RNA_snn_res.1  with whatever your cluster column is called in metadata
-      p$data$clusters <- seurat_object$seurat_clusters 
+      p$data$clusters <- seurat_object$seurat_clusters
       LabelClusters(plot = p, id = "clusters")
       ggsave(paste(plot_dir,gene,".png", sep=""), dpi=600, width=10, height=10)
     }
@@ -59,7 +66,7 @@ plot_celltype_markers <- function(seurat_object, assay = "RNA", slot="data", plo
 plot_celltype_markers_param <- function(seurat_object, markers, assay = "RNA", slot="data", plot_dir = "./"){
   # set correct assay
   DefaultAssay(seurat_object) <- assay
-  # these are the markers used for 
+  # these are the markers used for
   celltype_marker_genes <- markers
   for(gene in celltype_marker_genes){
     if(gene %in% rownames(seurat_object)){
@@ -79,7 +86,7 @@ plot_celltype_markers_param <- function(seurat_object, markers, assay = "RNA", s
 plot_celltype_violins <- function(seurat_object, assay = "RNA", slot="data", plot_dir = "./"){
   # set correct assay
   DefaultAssay(seurat_object) <- assay
-  # these are the markers used for 
+  # these are the markers used for
   celltype_marker_genes <- c("CCR7","S100A4","CD3E","CD4","CD8A", "CD8B", "FCGR3A","NKG7","GNLY","GZMB","PRF1","KLRC1","CD79A","MS4A1","CD14","LYZ","S100A9","CSF3R","LYN","CSF1R","CD1C","ITGAX","CLEC4C","PF4","GP9","PPBP","ITGA2B","CD34")
   for(gene in celltype_marker_genes){
     # only plot if the gene is present
@@ -145,7 +152,7 @@ saveRDS(v3_CA, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v3_CA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v3_X3hPA <- subset(v3, subset = timepoint == "X3hPA")
 v3_X24hPA <- subset(v3, subset = timepoint == "X24hPA")
 # get a list of the untreated and the two CA conditions
@@ -178,7 +185,7 @@ saveRDS(v3_PA, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v3_PA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v3_X3hMTB <- subset(v3, subset = timepoint == "X3hMTB")
 v3_X24hMTB <- subset(v3, subset = timepoint == "X24hMTB")
 # get a list of the untreated and the two CA conditions
@@ -290,7 +297,7 @@ ggsave(paste(dimplot_loc, 'v3_MTB_reclus_ctnewmega_20201106.png', sep = ''), wid
 
 # just change cluster 36 to megakaryocyte
 v3_CA@meta.data[v3_CA@meta.data$seurat_clusters == 36, ]$cell_type_lowerres <- 'megakaryocyte'
-# determine PF4 expression 
+# determine PF4 expression
 featureplot_PF4_CA <- FeaturePlot(v3_CA, features = c("PF4"))
 v3_CA <- AddMetaData(v3_CA, featureplot_PF4_CA$data["PF4"], "PF4_relative_expression")
 v3_CA@meta.data$above_PF4_threshold <- F
@@ -302,7 +309,7 @@ v3_CA@meta.data[v3_CA@meta.data$above_PF4_threshold == T, ]$cell_type_lowerres <
 DimPlot(v3_CA, reduction = 'umap', group.by = 'cell_type_lowerres')
 ggsave(paste(dimplot_loc, 'v3_CA_reclus_ctnewmega_20201106.png', sep = ''), width = 10, height = 10)
 
-# determine PF4 expression 
+# determine PF4 expression
 featureplot_PF4_PA <- FeaturePlot(v3_PA, features = c("PF4"))
 v3_PA <- AddMetaData(v3_PA, featureplot_PF4_PA$data["PF4"], "PF4_relative_expression")
 # only 37 to mega
@@ -330,9 +337,7 @@ v3 <- AddMetaData(v3, v3_cell_types)
 # remove the UT samples that were incorrectly stimulated
 v3 <- v3[, !(v3@meta.data$assignment %in% c('LLDeep_1058','LLDeep_1229', 'LLDeep_1179', 'LLDeep_1247', 'LLDeep_1016', 'LLDeep_1067', 'LLDeep_0747', 'LLDeep_0906') & v3@meta.data$timepoint == 'UT')]
 # redo normalization for RNA assay, since those are gone
-DefaultAssay(v3) <- 'RNA'                                                  
+DefaultAssay(v3) <- 'RNA'
 v3 <- NormalizeData(v3)
 # write the result
 saveRDS(v3, '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds')
-
-

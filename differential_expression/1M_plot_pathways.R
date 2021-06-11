@@ -1,3 +1,9 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_plot_pathways.R
+# Function: plot DE genes from gene enrichment analysis
+############################################################################################################################
+
 
 ######################
 # libraries          #
@@ -59,7 +65,7 @@ heatmap.3 <- function(x,
                       RowSideColorsSize = 1,
                       to_na=NULL,
                       KeyValueName="Value",...){
-  
+
   invalid <- function (x) {
     if (missing(x) || is.null(x) || length(x) == 0)
       return(TRUE)
@@ -69,7 +75,7 @@ heatmap.3 <- function(x,
       return(all(is.na(x)))
     else return(FALSE)
   }
-  
+
   x <- as.matrix(x)
   retval <- list()
   scale <- if (symm && missing(scale))
@@ -243,7 +249,7 @@ heatmap.3 <- function(x,
     lwid <- c(keysize, 4)
   if (missing(lmat) || is.null(lmat)) {
     lmat <- rbind(4:3, 2:1)
-    
+
     if (!missing(ColSideColors)) {
       #if (!is.matrix(ColSideColors))
       #stop("'ColSideColors' must be a matrix")
@@ -253,7 +259,7 @@ heatmap.3 <- function(x,
       #lhei <- c(lhei[1], 0.2, lhei[2])
       lhei=c(lhei[1], side.height.fraction*ColSideColorsSize/2, lhei[2])
     }
-    
+
     if (!missing(RowSideColors)) {
       #if (!is.matrix(RowSideColors))
       #stop("'RowSideColors' must be a matrix")
@@ -265,16 +271,16 @@ heatmap.3 <- function(x,
     }
     lmat[is.na(lmat)] <- 0
   }
-  
+
   if (length(lhei) != nrow(lmat))
     stop("lhei must have length = nrow(lmat) = ", nrow(lmat))
   if (length(lwid) != ncol(lmat))
     stop("lwid must have length = ncol(lmat) =", ncol(lmat))
   op <- par(no.readonly = TRUE)
   on.exit(par(op))
-  
+
   layout(lmat, widths = lwid, heights = lhei, respect = FALSE)
-  
+
   if (!missing(RowSideColors)) {
     if (!is.matrix(RowSideColors)){
       par(mar = c(margins[1], 0, 0, 0.5))
@@ -297,9 +303,9 @@ heatmap.3 <- function(x,
       }
     }
   }
-  
+
   if (!missing(ColSideColors)) {
-    
+
     if (!is.matrix(ColSideColors)){
       par(mar = c(0.5, 0, 0, margins[2]))
       image(cbind(1:nc), col = ColSideColors[colInd], axes = FALSE)
@@ -321,7 +327,7 @@ heatmap.3 <- function(x,
       }
     }
   }
-  
+
   par(mar = c(margins[1], 0, 0, margins[2]))
   x <- t(x)
   cellnote <- t(cellnote)
@@ -418,7 +424,7 @@ heatmap.3 <- function(x,
       min.raw <- min(x, na.rm = TRUE)
       max.raw <- max(x, na.rm = TRUE)
     }
-    
+
     z <- seq(min.raw, max.raw, length = length(col))
     image(z = matrix(z, ncol = 1), col = col, breaks = tmpbreaks,
           xaxt = "n", yaxt = "n")
@@ -665,7 +671,7 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
       # then grab the genes that are 'this' varied
       varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
     }
-    
+
     # and add them to the list
     top_vary_de <- c(top_vary_de, varying_genes)
   }
@@ -727,7 +733,7 @@ avg_exp_table_to_hm_table <- function(expression_table){
 
 get_gene_list_from_hm_branch <- function(heatmap, branch_directions, use_col=T){
   branch <- NULL
-  # grab the row or column 
+  # grab the row or column
   if(use_col){
     branch <- heatmap$colDendrogram
   }
@@ -835,7 +841,7 @@ de_pathway_genes <- unique(as.vector(unlist(pathway_genes_per_cond)))
 lfc_de_df <- get_lfcs_for_genes(mast_output_loc, de_pathway_genes, cell_types = c('monocyte'), na_to_zero = T)
 # get the most varying
 lfc_de_most_vary <- get_top_vary_genes(lfc_de_df, use_ct=T, use_pathogen = F, use_tp = F, use_dynamic_sd = T, top_so_many = 100, cell_types = c('monocyte'))
-# 
+#
 lfc_de_varying_df <- lfc_de_df[lfc_de_most_vary, ]
 # remove the monocyte and UTX monniker from the colnames
 colnames(lfc_de_varying_df) <- gsub('monocyteUTX', '', colnames(lfc_de_varying_df))
@@ -906,7 +912,3 @@ colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_
 heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression', RowSideColors = t(colors_m))
 # exclude UT
 heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
-
-
-
-

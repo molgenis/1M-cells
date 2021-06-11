@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Harm Brugge
+# Name: create_eqt_table.R
+# Function: summarize the eQTL output in Excel format
+############################################################################################################################
+
+
 options(java.parameters = "-Xmx8000m")
 library("xlsx")
 library('stringr')
@@ -10,8 +17,8 @@ sign_eqtls_ut$snp_gene <- paste0(sign_eqtls_ut$V1,sign_eqtls_ut$V2)
 
 base_dir <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/summaries/"
 
-#pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
-pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL) 
+#pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL)
+pbmc_ut <- read.table("/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/UT/bulk_expression/eQTLsFDR-ProbeLevel.txt.gz", header = T, stringsAsFactors = F, sep = "\t", row.names = NULL)
 pbmc_ut$snp_gene <- paste0(pbmc_ut$SNPName, pbmc_ut$ProbeName)
 pbmc_ut <- pbmc_ut[pbmc_ut$snp_gene %in% sign_eqtls_ut$snp_gene,]
 
@@ -42,17 +49,17 @@ add_to_table <- function(eqtl_table, eqtl_path, name, fdr_as_1=F, add_z_dir=F) {
         eqtl_table[,paste0("zdir_", name)] <- ifelse(eqtls_matched[,11] < 0, "DOWN", "UP")
       }
       return(eqtl_table)
-      
+
     }, error=function(error_condition) {
       print(paste("Could not read file:", eqtl_path))
       return(eqtl_table)
     }
   )
-  
+
 }
 
 add_MAST_to_table <- function(eqtl_table, MAST_path, name, is_meta=F){
-  # there might not be a MAST output file, so 
+  # there might not be a MAST output file, so
   tryCatch({
     # read the MAST file
     mast_output <- read.table(MAST_path, header = T, stringsAsFactors = F, sep = "\t")
@@ -307,12 +314,12 @@ eqtl_tables_per_condition <- list()
 
 for (condition in conditions) {
   for (cell_type in c("bulk", cell_types_to_use)) {
-    
+
     eqtl_table_condition <- eqtl_table
     # add UT
     #eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "3h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_3h", condition))
     eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20200729_eqtlgenlead_anycondsig_merged/results/', "UT", "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_UT"))
-    
+
     # add 3h and UT_vs_3h
     #eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "3h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_3h", condition))
     #eqtl_table_condition <- add_to_table(eqtl_table_condition, paste0('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_newest_log_200624_confine_1m_ut_all_cell_types_eqtlgen/results/', "UT_vs_3h", condition, "/", cell_type, "_expression/eQTLsFDR-ProbeLevel.txt.gz"), paste0(cell_type, "_UT_vs_3h", condition))
@@ -338,14 +345,14 @@ for (condition in conditions) {
     for(gwas in names(GWASses)){
       eqtl_table_condition <- add_GWAS_to_table(eqtl_table_condition, GWASses[[gwas]], gwas, ld_matched = T)
     }
-    
+
     # for the heatmap?
     eqtls_z_scores_all_conditions[,paste0(condition, "_3h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_3h", condition)]
     eqtls_z_scores_all_conditions[,paste0(condition, "_24h_", cell_type)] <- eqtl_table_condition[,paste0("z_", cell_type, "_24h", condition)]
-    
+
     colnames(eqtl_table_condition) <- gsub('CA|MTB|PA', '', colnames(eqtl_table_condition))
     colnames(eqtl_table_condition) <- gsub("bulk_|CD4T_|CD8T_|monocyte_|NK_|B_|DC_", '', colnames(eqtl_table_condition))
-    
+
     # store in list
     eqtl_tables_per_condition[[condition]][[cell_type]] <- eqtl_table_condition
     # write to excel file
@@ -354,10 +361,10 @@ for (condition in conditions) {
     # also write to a separate file to make it easier to analyse
     #write.table(eqtl_table_condition, (paste(base_dir, "eqtl_table_", cell_type, condition, '_200624_wmast_lfc01.tsv', sep = '')), col.names = T, row.names = T, sep = '\t')
     #write.table(eqtl_table_condition, (paste(base_dir, "eqtl_table_", cell_type, '_', condition, '_200729_wmast_lfc01.tsv', sep = '')), col.names = T, row.names = T, sep = '\t')
-    
+
     eqtl_table_condition$pathogen <- condition
     eqtl_table_condition$cell_type <- cell_type
-    
+
     if(is.null(super_table)){
       super_table <- eqtl_table_condition
     }
@@ -377,4 +384,3 @@ sds[is.na(sds)] <- 0
 sum(sds > 2)
 
 heatmap(t(as.matrix(eqtls_z_scores_all_conditions[sds > 2,])), scale="column", RowSideColors=colors, col=brewer.pal(11,"RdBu"))
-

@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_preprocess.R
+# Function: preprocess the count data
+############################################################################################################################
+
+
 ####################
 # libraries        #
 ####################
@@ -121,11 +128,11 @@ add_stim_tags <- function(seurat_object, stim_mapping_loc, assignment_key='exp.i
         # split the participant line by comma to get the participants for the timepoint
         participants.this.tp <- strsplit(participants.as.string, ",")
         # check if there are any cases with the combination of these participants with the timepoint (some participants had both v2 and v3 experiments)
-        if(nrow(seurat_object@meta.data[seurat_object@meta.data[[assignment_key]] %in% unlist(participants.this.tp) 
+        if(nrow(seurat_object@meta.data[seurat_object@meta.data[[assignment_key]] %in% unlist(participants.this.tp)
                                         & seurat_object@meta.data[[batch_key]] == lane
                                         ,]) > 0){
           # set this timepoint for this lane combined with these participants
-          seurat_object@meta.data[seurat_object@meta.data[[assignment_key]] %in% unlist(participants.this.tp) 
+          seurat_object@meta.data[seurat_object@meta.data[[assignment_key]] %in% unlist(participants.this.tp)
                                   & seurat_object@meta.data[[batch_key]] == lane
                                   ,][tp_key] <- tp
         }
@@ -401,7 +408,7 @@ integrate_conditions <- function(seurat_object, stim, use_sct = F){
   # get the timepoints
   stim_3h_tag = paste("X3h", stim, sep = "")
   stim_24h_tag = paste("X24h", stim, sep = "")
-  # try to do merge the CA timepoints with the untreated samples 
+  # try to do merge the CA timepoints with the untreated samples
   seurat_UT <- subset(seurat_object, subset = timepoint == "UT")
   seurat_X3h <- subset(seurat_object, subset = timepoint == stim_3h_tag)
   seurat_X24h <- subset(seurat_object, subset = timepoint == stim_24h_tag)
@@ -423,9 +430,9 @@ integrate_conditions <- function(seurat_object, stim, use_sct = F){
     })
   }
   # calculate the anchors
-  seurat_anchors <- FindIntegrationAnchors(object.list = seurat_list, dims = 1:20)
+  seurat_anchors <- FindIntegrationAnchors(object.list = seurat_list, dims = 1:30)
   # merge the untreated with the CA conditions based on the anchors
-  seurat_combined <- IntegrateData(anchorset = seurat_anchors, dims = 1:20)
+  seurat_combined <- IntegrateData(anchorset = seurat_anchors, dims = 1:30)
   # set the default assay to the integrated one for clustering etc
   DefaultAssay(seurat_combined) <- "integrated"
   return(seurat_combined)
@@ -459,13 +466,13 @@ plot_integration <- function(seurat_object, save_location){
 plot_celltype_markers <- function(seurat_object, assay = "RNA", slot="scale.data", plot_dir = "./"){
   # set correct assay
   DefaultAssay(seurat_object) <- assay
-  # these are the markers used for 
+  # these are the markers used for
   celltype_marker_genes <- c("CCR7","S100A4","CD3E","CD4","CD8A","FCGR3A","NKG7","GNLY","GZMB","PRF1","KLRC1","CD79A","MS4A1","CD14","LYZ","S100A9","CSF3R","LYN","CSF1R","CD1C","ITGAX","CLEC4C","PF4","GP9","PPBP","ITGA2B","CD34")
   for(gene in celltype_marker_genes){
     if(gene %in% rownames(seurat_object)){
       p <- FeaturePlot(seurat_object, features = c(gene), slot=slot)
       # replace RNA_snn_res.1  with whatever your cluster column is called in metadata
-      p$data$clusters <- seurat_object$integrated_snn_res.0.5 
+      p$data$clusters <- seurat_object$integrated_snn_res.0.8
       LabelClusters(plot = p, id = "clusters")
       ggsave(paste(plot_dir,gene,".png", sep=""), dpi=600, width=10, height=10)
     }
@@ -479,13 +486,13 @@ plot_celltype_markers <- function(seurat_object, assay = "RNA", slot="scale.data
 plot_celltype_violins <- function(seurat_object, assay = "RNA", slot="scale.data", plot_dir = "./"){
   # set correct assay
   DefaultAssay(seurat_object) <- assay
-  # these are the markers used for 
+  # these are the markers used for
   celltype_marker_genes <- c("CCR7","S100A4","CD3E","CD4","CD8A","FCGR3A","NKG7","GNLY","GZMB","PRF1","KLRC1","CD79A","MS4A1","CD14","LYZ","S100A9","CSF3R","LYN","CSF1R","CD1C","ITGAX","CLEC4C","PF4","GP9","PPBP","ITGA2B","CD34")
   for(gene in celltype_marker_genes){
     # only plot if the gene is present
     if(gene %in% rownames(seurat_object)){
       # plot the violins and save
-      VlnPlot(seurat_object, features = c(gene), group.by = seurat_object$integrated_snn_res.0.5)
+      VlnPlot(seurat_object, features = c(gene), group.by = seurat_object$integrated_snn_res.0.8)
       ggsave(paste(plot_dir,gene,"_violin.png", sep=""), dpi=600, width=10, height=10, assay=assay, slot=slot)
     }
     else{
@@ -590,7 +597,7 @@ v3_cellassign_loc <- paste(cellassign_dir, "v3_cellassign_celltypes.tsv", sep=""
 v3_cellassign <- read.table(v3_cellassign_loc, header=T, sep="\t", row.names = 1)
 AddMetaData(v3, v3_cellassign$cell_type, 'cellassign_ct')
 
-# try to do merge the CA timepoints with the untreated samples 
+# try to do merge the CA timepoints with the untreated samples
 v3_UT <- subset(v3, subset = timepoint == "UT")
 v3_X3hCA <- subset(v3, subset = timepoint == "X3hCA")
 v3_X24hCA <- subset(v3, subset = timepoint == "X24hCA")
@@ -603,9 +610,9 @@ v3_CA_list <- lapply(X = v3_CA_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v3_CA_anchors <- FindIntegrationAnchors(object.list = v3_CA_list, dims = 1:20)
+v3_CA_anchors <- FindIntegrationAnchors(object.list = v3_CA_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v3_CA <- IntegrateData(anchorset = v3_CA_anchors, dims = 1:20)
+v3_CA <- IntegrateData(anchorset = v3_CA_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v3_CA) <- "integrated"
 # do scaling, required for integrated sets
@@ -613,9 +620,9 @@ v3_CA <- ScaleData(v3_CA, verbose = FALSE)
 # do PCA
 v3_CA <- RunPCA(v3_CA, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v3_CA <- RunUMAP(v3_CA, reduction = "pca", dims = 1:20)
-v3_CA <- FindNeighbors(v3_CA, reduction = "pca", dims = 1:20)
-v3_CA <- FindClusters(v3_CA, resolution = 0.5)
+v3_CA <- RunUMAP(v3_CA, reduction = "pca", dims = 1:30)
+v3_CA <- FindNeighbors(v3_CA, reduction = "pca", dims = 1:30)
+v3_CA <- FindClusters(v3_CA, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v3_CA <- add_imputed_meta_data(v3_CA, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -626,7 +633,7 @@ saveRDS(v3_CA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v3_CA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v3_X3hPA <- subset(v3, subset = timepoint == "X3hPA")
 v3_X24hPA <- subset(v3, subset = timepoint == "X24hPA")
 # get a list of the untreated and the two CA conditions
@@ -638,9 +645,9 @@ v3_PA_list <- lapply(X = v3_PA_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v3_PA_anchors <- FindIntegrationAnchors(object.list = v3_PA_list, dims = 1:20)
+v3_PA_anchors <- FindIntegrationAnchors(object.list = v3_PA_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v3_PA <- IntegrateData(anchorset = v3_PA_anchors, dims = 1:20)
+v3_PA <- IntegrateData(anchorset = v3_PA_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v3_PA) <- "integrated"
 # do scaling, required for integrated sets
@@ -648,9 +655,9 @@ v3_PA <- ScaleData(v3_PA, verbose = FALSE)
 # do PCA
 v3_PA <- RunPCA(v3_PA, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v3_PA <- RunUMAP(v3_PA, reduction = "pca", dims = 1:20)
-v3_PA <- FindNeighbors(v3_PA, reduction = "pca", dims = 1:20)
-v3_PA <- FindClusters(v3_PA, resolution = 0.5)
+v3_PA <- RunUMAP(v3_PA, reduction = "pca", dims = 1:30)
+v3_PA <- FindNeighbors(v3_PA, reduction = "pca", dims = 1:30)
+v3_PA <- FindClusters(v3_PA, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v3_PA <- add_imputed_meta_data(v3_PA, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -661,7 +668,7 @@ saveRDS(v3_PA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v3_PA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v3_X3hMTB <- subset(v3, subset = timepoint == "X3hMTB")
 v3_X24hMTB <- subset(v3, subset = timepoint == "X24hMTB")
 # get a list of the untreated and the two CA conditions
@@ -673,9 +680,9 @@ v3_MTB_list <- lapply(X = v3_MTB_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v3_MTB_anchors <- FindIntegrationAnchors(object.list = v3_MTB_list, dims = 1:20)
+v3_MTB_anchors <- FindIntegrationAnchors(object.list = v3_MTB_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v3_MTB <- IntegrateData(anchorset = v3_MTB_anchors, dims = 1:20)
+v3_MTB <- IntegrateData(anchorset = v3_MTB_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v3_MTB) <- "integrated"
 # do scaling, required for integrated sets
@@ -683,9 +690,9 @@ v3_MTB <- ScaleData(v3_MTB, verbose = FALSE)
 # do PCA
 v3_MTB <- RunPCA(v3_MTB, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v3_MTB <- RunUMAP(v3_MTB, reduction = "pca", dims = 1:20)
-v3_MTB <- FindNeighbors(v3_MTB, reduction = "pca", dims = 1:20)
-v3_MTB <- FindClusters(v3_MTB, resolution = 0.5)
+v3_MTB <- RunUMAP(v3_MTB, reduction = "pca", dims = 1:30)
+v3_MTB <- FindNeighbors(v3_MTB, reduction = "pca", dims = 1:30)
+v3_MTB <- FindClusters(v3_MTB, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v3_MTB <- add_imputed_meta_data(v3_MTB, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -696,7 +703,7 @@ saveRDS(v3_MTB, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/data
 # clear memory after saving
 rm(v3_MTB)
 
-# try to do merge the CA timepoints with the untreated samples 
+# try to do merge the CA timepoints with the untreated samples
 v2_UT <- subset(v2, subset = timepoint == "UT")
 v2_X3hCA <- subset(v2, subset = timepoint == "X3hCA")
 v2_X24hCA <- subset(v2, subset = timepoint == "X24hCA")
@@ -709,9 +716,9 @@ v2_CA_list <- lapply(X = v2_CA_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v2_CA_anchors <- FindIntegrationAnchors(object.list = v2_CA_list, dims = 1:20)
+v2_CA_anchors <- FindIntegrationAnchors(object.list = v2_CA_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v2_CA <- IntegrateData(anchorset = v2_CA_anchors, dims = 1:20)
+v2_CA <- IntegrateData(anchorset = v2_CA_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v2_CA) <- "integrated"
 # do scaling, required for integrated sets
@@ -719,9 +726,9 @@ v2_CA <- ScaleData(v2_CA, verbose = FALSE)
 # do PCA
 v2_CA <- RunPCA(v2_CA, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v2_CA <- RunUMAP(v2_CA, reduction = "pca", dims = 1:20)
-v2_CA <- FindNeighbors(v2_CA, reduction = "pca", dims = 1:20)
-v2_CA <- FindClusters(v2_CA, resolution = 0.5)
+v2_CA <- RunUMAP(v2_CA, reduction = "pca", dims = 1:30)
+v2_CA <- FindNeighbors(v2_CA, reduction = "pca", dims = 1:30)
+v2_CA <- FindClusters(v2_CA, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v2_CA <- add_imputed_meta_data(v2_CA, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -732,7 +739,7 @@ saveRDS(v2_CA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v2_CA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v2_X3hPA <- subset(v2, subset = timepoint == "X3hPA")
 v2_X24hPA <- subset(v2, subset = timepoint == "X24hPA")
 # get a list of the untreated and the two CA conditions
@@ -744,9 +751,9 @@ v2_PA_list <- lapply(X = v2_PA_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v2_PA_anchors <- FindIntegrationAnchors(object.list = v2_PA_list, dims = 1:20)
+v2_PA_anchors <- FindIntegrationAnchors(object.list = v2_PA_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v2_PA <- IntegrateData(anchorset = v2_PA_anchors, dims = 1:20)
+v2_PA <- IntegrateData(anchorset = v2_PA_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v2_PA) <- "integrated"
 # do scaling, required for integrated sets
@@ -754,9 +761,9 @@ v2_PA <- ScaleData(v2_PA, verbose = FALSE)
 # do PCA
 v2_PA <- RunPCA(v2_PA, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v2_PA <- RunUMAP(v2_PA, reduction = "pca", dims = 1:20)
-v2_PA <- FindNeighbors(v2_PA, reduction = "pca", dims = 1:20)
-v2_PA <- FindClusters(v2_PA, resolution = 0.5)
+v2_PA <- RunUMAP(v2_PA, reduction = "pca", dims = 1:30)
+v2_PA <- FindNeighbors(v2_PA, reduction = "pca", dims = 1:30)
+v2_PA <- FindClusters(v2_PA, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v2_PA <- add_imputed_meta_data(v2_PA, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -767,7 +774,7 @@ saveRDS(v2_PA, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/datas
 # clear memory after saving
 rm(v2_PA)
 
-# try to do merge the PA timepoints with the untreated samples 
+# try to do merge the PA timepoints with the untreated samples
 v2_X3hMTB <- subset(v2, subset = timepoint == "X3hMTB")
 v2_X24hMTB <- subset(v2, subset = timepoint == "X24hMTB")
 # get a list of the untreated and the two CA conditions
@@ -779,9 +786,9 @@ v2_MTB_list <- lapply(X = v2_MTB_list, FUN = function(x) {
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
 # calculate the anchors
-v2_MTB_anchors <- FindIntegrationAnchors(object.list = v2_MTB_list, dims = 1:20)
+v2_MTB_anchors <- FindIntegrationAnchors(object.list = v2_MTB_list, dims = 1:30)
 # merge the untreated with the CA conditions based on the anchors
-v2_MTB <- IntegrateData(anchorset = v2_MTB_anchors, dims = 1:20)
+v2_MTB <- IntegrateData(anchorset = v2_MTB_anchors, dims = 1:30)
 # set the default assay to the integrated one for clustering etc
 DefaultAssay(v2_MTB) <- "integrated"
 # do scaling, required for integrated sets
@@ -789,9 +796,9 @@ v2_MTB <- ScaleData(v2_MTB, verbose = FALSE)
 # do PCA
 v2_MTB <- RunPCA(v2_MTB, npcs = 30, verbose = FALSE)
 # UMAP and Clustering
-v2_MTB <- RunUMAP(v2_MTB, reduction = "pca", dims = 1:20)
-v2_MTB <- FindNeighbors(v2_MTB, reduction = "pca", dims = 1:20)
-v2_MTB <- FindClusters(v2_MTB, resolution = 0.5)
+v2_MTB <- RunUMAP(v2_MTB, reduction = "pca", dims = 1:30)
+v2_MTB <- FindNeighbors(v2_MTB, reduction = "pca", dims = 1:30)
+v2_MTB <- FindClusters(v2_MTB, resolution = 0.8)
 # impute the cell types from our earlier eqtlgen work as a test
 v2_MTB <- add_imputed_meta_data(v2_MTB, 'seurat_clusters','eqtlgen_ct','imputed_ct')
 # clear up some memory
@@ -868,6 +875,5 @@ DefaultAssay(v3_CA) <- "RNA"
 # add complete tag for both the timepoint and the condition
 v3_CA$celltype.stim <- paste(v3_CA$imputed_ct, v3_CA$timepoint, sep = "_")
 Idents(v3_CA) <- "celltype.stim"
-FeaturePlot(v3_CA, features = c("CD3D", "GNLY", "IFI6"), split.by = "timepoint", max.cutoff = 3, 
+FeaturePlot(v3_CA, features = c("CD3D", "GNLY", "IFI6"), split.by = "timepoint", max.cutoff = 3,
             cols = c("grey", "red"))
-

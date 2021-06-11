@@ -1,3 +1,13 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_check_confined_vs_unconfined_eqtl.R
+# Function: check the difference between doing eQTLgen lead esnp vs unconfined eQTL mapping
+############################################################################################################################
+
+
+###########
+#functions#
+###########
 
 get_egenes_unique_and_shared <- function(eqtl_output_loc_1, eqtl_output_loc_2, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')){
   # init list
@@ -159,7 +169,7 @@ egenes_shared_and_unique_numbers_table_add_percentage <- function(numbers_table)
         # get percentage by dividing by all
         pct_state <- numbers_table_ct_condition[numbers_table_ct_condition$state == state, 'number'] / numbers_combined * 100
         # set as the value in the dataframe
-        numbers_table[numbers_table$cell_type == cell_type & 
+        numbers_table[numbers_table$cell_type == cell_type &
                                       numbers_table$condition == condition &
                                       numbers_table$state == state, 'pct'] <- pct_state
       }
@@ -190,10 +200,10 @@ egenes_shared_and_unique_to_numbers_plot <- function(eqtl_output_loc_1, eqtl_out
     # make a plot per condition
     for(condition in unique(egenes_table$condition)){
       # make the plot
-      p <- ggplot(data=egenes_table[egenes_table$condition == condition, ], aes(x=cell_type, y=number, fill=state)) + 
+      p <- ggplot(data=egenes_table[egenes_table$condition == condition, ], aes(x=cell_type, y=number, fill=state)) +
         geom_bar(position='stack', stat='identity') +
         ggtitle(paste('egenes sharing in', condition, 'of', name_1, 'vs', name_2)) +
-        xlab('condition') + 
+        xlab('condition') +
         ylab('number of egenes')
       # make a color scale
       colScale <- scale_fill_manual(name = 'state',values = unlist(color_list[egenes_table[egenes_table$condition == condition, 'state']]))
@@ -217,7 +227,7 @@ egenes_shared_and_unique_to_numbers_plot <- function(eqtl_output_loc_1, eqtl_out
     # make a plot per cell type
     for(cell_type in unique(egenes_table$cell_type)){
       # make the plot
-      p <- ggplot(data=egenes_table[egenes_table$cell_type == cell_type, ], aes(x=condition, y=number, fill=state)) + 
+      p <- ggplot(data=egenes_table[egenes_table$cell_type == cell_type, ], aes(x=condition, y=number, fill=state)) +
         geom_bar(position='stack', stat='identity') +
         ggtitle(paste('egenes sharing in', cell_type, 'of', name_1, 'vs', name_2)) +
         xlab("cell type") +
@@ -354,7 +364,7 @@ coeqt_gene_pathways_to_df <- function(output_path_prepend, output_path_appends, 
             else{
               pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
             }
-            
+
             # reduce to the only two columns we care about
             pathways <- pathways[, c('id_name', newcolname)]
             # join with other pathway files

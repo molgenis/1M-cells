@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_MAST_meta.R
+# Function: meta analyse output of MAST v2 and v3 chemistries, and determine significant DE genes
+############################################################################################################################
+
+
 ######################
 # libraries          #
 ######################
@@ -456,7 +463,7 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
           pathway_df <- merge(pathway_df, data.table(pathways, key = c('id_name')), by.x='id_name', by.y='id_name', all=T)
           #pathway_df[[newcolname]] <- pathways[[newcolname]][match(pathway_df$Name, pathways$Name)]
           #pathway_df <- left_join(pathway_df, pathways)
-          
+
         }
       })
     }
@@ -506,20 +513,20 @@ get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
     summed_rank <- apply(pathway_table, 1, sum)
     # get the top X so many from the pathway table, ordered by this sum of rankings
     most_shared <- rownames(pathway_table[order(summed_rank), ])[1:top_so_many]
-    
+
     # get the sum of the 3h conditions
     timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
     summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
     most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_3h), ])[1:top_so_many])
-    
+
     # get the sum of the 24h conditions
     timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
     summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
     most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_24h), ])[1:top_so_many])
-    
+
     # make unique of course
     most_shared <- unique(most_shared)
-    
+
   }
   return(most_shared)
 }
@@ -604,8 +611,8 @@ get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2,
                      category.names = c(group1name, group2name),
                      filename = paste(venn_output_loc, output_file, '.png', sep = ''),
                      imagetype="png" ,
-                     height = 600 , 
-                     width = 600 , 
+                     height = 600 ,
+                     width = 600 ,
                      resolution = 300,
                      compression = "lzw",
                      lwd = 2,
@@ -647,11 +654,11 @@ get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F,
           deg_meta_combined <- merge(deg_meta_combined, deg_table, by.x='genes', by.y='genes', all=TRUE)
           #deg_meta_combined[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
         }
-        
+
       }
     }
   }
-  
+
   deg_meta_combined <- data.frame(deg_meta_combined)
   rownames(deg_meta_combined) <- deg_meta_combined$genes
   deg_meta_combined$genes <- NULL
@@ -925,7 +932,7 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
       # then grab the genes that are 'this' varied
       varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
     }
-    
+
     # and add them to the list
     top_vary_de <- c(top_vary_de, varying_genes)
   }
@@ -1067,7 +1074,7 @@ get_color_coding_dict <- function(){
 
 get_gene_list_from_hm_branch <- function(heatmap, branch_directions, use_col=T){
   branch <- NULL
-  # grab the row or column 
+  # grab the row or column
   if(use_col){
     branch <- heatmap$colDendrogram
   }

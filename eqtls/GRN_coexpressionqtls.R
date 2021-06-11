@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name:GRN_coexpressionqtls.R
+# Function: perform co-expression analysis on prepared matrices
+############################################################################################################################
+
+
 library(Seurat)
 library(Matrix)
 library(meta)
