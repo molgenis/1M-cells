@@ -212,58 +212,6 @@ saveRDS(v3_MTB, "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/data
 rm(v3_MTB)
 
 
-# do T reclustering based on 20201105 1.2 resolution output
-#v3_3hMTB_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X3hMTB')
-#v3_24hMTB_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X24hMTB')
-#v3_MTB_UT_T <- subset(v3_MTB, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'UT')
-#v3_3hCA_T <- subset(v3_CA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X3hCA')
-#v3_24hCA_T <- subset(v3_CA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X24hCA')
-#v3_CA_UT_T <- subset(v3_CA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'UT')
-#v3_3hPA_T <- subset(v3_PA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X3hPA')
-#v3_24hPA_T <- subset(v3_PA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'X24hPA')
-#v3_PA_UT_T <- subset(v3_PA, subset = (cell_type_lowerres == 'CD4T' | cell_type_lowerres == 'CD8T') & timepoint == 'UT')
-# grab T cells from any integration with UT
-#v3_UT_T <- v3_MTB_UT_T
-#v3_CA_UT_T_notinmtb <- v3_CA_UT_T[, !(rownames(v3_CA_UT_T@meta.data) %in% rownames(v3_UT_T@meta.data))]
-# the SCT assay seems to give issues, so just NULLing that one
-#v3_UT_T@assays$SCT <- NULL
-#v3_CA_UT_T@assays$SCT <- NULL
-#v3_UT_T <- merge(v3_CA_UT_T_notinmtb, v3_UT_T)
-#v3_PA_UT_T_notinmtborca <- v3_PA_UT_T[, !(rownames(v3_PA_UT_T@meta.data) %in% rownames(v3_UT_T@meta.data))]
-#v3_PA_UT_T_notinmtborca@assays$SCT <- NULL
-#v3_UT_T <- merge(v3_PA_UT_T_notinmtborca, v3_UT_T)
-# add everything into a list
-#v3_T_list <- list(v3_UT_T, v3_3hMTB_T, v3_24hMTB_T, v3_3hCA_T, v3_24hCA_T, v3_3hPA_T, v3_24hPA_T)
-#v3_T_list <- lapply(X = v3_T_list, FUN = function(x) {
-#  DefaultAssay(x) <- "RNA"
-#  x <- NormalizeData(x)
-#  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
-#})
-#saveRDS(v3_T_list, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_T_list_20201105.rds")
-# calculate the anchors
-#v3_T_anchors <- FindIntegrationAnchors(object.list = v3_T_list, dims = 1:20)
-# merge the untreated with the CA conditions based on the anchors
-#v3_T <- IntegrateData(anchorset = v3_T_anchors, dims = 1:20)
-# set the default assay to the integrated one for clustering etc
-#DefaultAssay(v3_T) <- "integrated"
-# do scaling, required for integrated sets
-#v3_T <- ScaleData(v3_T, verbose = FALSE)
-# do PCA
-#v3_T <- RunPCA(v3_T, npcs = 30, verbose = FALSE)
-# UMAP and Clustering
-#v3_T <- RunUMAP(v3_T, reduction = "pca", dims = 1:30)
-#v3_T <- FindNeighbors(v3_T, reduction = "pca", dims = 1:30)
-#v3_T <- FindClusters(v3_T, resolution = 1.2)
-# create the plot
-#DimPlot(v3_T, reduction = 'umap', group.by = 'seurat_clusters')
-#ggsave(paste(dimplot_loc, 'v3_T_reclus_clus_20201105.png', sep = ''), width = 10, height = 10)
-# switch to RNA assay to prepare for featureplots
-#DefaultAssay(v3_T) <- 'RNA'
-#v3_T <- NormalizeData(v3_CA)
-#saveRDS(v3_T, "/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_T_cca_integrated_classicnorm_20201105.rds")
-# plot
-#plot_celltype_markers(seurat_object = v3_T, assay = 'RNA', slot = 'data', plot_dir = paste(features_base_plot, 'v3_T/RNA_data_20201105/', sep = ''))
-
 v3_CA <- readRDS('/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/dataset_integration/seurat_anchoring/objects/1M_v3_CA_cca_integrated_classicnormscale_20201105.rds')
 DefaultAssay(v3_CA) <- 'integrated'
 v3_CA <- FindClusters(v3_CA, resolution = 1.5)
