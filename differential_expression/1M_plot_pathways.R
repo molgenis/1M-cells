@@ -1,3 +1,9 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_plot_pathways.R
+# Function: plot DE genes from gene enrichment analysis
+############################################################################################################################
+
 
 ######################
 # libraries          #
@@ -59,7 +65,7 @@ heatmap.3 <- function(x,
                       RowSideColorsSize = 1,
                       to_na=NULL,
                       KeyValueName="Value",...){
-  
+
   invalid <- function (x) {
     if (missing(x) || is.null(x) || length(x) == 0)
       return(TRUE)
@@ -69,7 +75,7 @@ heatmap.3 <- function(x,
       return(all(is.na(x)))
     else return(FALSE)
   }
-  
+
   x <- as.matrix(x)
   retval <- list()
   scale <- if (symm && missing(scale))
@@ -243,7 +249,7 @@ heatmap.3 <- function(x,
     lwid <- c(keysize, 4)
   if (missing(lmat) || is.null(lmat)) {
     lmat <- rbind(4:3, 2:1)
-    
+
     if (!missing(ColSideColors)) {
       #if (!is.matrix(ColSideColors))
       #stop("'ColSideColors' must be a matrix")
@@ -253,7 +259,7 @@ heatmap.3 <- function(x,
       #lhei <- c(lhei[1], 0.2, lhei[2])
       lhei=c(lhei[1], side.height.fraction*ColSideColorsSize/2, lhei[2])
     }
-    
+
     if (!missing(RowSideColors)) {
       #if (!is.matrix(RowSideColors))
       #stop("'RowSideColors' must be a matrix")
@@ -265,16 +271,16 @@ heatmap.3 <- function(x,
     }
     lmat[is.na(lmat)] <- 0
   }
-  
+
   if (length(lhei) != nrow(lmat))
     stop("lhei must have length = nrow(lmat) = ", nrow(lmat))
   if (length(lwid) != ncol(lmat))
     stop("lwid must have length = ncol(lmat) =", ncol(lmat))
   op <- par(no.readonly = TRUE)
   on.exit(par(op))
-  
+
   layout(lmat, widths = lwid, heights = lhei, respect = FALSE)
-  
+
   if (!missing(RowSideColors)) {
     if (!is.matrix(RowSideColors)){
       par(mar = c(margins[1], 0, 0, 0.5))
@@ -297,9 +303,9 @@ heatmap.3 <- function(x,
       }
     }
   }
-  
+
   if (!missing(ColSideColors)) {
-    
+
     if (!is.matrix(ColSideColors)){
       par(mar = c(0.5, 0, 0, margins[2]))
       image(cbind(1:nc), col = ColSideColors[colInd], axes = FALSE)
@@ -321,7 +327,7 @@ heatmap.3 <- function(x,
       }
     }
   }
-  
+
   par(mar = c(margins[1], 0, 0, margins[2]))
   x <- t(x)
   cellnote <- t(cellnote)
@@ -418,7 +424,7 @@ heatmap.3 <- function(x,
       min.raw <- min(x, na.rm = TRUE)
       max.raw <- max(x, na.rm = TRUE)
     }
-    
+
     z <- seq(min.raw, max.raw, length = length(col))
     image(z = matrix(z, ncol = 1), col = col, breaks = tmpbreaks,
           xaxt = "n", yaxt = "n")
@@ -665,7 +671,7 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
       # then grab the genes that are 'this' varied
       varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
     }
-    
+
     # and add them to the list
     top_vary_de <- c(top_vary_de, varying_genes)
   }
@@ -727,7 +733,7 @@ avg_exp_table_to_hm_table <- function(expression_table){
 
 get_gene_list_from_hm_branch <- function(heatmap, branch_directions, use_col=T){
   branch <- NULL
-  # grab the row or column 
+  # grab the row or column
   if(use_col){
     branch <- heatmap$colDendrogram
   }
@@ -835,7 +841,7 @@ de_pathway_genes <- unique(as.vector(unlist(pathway_genes_per_cond)))
 lfc_de_df <- get_lfcs_for_genes(mast_output_loc, de_pathway_genes, cell_types = c('monocyte'), na_to_zero = T)
 # get the most varying
 lfc_de_most_vary <- get_top_vary_genes(lfc_de_df, use_ct=T, use_pathogen = F, use_tp = F, use_dynamic_sd = T, top_so_many = 100, cell_types = c('monocyte'))
-# 
+#
 lfc_de_varying_df <- lfc_de_df[lfc_de_most_vary, ]
 # remove the monocyte and UTX monniker from the colnames
 colnames(lfc_de_varying_df) <- gsub('monocyteUTX', '', colnames(lfc_de_varying_df))
@@ -853,34 +859,10 @@ v2_expression_mono_de_hm <- apply(v2_expression_mono_de_hm, 1, function(x){x <- 
 
 # grab some pathway genes to use for annotation
 pathways_list <- list()
-# 24hCA specific?
-#pathways_list[['Interferon alpha or beta_signaling']] <- "/data/scRNA/pathways/REACTOME_Interferon_alpha_or_beta_signaling.txt"
-# 3h
 pathways_list[['Interferon Signalling']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
-# 3h
 pathways_list[['Interleukin-1 signalling']] <- "/data/scRNA/pathways/REACTOME_Interleukin-1_signaling.txt"
-# 3h
-#pathways_list[['MyD88 cascade initiated on plasma membrane']] <- "/data/scRNA/pathways/REACTOME_MyD88_cascade_initiated_on_plasma_membrane.txt"
-# 3h
-#pathways_list[['MyD88 dependent cascade initiated on endosome']] <- "/data/scRNA/pathways/REACTOME_MyD88_dependent_cascade_initiated_on_endosome.txt"
-# 3h
 pathways_list[['Toll-Like Receptors Cascades']] <- "/data/scRNA/pathways/REACTOME_Toll-Like_Receptors_Cascades.txt"
-# 24h
-#pathways_list[['Dectin-1 mediated noncanonical NF-kB signaling']] <- "/data/scRNA/pathways/REACTOME_Dectin-1_mediated_noncanonical_NF-kB_signaling.txt"
-# 24h, bit in 3h
-#pathways_list[['CLEC7A (Dectin-1) signaling']] <- "/data/scRNA/pathways/REACTOME_CLEC7A_(Dectin-1)_signaling.txt"
-# 24h
-#pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
-# 24h
-#pathways_list[['Cross-presentation of soluble exogenous antigens']] <- "/data/scRNA/pathways/REACTOME_Cross-presentation_of_soluble_exogenous_antigens.txt"
-# 24h
-#pathways_list[['Regulation of RAS by GAPs']] <- "/data/scRNA/pathways/REACTOME_Regulation_of_RAS_by_GAPs.txt"
-# 24h
 pathways_list[['C-type lectin receptors']] <- "/data/scRNA/pathways/REACTOME_C-type_lectin_receptors.txt"
-# all
-#pathways_list[['Neutrophil degranulation']] <- "/data/scRNA/pathways/REACTOME_Neutrophil_degranulation.txt"
-# all
-#pathways_list[['Cytokine signalling']] <- "/data/scRNA/pathways/REACTOME_Cytokine_Signaling_in_Immune_system_genes.txt"
 
 
 # add all the genes from the pathways togeter
@@ -897,7 +879,6 @@ colors_pathways_v2_de_hm <- pathways_to_hm_colors(t(v2_expression_mono_de_hm), p
 
 # plot that stuff
 heatmap.3(v2_expression_mono_de_hm, col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v2_de_hm)
-
 
 # show pathways
 cc <- get_color_coding_dict()
@@ -931,7 +912,3 @@ colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_
 heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression', RowSideColors = t(colors_m))
 # exclude UT
 heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
-
-
-
-

@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen, Dylan de Vries
+# Name: 1M_reqtl_plos_substract_features.R
+# Function: calculate the expression differences between conditions, to use as input for re-QTL mapping
+############################################################################################################################
+
+
 args <- commandArgs(trailingOnly=TRUE)
 
 # grab the location of the two matrices

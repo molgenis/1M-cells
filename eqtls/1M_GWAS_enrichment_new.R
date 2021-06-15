@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_check_gwas_enrichment_new.R
+# Function: check for enrichment or inflation of GWAS associated SNPs in the eSNPs
+############################################################################################################################
+
+
 library(stringr)
 library(ggplot2)
 
@@ -286,7 +293,7 @@ plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_
         plot_data[!is.na(plot_data$is_reqtl) & plot_data$is_reqtl, 'reqtl'] <- 'reqtl'
         plot_data[!is.na(plot_data$is_reqtl) & plot_data$is_reqtl == F, 'reqtl'] <- 'not reqtl'
         plot_data$reqtl <- as.factor(plot_data$reqtl)
-        
+
         p <- ggplot(data=plot_data, aes(x=predicted, y=observed, color=reqtl)) + geom_point()
       }
       else{
@@ -295,10 +302,10 @@ plot_lamba_inflation <- function(gwas_and_eqtls, eqtl_cutoff_column='FDR', eqtl_
       p <- p +
            xlim(c(0,min_log_p)) +
            ylim(c(0,min_log_p)) +
-           labs(title=paste(cell_type, condition)) + 
-          xlab("-log10 expected p-value") + 
+           labs(title=paste(cell_type, condition)) +
+          xlab("-log10 expected p-value") +
           ylab("-log10 observed p-value")
-        
+
       #legend("bottomright", "legend", paste0("Lambda inflation: :", signif(inflation,3)))
       #abline(0, 1, col = "red")
       # add to list
@@ -318,7 +325,7 @@ plot_inflations <- function(top_hit_per_esnp_z_per_gwas, plot_output_loc){
     plots_list <- plot_lamba_inflation(gwas_and_eqtls = top_hit_per_esnp_z_per_gwas[[gwas]], mark_reqtl = T)
     # check each condition
     for(condition in names(plots_list)){
-      # get for this 
+      # get for this
     }
   }
 }

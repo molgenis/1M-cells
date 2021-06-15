@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_MAST_meta.R
+# Function: meta analyse output of MAST v2 and v3 chemistries, and determine significant DE genes
+############################################################################################################################
+
+
 ######################
 # libraries          #
 ######################
@@ -456,7 +463,7 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
           pathway_df <- merge(pathway_df, data.table(pathways, key = c('id_name')), by.x='id_name', by.y='id_name', all=T)
           #pathway_df[[newcolname]] <- pathways[[newcolname]][match(pathway_df$Name, pathways$Name)]
           #pathway_df <- left_join(pathway_df, pathways)
-          
+
         }
       })
     }
@@ -506,20 +513,20 @@ get_most_shared_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
     summed_rank <- apply(pathway_table, 1, sum)
     # get the top X so many from the pathway table, ordered by this sum of rankings
     most_shared <- rownames(pathway_table[order(summed_rank), ])[1:top_so_many]
-    
+
     # get the sum of the 3h conditions
     timepoints_3h <- colnames(pathway_table)[grep('3h', colnames(pathway_table))]
     summed_rank_3h <- apply(pathway_table[, timepoints_3h], 1, sum)
     most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_3h), ])[1:top_so_many])
-    
+
     # get the sum of the 24h conditions
     timepoints_24h <- colnames(pathway_table)[grep('24h', colnames(pathway_table))]
     summed_rank_24h <- apply(pathway_table[, timepoints_24h], 1, sum)
     most_shared <- c(most_shared, rownames(pathway_table[order(summed_rank_24h), ])[1:top_so_many])
-    
+
     # make unique of course
     most_shared <- unique(most_shared)
-    
+
   }
   return(most_shared)
 }
@@ -604,8 +611,8 @@ get_mast_meta_output_overlap <- function(mast_meta_output_1, mast_meta_output_2,
                      category.names = c(group1name, group2name),
                      filename = paste(venn_output_loc, output_file, '.png', sep = ''),
                      imagetype="png" ,
-                     height = 600 , 
-                     width = 600 , 
+                     height = 600 ,
+                     width = 600 ,
                      resolution = 300,
                      compression = "lzw",
                      lwd = 2,
@@ -647,11 +654,11 @@ get_combined_meta_de_table <- function(meta_output_loc, must_be_positive_once=F,
           deg_meta_combined <- merge(deg_meta_combined, deg_table, by.x='genes', by.y='genes', all=TRUE)
           #deg_meta_combined[,paste(cell_type, timepoint, pathogen, sep = "_")] <- deg_table$metafc
         }
-        
+
       }
     }
   }
-  
+
   deg_meta_combined <- data.frame(deg_meta_combined)
   rownames(deg_meta_combined) <- deg_meta_combined$genes
   deg_meta_combined$genes <- NULL
@@ -925,7 +932,7 @@ get_top_vary_genes <- function(de_table, use_tp=T, use_pathogen=T, use_ct=T, sd_
       # then grab the genes that are 'this' varied
       varying_genes <- rownames(sub_de_table[sds > sd_cutoff,])
     }
-    
+
     # and add them to the list
     top_vary_de <- c(top_vary_de, varying_genes)
   }
@@ -1067,7 +1074,7 @@ get_color_coding_dict <- function(){
 
 get_gene_list_from_hm_branch <- function(heatmap, branch_directions, use_col=T){
   branch <- NULL
-  # grab the row or column 
+  # grab the row or column
   if(use_col){
     branch <- heatmap$colDendrogram
   }
@@ -1270,12 +1277,6 @@ transform.to.zscore.log10 <- function(x){
 	}
 }
 
-
-# cell counts loc
-#cell_counts_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
-# grab the cell counts
-#cell_counts <- read.table(cell_counts_loc, sep = '\t', header = T)
-
 # get the locations of the DE output
 mast_output_prepend <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/v'
 mast_output_append <- '_paired_lores_lfc01minpct01_20201106/rna/'
@@ -1325,408 +1326,3 @@ sig_up_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_pos/meta_pa
 get_significant_genes(mast_meta_output_3h24h_loc, sig_up_output_3h24h_loc, only_positive = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
 sig_down_output_3h24h_loc <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_lores_lfc01minpct01_20201106_3h24h/rna/'
 get_significant_genes(mast_meta_output_3h24h_loc, sig_down_output_3h24h_loc, only_negative = T, to_ens = F, symbols.to.ensg.mapping = gene_to_ens_mapping)
-
-# check unique DE genes per timepoint for the different pathogens
-sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
-sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
-sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_condition_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
-
-# check unique DE genes per timepoint for the same pathogen
-sig_output_unique_loc <- '/data/scRNA/differential_expression/sigs_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_unique_loc)
-sig_output_pos_unique_loc <- '/data/scRNA/differential_expression/sigs_pos_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_unique_loc, only_positive = T)
-sig_output_neg_unique_loc <- '/data/scRNA/differential_expression/sigs_neg_unique/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_unique_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_unique_loc, only_negative = T)
-
-# check shared DE genes per timepoint for the different pathogens
-sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
-sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
-sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_condition_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
-
-# check shared DE genes per timepoint for the same pathogen
-sig_output_shared_loc <- '/data/scRNA/differential_expression/sigs_shared/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_shared_loc)
-sig_output_pos_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_pos/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_pos_shared_loc, only_positive = T)
-sig_output_neg_shared_loc <- '/data/scRNA/differential_expression/sigs_shared_neg/meta_paired_lores_lfc01minpct01_20201106/rna/'
-get_shared_timepoint_DE_genes(mast_meta_output_loc, sig_output_neg_shared_loc, only_negative = T)
-
-# get the location of the pathways
-pathway_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs/'
-#pathway_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/mast/meta_paired_lores_unconfined_20200624/'
-# write the combined pathway file
-pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
-pathway_df[pathway_df==0] <- 600
-write.table(pathway_df, paste('/data/scRNA/pathways/meta_paired_lores_lfc01minpct01_20201106/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
-
-# get the locaiton of the pathways of only upregulated genes
-pathway_up_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/'
-# write the combined pathway file
-pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
-pathway_up_df[pathway_up_df==0] <- 600
-write.table(pathway_df, paste('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/', 'summary.tsv', sep = ''), sep = '\t', row.names = F, col.names = T)
-
-# get the df limited by top pathways
-pathway_df_top_3 <- get_top_pathways(pathway_df, 3, T)
-pathway_df_top_5 <- get_top_pathways(pathway_df, 5, T)
-pathway_df_top_10 <- get_top_pathways(pathway_df, 10, T)
-
-# get the df limited by top pathways of upregulated genes
-pathway_up_df_top_3 <- get_top_pathways(pathway_up_df, 3, T)
-pathway_up_df_top_5 <- get_top_pathways(pathway_up_df, 5, T)
-
-# show clustering based on DE genes
-deg_path <- "/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/"
-
-
-
-##################################
-# Harm                           #
-##################################
-pathogens <- c("CA", "MTB", "PA")
-timepoints <- c("3h", "24h")
-cell_types_to_use <- c("CD4T", "CD8T", "monocyte", "NK", "B", "DC")
-
-
-deg_meta_fc_all_conditions <- get_combined_meta_de_table(deg_path)
-
-sds <- apply(deg_meta_fc_all_conditions, 1, sd, na.rm=T)
-sum(sds > 0.4)
-
-colors <- c("#153057", "#009ddb", "#e64b50", "#edba1b", "#71bc4b", "#965ec8")
-colors_celltype <- c(rep(colors, times=6))
-colors_timepoints <- c(rep(c("lightgrey","darkgrey"), times = 3, each = 6)) 
-colors_pathogen <- c(rep("tan1", 12), rep("tan3", 12), rep("brown", 12))
-colors_matrix <- cbind(colors_celltype, colors_timepoints, colors_pathogen)
-colnames(colors_matrix) <- c("Cell type", "Timepoint", "Pathogen")
-
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions)), labCol = NA,
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions[sds > .5,])),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
-
-##################################
-# /Harm                           #
-##################################
-
-
-
-
-# show pathways
-cc <- get_color_coding_dict()
-colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
-colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),rep(cc[['monocyte']], times=6),rep(cc[['NK']], times=6))
-colors_m <- cbind(colors_ct, colors_cond)
-colnames(colors_m) <- c('celltype',
-                        'condition')
-heatmap.3(t(as.matrix(pathway_up_df_top_5)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(15,10))
-
-ggplot(df_merged, aes(x= as.numeric(df_merged$avg_logFC.x), y=as.numeric(df_merged$avg_logFC.y)))+
-  geom_point() + labs(y="LogFC genes upon IRF2 sgRNA", x = "LogFC genes upon IRF1 sgRNA")+
-  ggtitle('Correlation IRF1 vs IRF2 sgRNA')
-
-# get table of logfc of all ct and tp
-#deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_unconfined_20200624/meta_paired_lores_unconfined_20200624/rna/', T)
-#deg_meta_fc_all_conditions <- get_combined_meta_de_table('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/', T)
-deg_meta_fc_all_conditions <- get_combined_meta_de_table(mast_meta_output_loc, T)
-
-
-# genes most varying within cell type and timepoint
-genes_vary_timepoint_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-# genes most varying within cell type and pathogen
-genes_vary_pathogen_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-# genes most varying within timepoint and pathogen
-genes_vary_pathogen_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-# genes most varying within cell type
-genes_vary_ct <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-# genes most varying within pathogen
-genes_vary_pathogen <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = F, use_pathogen = T, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-# genes most varying within timepoint
-genes_vary_timepoint <- get_top_vary_genes(deg_meta_fc_all_conditions, use_ct = F, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T)
-
-# subset dataframe
-deg_meta_fc_all_conditions_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_ct), ]
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_ct_vary)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
-deg_meta_fc_all_conditions_timepoint_ct_vary <- deg_meta_fc_all_conditions[(rownames(deg_meta_fc_all_conditions) %in% genes_vary_timepoint_ct), ]
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_timepoint_ct_vary)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(5,8))
-
-# check only monocyte and DC
-deg_meta_fc_all_conditions_mono_DC <- deg_meta_fc_all_conditions[, c(grep('monocyte', colnames(deg_meta_fc_all_conditions)),grep('DC', colnames(deg_meta_fc_all_conditions)))]
-# genes most varying within cell type
-genes_vary_ct_mono_DC <- get_top_vary_genes(deg_meta_fc_all_conditions_mono_DC, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T, cell_types = c('DC', 'monocyte'))
-# genes most varying within cell type and timepoint
-genes_vary_timepoint_ct_mono_DC <- get_top_vary_genes(deg_meta_fc_all_conditions_mono_DC, use_ct = T, use_tp = T, use_pathogen = F, use_dynamic_sd = T, top_so_many=20, must_be_positive_once = T, cell_types = c('DC', 'monocyte'))
-# subset dataframe
-deg_meta_fc_all_conditions_mono_DC_timepoint_ct_vary <- deg_meta_fc_all_conditions_mono_DC[(rownames(deg_meta_fc_all_conditions_mono_DC) %in% genes_vary_timepoint_ct_mono_DC), ]
-# subset dataframe
-deg_meta_fc_all_conditions_mono_DC_ct_vary <- deg_meta_fc_all_conditions_mono_DC[(rownames(deg_meta_fc_all_conditions_mono_DC) %in% genes_vary_ct_mono_DC), ]
-
-
-# create new rowside colors for just mono+dc
-colorsmonodc <- c("#153057", "#009ddb")
-colors_celltypemonodc <- c(rep(colorsmonodc, times=6))
-colors_timepointsmonodc <- c(rep(c("lightgrey","darkgrey"), times = 3, each = 2)) 
-colors_pathogenmonodc <- c(rep("tan1", 4), rep("tan3", 4), rep("brown", 4))
-colors_matrixmonodc <- cbind(colors_celltypemonodc, colors_timepointsmonodc, colors_pathogenmonodc)
-colnames(colors_matrixmonodc) <- c("Cell type", "Timepoint", "Pathogen")
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_ct_vary)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
-heatmap.3(t(as.matrix(deg_meta_fc_all_conditions_mono_DC_timepoint_ct_vary)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrixmonodc), margins=c(6,10))
-
-
-
-
-# check how much difference it makes when using different lfcs
-lfc01 <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20200713/meta_paired_lores_lfc01minpct01_20200713/rna/'
-lfc025 <- '/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc025minpct01_20200713/meta_paired_lores_lfc025minpct01_20200713/rna/'
-lfc01vs025_venn_loc <- '/data/scRNA/differential_expression/seurat_MAST/paired_lores_lfc01vs025_minpct01_20200713/meta_paired_lores_lfc01vs025_minpct01_20200713/rna/'
-get_mast_meta_output_overlap(lfc01,lfc025, lfc01vs025_venn_loc, group1name = 'lfc01', group2name = 'lfc025')
-
-# plotting the expression instead of the LFC
-v2_exp_loc <- '/data/scRNA/expression/1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617_avgexp_rna.tsv'
-v3_exp_loc <- '/data/scRNA/expression/1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617_avgexp_rna.tsv'
-# get expression
-v2_exp <- read.table(v2_exp_loc, sep = '\t', header = T, row.names = 1)
-v3_exp <- read.table(v3_exp_loc, sep = '\t', header = T, row.names = 1)
-# some cleanup required
-v2_exp <- v2_exp[, c(grep('CA|MTB|PA', colnames(v2_exp)))]
-# confine to DE genes
-v2_exp_de <- v2_exp[(rownames(v2_exp) %in% genes_vary_ct),]
-cell_types_to_use_underscore <- paste('^', cell_types_to_use, '_', sep = '')
-v2_exp_de <- v2_exp_de[, c(grep(paste(cell_types_to_use_underscore, collapse = '|'), colnames(v2_exp_de)))]
-v3_exp_de <- v3_exp[(rownames(v3_exp) %in% genes_vary_ct),]
-# plot
-heatmap.3(t(as.matrix(v2_exp_de)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_matrix), margins=c(6,10))
-
-# this is the reactome ID for the immune system
-immune_system_reactome_id <- 'R-HSA-168256'
-# load the pathways
-pathways <- read.table('/data/scRNA/pathways/ReactomePathways.tsv', sep='\t')
-# subset to just human to speed up the search
-pathways <- pathways[pathways$V3 == 'Homo sapiens', ]
-# load the pathway mapping
-pathway_mappings <- read.table('/data/scRNA/pathways/ReactomePathwaysRelation.tsv', sep = '\t')
-# get the filtered names
-filtered_names <- get_filtered_pathway_names(pathways, pathway_mappings, 'R-HSA-168256')
-# get the df that is left after filtering
-pathway_up_df <- get_pathway_table(pathway_up_output_loc, use_ranking = T)
-pathway_up_df_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)
-#pathway_up_df_filtered[pathway_up_df_filtered==0] <- 400
-pathway_up_df_filtered[pathway_up_df_filtered==0] <- max(pathway_up_df_filtered) + 1
-# check what is top now
-pathway_up_df_filtered_top_10 <- get_top_pathways(pathway_up_df_filtered, 10, T)
-pathway_up_df_filtered_top_10 <- 1 - (pathway_up_df_filtered_top_10 / max(pathway_up_df_filtered))
-# show pathways
-cc <- get_color_coding_dict()
-colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 6)
-colors_ct <- c(rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),rep(cc[['monocyte']], times=6),rep(cc[['NK']], times=6))
-colors_m <- cbind(colors_ct, colors_cond)
-colnames(colors_m) <- c('celltype',
-                        'condition')
-
-rownames(pathway_up_df_filtered_top_10) <- sapply( strwrap(rownames(pathway_up_df_filtered_top_10), 50, simplify=FALSE), paste, collapse="\n" )
-
-heatmap.3(t(as.matrix(pathway_up_df_filtered_top_10)),
-          col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), margins=c(20,8), dendrogram = 'none', to_na = 0)
-
-cell_type_numbers_loc <- '/data/scRNA/differential_expression/seurat_MAST/de_condition_counts.tsv'
-
-
-
-
-# get the specific monocyte sharing pathways
-sigs_pos_shared_across_pathogens_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_shared_across_pathogens_same_timepoint/'
-sigs_pos_shared_across_timepoints_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_shared_across_timepoints_same_pathogen/'
-sigs_pos_unique_to_timepoint_same_pathogen_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_unique_to_timepoint_same_pathogen/'
-sigs_pos_unique_to_pathogen_same_timepoint_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos_unique_to_pathogen_same_timepoint/'
-sigs_pos_output_loc <- '/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/'
-mono_pathway_locs <- c(sigs_pos_shared_across_pathogens_same_timepoint_loc, sigs_pos_shared_across_timepoints_same_pathogen_loc, sigs_pos_unique_to_timepoint_same_pathogen_loc, sigs_pos_unique_to_pathogen_same_timepoint_loc, sigs_pos_output_loc)
-# get the pathway df
-mono_pathways_df <- create_overlap_pathway_df_cell_type('monocyte', mono_pathway_locs)
-# only get the upregulated files
-mono_pathways_df <- mono_pathways_df[, grep('up', colnames(mono_pathways_df))]
-# filter for immune related traits
-mono_pathways_df_filtered <- filter_pathway_df_on_starting_id(mono_pathways_df, filtered_names)
-# set zeroes to max value
-mono_pathways_df_filtered[mono_pathways_df_filtered==0] <- 400
-# rename the columns to be shorted
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_sig_up_pathways','')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), 'monocyte','')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_shared_across_timepoints_same_pathogen',' timepoints shared')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_unique_to_timepoint_same_pathogen',' timepoint unique')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_shared_across_pathogens_same_timepoint',' pathogens shared')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), '_unique_to_pathogen_same_timepoint',' pathogen unique')
-colnames(mono_pathways_df_filtered) <- str_replace(colnames(mono_pathways_df_filtered), 'UTX','')
-# get the top ten per column
-mono_pathways_df_filtered_top_10 <- get_top_pathways(mono_pathways_df_filtered, 10, T)
-# create the heatmap
-pdf('~/Desktop/unique_shared_mono_pathways_top10.pdf', width = 20, height=20)
-heatmap.3(t(mono_pathways_df_filtered_top_10), dendrogram = 'none', margins=c(28,10))
-dev.off()
-# now for the top 5
-mono_pathways_df_filtered_top_5 <- get_top_pathways(mono_pathways_df_filtered, 5, T)
-# create the heatmap
-pdf('~/Desktop/unique_shared_mono_pathways_top5.pdf', width = 20, height=20)
-heatmap.3(t(mono_pathways_df_filtered_top_5), dendrogram = 'none', margins=c(30,10))
-dev.off()
-
-# check DE genes for monocytes
-deg_meta_fc_monos <- get_combined_meta_de_table(mast_meta_output_loc, must_be_positive_once = T, convert_insignificant_p_to_lfc0 = T, cell_types_to_use = c('monocyte'), pval_significance_threshold = 0.05)
-deg_meta_fc_monos_vary_pathogen_timepoint_genes <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=100, must_be_positive_once = T, cell_types = c('monocyte'))
-deg_meta_fc_monos_vary_pathogen_timepoint_genes_250 <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=250, must_be_positive_once = T, cell_types = c('monocyte'))
-deg_meta_fc_monos_vary_pathogen_timepoint_genes_500 <- get_top_vary_genes(deg_meta_fc_monos, use_ct = T, use_tp = F, use_pathogen = F, use_dynamic_sd = T, top_so_many=500, must_be_positive_once = T, cell_types = c('monocyte'))
-deg_meta_fc_monos_vary_pathogen_timepoint <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes, ]
-deg_meta_fc_monos_vary_pathogen_timepoint_250 <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes_250, ]
-deg_meta_fc_monos_vary_pathogen_timepoint_500 <- deg_meta_fc_monos[rownames(deg_meta_fc_monos) %in% deg_meta_fc_monos_vary_pathogen_timepoint_genes_500, ]
-colnames(deg_meta_fc_monos) <- str_replace(colnames(deg_meta_fc_monos), 'monocyte', '')
-colnames(deg_meta_fc_monos_vary_pathogen_timepoint) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint), 'monocyte', '')
-colnames(deg_meta_fc_monos_vary_pathogen_timepoint_250) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint_250), 'monocyte', '')
-colnames(deg_meta_fc_monos_vary_pathogen_timepoint_500) <- str_replace(colnames(deg_meta_fc_monos_vary_pathogen_timepoint_500), 'monocyte', '')
-heatmap.3(t(deg_meta_fc_monos), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_250), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_500), dendrogram = 'none', labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-
-
-hm_monos_vary_pathogen_timepoint_250 <- heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_250), labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-hm_monos_vary_pathogen_timepoint_500 <- heatmap.3(t(deg_meta_fc_monos_vary_pathogen_timepoint_500), labCol = NA, col=(brewer.pal(10,"RdBu")), margins = c(5,10))
-monos_vary_pathogen_timepoint_250_genes_branch1212 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_250, c(1,2,1,2), use_col=T)
-monos_vary_pathogen_timepoint_500_genes_branch1112 <- get_gene_list_from_hm_branch(hm_monos_vary_pathogen_timepoint_500, c(1,1,1,2), use_col=T)
-
-
-
-
-# average expression matrix locations
-v3_avg_exp_loc <- '/data/scRNA/pathways/avg_expression_v3_20201106_rna.tsv'
-v3_avg_exp <- read.table(v3_avg_exp_loc, sep = '\t', header = T)
-v3_mono_avg_exp <- v3_avg_exp[v3_avg_exp$cell_type == 'monocyte', ]
-
-v2_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v2_mono_avg_exp.tsv'
-v3_mono_avg_exp_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/pathways/v3_mono_avg_exp.tsv'
-v2_mono_avg_exp_loc <- '/data/scRNA/pathways/v2_mono_avg_exp.tsv'
-v3_mono_avg_exp_loc <- '/data/scRNA/pathways/v3_mono_avg_exp.tsv'
-# read these matrices
-v2_mono_avg_exp <- read.table(v2_mono_avg_exp_loc, sep = '\t', header = T)
-v3_mono_avg_exp <- read.table(v3_mono_avg_exp_loc, sep = '\t', header = T)
-# norm to max expression of gene
-v2_mono_avg_exp_normed <- get_normed_to_max_expression(v2_mono_avg_exp, 'monocyte')
-v3_mono_avg_exp_normed <- get_normed_to_max_expression(v3_mono_avg_exp, 'monocyte')
-# subset to mono DE genes
-v2_mono_avg_exp_normed_de <- subset_expression_table_by_de(v2_mono_avg_exp_normed, mast_meta_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, lfc_column='metafc')
-v3_mono_avg_exp_normed_de <- subset_expression_table_by_de(v3_mono_avg_exp_normed, mast_meta_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), pval_column='metap_bonferroni', sig_pval=0.05, only_positive=T, only_negative=F, lfc_column='metafc')
-# convert to a heatmap compatible table
-v2_mono_avg_exp_normed_de_hmt <- avg_exp_table_to_hm_table(v2_mono_avg_exp_normed_de)
-v3_mono_avg_exp_normed_de_hmt <- avg_exp_table_to_hm_table(v3_mono_avg_exp_normed_de)
-
-# grab some pathway genes to use for annotation
-pathways_list <- list()
-pathways_list[['IFN']] <- "/data/scRNA/pathways/REACTOME_Interferon_Signaling_genes.txt"
-pathways_list[['antigen presenting']] <- "/data/scRNA/pathways/REACTOME_Antigen_processing-Cross_presentation.txt"
-#pathways_list[['IL2 signalling']] <- '/data/scRNA/pathways/REACTOME_Interleukin-2_signaling.txt'
-pathways_list[['IL10 signalling']] <- '/data/scRNA/pathways/REACTOME_Interleukin-10_signaling.txt'
-#pathways_list[['DAP12 signalling']] <- '/data/scRNA/pathways/REACTOME_DAP12_signaling.txt'
-
-# add all the genes from the pathways togeter
-pathway_genes <- c()
-for(pathway in names(pathways_list)){
-  genes_pathway_loc <- pathways_list[[pathway]]
-  genes_pathway <- read.table(genes_pathway_loc, header=F, stringsAsFactors = F)$V1
-  pathway_genes <- c(pathway_genes, genes_pathway)
-}
-pathway_genes <- unique(pathway_genes)
-# subset to the pathway genes
-v3_mono_avg_exp_normed_de_hmt_only_pathways <- v3_mono_avg_exp_normed_de_hmt[rownames(v3_mono_avg_exp_normed_de_hmt) %in% pathway_genes, ]
-
-# transform the pathways to colors
-colors_pathways <- pathways_to_hm_colors(v3_mono_avg_exp_normed_de_hmt, pathways_list)
-colors_pathways_only_pathways <- pathways_to_hm_colors(v3_mono_avg_exp_normed_de_hmt_only_pathways, pathways_list)
-
-heatmap.3(t(v3_mono_avg_exp_normed_de_hmt), labCol = NA, col=rev(brewer.pal(10,"RdBu")), margins = c(5,10), ColSideColors = colors_pathways)
-heatmap.3(t(v3_mono_avg_exp_normed_de_hmt_only_pathways), labCol = NA, col=(brewer.pal(10,"YlOrRd")), margins = c(5,10), ColSideColors = colors_pathways_only_pathways)
-
-# read again
-pathway_df <- get_pathway_table(pathway_output_loc, use_ranking = T)
-# filter to immune pathways
-pathway_up_df_mono_filtered <- filter_pathway_df_on_starting_id(pathway_up_df, filtered_names)[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]]
-# remove the monocyte and UTX monniker from the colnames
-colnames(pathway_up_df_mono_filtered) <- gsub('monocyteUTX', '', colnames(pathway_up_df_mono_filtered))
-# store which were zero
-pathway_up_df_mono_filtered_nonresults <- pathway_up_df_mono_filtered==0
-# now set to max instead
-pathway_up_df_mono_filtered[pathway_up_df_mono_filtered==0] <- max(pathway_up_df_mono_filtered) + 1
-
-# get the most shared mono pathways that were upregulated
-mono_most_shared_pathways <- get_most_shared_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10)
-# subset to these pathways
-mono_most_shared_pathways_df <- pathway_up_df_mono_filtered[mono_most_shared_pathways, ]
-# scale to a value from zero to one
-mono_most_shared_pathways_df <- 1 - (mono_most_shared_pathways_df/max(pathway_up_df_mono_filtered))
-# set other hclust function
-#distfunc <- function(x) daisy(x,metric="gower")
-#hclustfunc <- function(x) hclust(x, method="complete")
-colors_cond <- rep(c(cc[['3hCA']],cc[['24hCA']],cc[['3hMTB']],cc[['24hMTB']],cc[['3hPA']],cc[['24hPA']]), times = 1)
-colors_ct <- c(
-  #rep(cc[['B']], times=6),rep(cc[['CD4T']], times=6),rep(cc[['CD8T']], times=6),rep(cc[['DC']], times=6),
-  rep(cc[['monocyte']], times=6)
-  #,rep(cc[['NK']], times=6)
-  )
-colors_m <- cbind(colors_ct, colors_cond)
-colnames(colors_m) <- c('celltype',
-                        'condition')
-# fix some of these insanely long names
-rownames(mono_most_shared_pathways_df) <- sapply( strwrap(rownames(mono_most_shared_pathways_df), 50, simplify=FALSE), paste, collapse="\n" )
-
-pdf('~/Desktop/mono_most_shared.pdf', width = 20, height=20)
-mono_most_shared_pathways_df_h <- heatmap.3(t(mono_most_shared_pathways_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(20,6), to_na = 0)
-dev.off()
-
-# get the most shared mono pathways that were upregulated
-mono_most_varied_pathways <- get_most_varied_pathways(pathway_table = pathway_up_df_mono_filtered, top_so_many = 10, use_sd_method = T, disregard_3h_vs_24h = T)
-# subset to monocytes and these pathways
-mono_most_varied_pathways_df <- pathway_up_df_mono_filtered[mono_most_varied_pathways, ]
-# scale to a value from zero to one
-mono_most_varied_pathways_df <- 1 - (mono_most_varied_pathways_df/max(pathway_up_df_mono_filtered))
-# remove the monocyte and UTX monniker from the colnames
-colnames(mono_most_varied_pathways_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_df))
-# set other hclust function
-#distfunc <- function(x) daisy(x,metric="gower")
-#hclustfunc <- function(x) hclust(x, method="complete")
-colors_m <- cbind(colors_ct, colors_cond)
-colnames(colors_m) <- c('celltype',
-                        'condition')
-# fix some of these insanely long names
-rownames(mono_most_varied_pathways_df) <- sapply( strwrap(rownames(mono_most_varied_pathways_df), 50, simplify=FALSE), paste, collapse="\n" )
-
-pdf('~/Desktop/mono_most_varied.pdf', width = 20, height=20)
-heatmap.3(t(mono_most_varied_pathways_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(20,6), to_na = 0)
-dev.off()
-
-
-mono_most_varied_pathways_nosd <- get_most_varied_pathways(pathway_table = pathway_up_df[, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]], top_so_many = 10, use_sd_method = F)
-# subset to monocytes and these pathways
-mono_most_varied_pathways_nosd_df <- pathway_up_df[mono_most_varied_pathways_nosd, colnames(pathway_up_df)[grep('monocyte', colnames(pathway_up_df))]]
-# scale to a value from zero to one
-mono_most_varied_pathways_nosd_df <- 1 - (mono_most_varied_pathways_nosd_df/max(mono_most_varied_pathways_nosd_df))
-# remove the monocyte and UTX monniker from the colnames
-colnames(mono_most_varied_pathways_nosd_df) <- gsub('monocyteUTX', '', colnames(mono_most_varied_pathways_nosd_df))
-# 
-colors_m <- cbind(colors_ct, colors_cond)
-colnames(colors_m) <- c('celltype',
-                        'condition')
-pdf('~/Desktop/mono_most_varied_nosd.pdf', width = 20, height=20)
-heatmap.3(t(mono_most_varied_pathways_nosd_df), col=rev(brewer.pal(10,"RdBu")), RowSideColors = t(colors_m), dendrogram = 'none', margins=c(25,6), to_na = 0)
-dev.off()
-
-

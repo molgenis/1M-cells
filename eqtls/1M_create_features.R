@@ -1,3 +1,11 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_create_features.R
+# Function: create the mean expression per cell type and condition files used for eQTL mapping
+############################################################################################################################
+
+
+
 ######################
 # libraries          #
 ######################
@@ -21,14 +29,14 @@ create_features_files <- function(seurat_object,  output_loc, cell_types_to_outp
     cell_types_to_output = unique(seurat_object@meta.data[[cell_type_column]])
   }
   # we will want to report on the number of cells per cell type, so that needs to be stored in a matrix
-  cell_counts <- matrix(nrow=length(cell_types_to_output), ncol = length(individuals), 
+  cell_counts <- matrix(nrow=length(cell_types_to_output), ncol = length(individuals),
                         dimnames = list(cell_types_to_output, individuals))
   # go through the cell types we want to output
   for (celltype in cell_types_to_output) {
     # grab the cells specific to that cell type
     cells_cell_type <- seurat_object[,seurat_object@meta.data[cell_type_column] == celltype]
     # create a matrix where we will store the mean expressions
-    mean_expression_matrix <- matrix(nrow=nrow(cells_cell_type), ncol = length(individuals), 
+    mean_expression_matrix <- matrix(nrow=nrow(cells_cell_type), ncol = length(individuals),
                                      dimnames = list(rownames(cells_cell_type), individuals))
     # go through the individuals
     #for (individual in individuals) {
@@ -56,16 +64,16 @@ create_features_files <- function(seurat_object,  output_loc, cell_types_to_outp
       rownames(mean_expression_matrix) <- genes[match(rownames(mean_expression_matrix), genes$V2),"V1"]
     }
     if(prepend_1){
-      # prepend the '1_' to the id 
+      # prepend the '1_' to the id
       colnames(mean_expression_matrix) <- paste0("1_", colnames(mean_expression_matrix))
     }
     # write our table of means for this cell type
-    write.table(mean_expression_matrix, 
+    write.table(mean_expression_matrix,
                 file = paste0(output_loc, celltype, "_expression", ".tsv"),
                 quote = F, sep = "\t", col.names = NA)
   }
-  # write out table of 
-  write.table(cell_counts, 
+  # write out table of
+  write.table(cell_counts,
               file = paste0(output_loc, "cell_counts.txt"),
               quote = F, sep = "\t", col.names = NA)
 }
@@ -104,7 +112,7 @@ create_features_files_bulk <- function(seurat_object,  output_loc, symbols.to.en
   individuals <- unique(seurat_object@meta.data[,sample.id.column.name])
   # remove any na individuals (sometimes caused if using demux assignments)
   individuals <- individuals[!is.na(individuals)]
-  
+
   # create a matrix where we will store the mean expressions
   mean_expression_matrix <- matrix(nrow=nrow(seurat_object), ncol = length(individuals),
                                    dimnames = list(rownames(seurat_object), individuals))

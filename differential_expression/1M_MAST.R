@@ -1,3 +1,10 @@
+############################################################################################################################
+# Authors: Roy Oelen
+# Name: 1M_MAST_meta.R
+# Function: perform MAST DE analysis
+############################################################################################################################
+
+
 ####################
 # libraries        #
 ####################
@@ -245,34 +252,15 @@ get_pct_per_cell_type <- function(seurat_object, output_loc, cell.type.column = 
 
 # object locations
 object_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/'
-#object_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/'
-#object_loc <- '/data/p287578/1M_cells_scRNAseq/scanpy_preprocess_samples/objects/'
-object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
-object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617.rds', sep = '')
-#object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20200617_anon.rds', sep = '')
-#object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20200617_anon.rds', sep = '')
+object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds', sep = '')
+object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
 
 # DE output locations
-#mast_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison/'
-#mast_output_loc <- '/groups/umcg-bios/scr01/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison/'
-#mast_output_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison_20200617_top1000/'
-#mast_output_loc <- '/data/p287578/1M_cells_scRNAseq/differential_expression/seurat_MAST/output/pairwise_DE_comparison_20200617/'
-#mast_output_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/pairwise_DE_comparison_20200617_top1000/'
 mast_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/'
 
 # for a MAST comparison, also do only paired comparisons
-mast_output_paired_loc_v2 <- paste(mast_output_loc, 'v2_paired/', sep = '')
-mast_output_paired_loc_v3 <- paste(mast_output_loc, 'v3_paired/', sep = '')
-mast_output_paired_lores_loc_v2 <- paste(mast_output_loc, 'v2_paired_lores_lfc025minpct01ncountrna_20200713/', sep = '')
-mast_output_paired_lores_loc_v3 <- paste(mast_output_loc, 'v3_paired_lores_lfc025minpct01ncountrna_20200713/', sep = '')
-mast_output_paired_loc_v2_rna <- paste(mast_output_paired_loc_v2, 'rna/', sep = '')
-mast_output_paired_loc_v3_rna <- paste(mast_output_paired_loc_v3, 'rna/', sep = '')
-mast_output_paired_loc_v2_sct <- paste(mast_output_paired_loc_v2, 'sct/', sep = '')
-mast_output_paired_loc_v3_sct <- paste(mast_output_paired_loc_v3, 'sct/', sep = '')
-mast_output_paired_lores_loc_v2_rna <- paste(mast_output_paired_lores_loc_v2, 'rna/', sep = '')
-mast_output_paired_lores_loc_v3_rna <- paste(mast_output_paired_lores_loc_v3, 'rna/', sep = '')
-mast_output_paired_lores_loc_v2_sct <- paste(mast_output_paired_lores_loc_v2, 'sct/', sep = '')
-mast_output_paired_lores_loc_v3_sct <- paste(mast_output_paired_lores_loc_v3, 'sct/', sep = '')
+mast_output_paired_lores_loc_v2 <- paste(mast_output_loc, 'v2_paired_lores_lfc01minpct01_20201106/', sep = '')
+mast_output_paired_lores_loc_v3 <- paste(mast_output_loc, 'v3_paired_lores_lfc01minpct01_20201106/', sep = '')
 
 # for pathway analysis we may want some background genes
 background_gene_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/background_genes/'
@@ -282,27 +270,14 @@ background_gene_loc_v3 <- paste(background_gene_loc, 'v3/', sep = '')
 # some pathway analysis tools prefer Ensemble IDs, so we need to map to those
 gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
 
-
 # put in the work for v2
 v2 <- readRDS(object_loc_v2)
-#perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_sct, cell.type.column = 'cell_type_lowerres', assay = 'SCT')
-#perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0, logfc.threshold = 0, stims = c('CA'))
-#perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25)
-perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, latent.vars=c('nCount_RNA'))
-#perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_loc_v2_sct, cell.type.column = 'cell_type', assay = 'SCT')
-#perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_loc_v2_rna, cell.type.column = 'cell_type', assay = 'RNA')
-get_background_genes_per_cell_type(seurat_object = v2, output_loc = background_gene_loc_v2, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_lores_loc_v2_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.1)
 get_background_genes_per_cell_type(seurat_object = v2, output_loc = background_gene_loc_v2, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.01, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 rm(v2)
 
 # put in the work for v3
 v3 <- readRDS(object_loc_v3)
-#perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_sct, cell.type.column = 'cell_type_lowerres', assay = 'SCT')
-#perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0, logfc.threshold = 0, stims = c('CA'))
-#perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25)
-perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.25, latent.vars=c('nCount_RNA'))
-#perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_loc_v3_sct, cell.type.column = 'cell_type', assay = 'SCT')
-#perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_loc_v3_rna, cell.type.column = 'cell_type', assay = 'RNA')
-get_background_genes_per_cell_type(seurat_object = v3, output_loc = background_gene_loc_v3, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
+perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_lores_loc_v3_rna, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.1, logfc.threshold = 0.1)
 get_background_genes_per_cell_type(seurat_object = v3, output_loc = background_gene_loc_v3, cell.type.column = 'cell_type_lowerres', assay = 'RNA', min.pct = 0.01, symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping)
 rm(v3)
