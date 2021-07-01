@@ -7,6 +7,7 @@ This is the repository which contains the code that was used to generate the res
 The code to generate the results is separated by the different steps taken to get from the raw data to the results. Software requirements are as follows:
 
   - R >= 3.6.1
+  - Seurat >= 3.1
   - 4.1.2(2)-release
   - Python 3.7.4
   - numpy 1.19.5
@@ -15,9 +16,9 @@ The code to generate the results is separated by the different steps taken to ge
   - statsmodels 0.12.2
 
 
-The steps and their respective directories are the following
+The steps and their respective directories are the following:
 
-  - The the alignment of the sequence data, to the the HG19 version of the reference human genome, using Cellranger: https://github.com/molgenis/1M-cells/tree/master/alignment
+  - The alignment of the sequence data, to the the HG19 version of the reference human genome, using Cellranger: https://github.com/molgenis/1M-cells/tree/master/alignment
   - Demultiplexing of the cells using Souporcell and sample assignment using Demuxlet: https://github.com/molgenis/1M-cells/tree/master/demultiplexing
   - Cellranger and demultiplexing output was loaded in Seurat, where quality control, cell normalization was performed: https://github.com/molgenis/1M-cells/tree/master/seurat_preprocess_samples
   - Cell type classification was performed using cluster annotations with marker genes: https://github.com/molgenis/1M-cells/tree/master/celltype-clustering
@@ -26,3 +27,12 @@ The steps and their respective directories are the following
   - Normalized gene expression was used to create files required for eQTL, re-QTL and co-eQTL mapping, and subsequently analyse the results: https://github.com/molgenis/1M-cells/tree/master/eqtls
   - Interaction of the SLE PRS on the CLEC12A eQTL were calculated using an interaction analysis: https://github.com/molgenis/1M-cells/tree/master/interaction_analysis
   - Results were visualized using the tools in the respective folder or using the plotting folder: https://github.com/molgenis/1M-cells/tree/master/plotting
+
+
+External tools used were:
+
+  - Souporcell v1: https://github.com/wheaton5/souporcell
+  - Demuxlet: https://github.com/statgen/demuxlet
+  - GenotypeHarmonizer: https://github.com/molgenis/systemsgenetics/wiki/Genotype-Harmonizer
+  - SystemGenetics eQTL-mapping-pipeline: https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline
+  - plink 1.9: https://www.cog-genomics.org/plink/
