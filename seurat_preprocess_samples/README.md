@@ -1,3 +1,3 @@
-# demultiplexing
+# preprocessing
 
 *1M_preprocess.R* reads the cellranger output count matrices and adds them together in one large Seurat object. Metadata output from Souporcell and Demuxlet output is subsequently added to filter out doublets and do participant assignment respectively. The participants are mapped to their experiment IDs, which allows mapping to a specific stimulation condition for a sample in a lane. Cells are then filtered by mitochondrial percentage and minimum expression for each chemistry. Each pathogen is then integrated with the unstimulated, 3h and 24h condition. This is then clustered and marker gene expression is plotted. Marker gene expression then determines the cell type of each cluster. These classifications are the transferred back into the object containing all conditions.

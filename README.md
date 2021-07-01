@@ -36,3 +36,8 @@ The steps and their respective directories are the following:
   - Normalized gene expression was used to create files required for eQTL, re-QTL and co-eQTL mapping, and subsequently analyse the results: https://github.com/molgenis/1M-cells/tree/master/eqtls
   - Interaction of the SLE PRS on the CLEC12A eQTL were calculated using an interaction analysis: https://github.com/molgenis/1M-cells/tree/master/interaction_analysis
   - Results were visualized using the tools in the respective folder or using the plotting folder: https://github.com/molgenis/1M-cells/tree/master/plotting
+
+
+# test data
+A Seurat object to test with, is supplied here: https://molgenis26.gcc.rug.nl/downloads/1m-scbloodnl/small-test-dataset/
+This contains the v3 samples in the UT condition, as well as the SNP affecting RPS26 co-expression.
