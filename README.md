@@ -4,7 +4,7 @@ This is the repository which contains the code that was used to generate the res
 
 ## Overview
 
-The code to generate the results is separated by the different steps taken to get from the raw data to the results. Software requirements are as follows:
+The code to generate the results is separated by the different steps taken to get from the raw data to the results. Languages and packages are listed below:
 
   - R >= 3.6.1
   - Seurat >= 3.1
@@ -14,6 +14,15 @@ The code to generate the results is separated by the different steps taken to ge
   - pandas 1.2.1
   - scipy 1.6.0
   - statsmodels 0.12.2
+
+External tools used were:
+
+  - Souporcell v1: https://github.com/wheaton5/souporcell
+  - Demuxlet: https://github.com/statgen/demuxlet
+  - GenotypeHarmonizer: https://github.com/molgenis/systemsgenetics/wiki/Genotype-Harmonizer
+  - SystemGenetics eQTL-mapping-pipeline: https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline
+  - PLINK 1.9: https://www.cog-genomics.org/plink/
+  - Cellranger 3.0.2: https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/installation
 
 
 The steps and their respective directories are the following:
@@ -27,12 +36,3 @@ The steps and their respective directories are the following:
   - Normalized gene expression was used to create files required for eQTL, re-QTL and co-eQTL mapping, and subsequently analyse the results: https://github.com/molgenis/1M-cells/tree/master/eqtls
   - Interaction of the SLE PRS on the CLEC12A eQTL were calculated using an interaction analysis: https://github.com/molgenis/1M-cells/tree/master/interaction_analysis
   - Results were visualized using the tools in the respective folder or using the plotting folder: https://github.com/molgenis/1M-cells/tree/master/plotting
-
-
-External tools used were:
-
-  - Souporcell v1: https://github.com/wheaton5/souporcell
-  - Demuxlet: https://github.com/statgen/demuxlet
-  - GenotypeHarmonizer: https://github.com/molgenis/systemsgenetics/wiki/Genotype-Harmonizer
-  - SystemGenetics eQTL-mapping-pipeline: https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline
-  - plink 1.9: https://www.cog-genomics.org/plink/
