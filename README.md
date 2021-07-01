@@ -1,18 +1,19 @@
-###1M-cells
+### 1M-cells
 
 This is the repository which contains the code that was used to generate the results and figures of the *“Single-cell RNA-sequencing reveals widespread personalized, context-specific gene expression regulation in immune cells”* paper (https://www.biorxiv.org/content/10.1101/2021.06.04.447088v1)
 
-##Overview
+## Overview
 
 The code to generate the results is separated by the different steps taken to get from the raw data to the results. Software requirements are as follows:
 
-R >= 3.6.1
-4.1.2(2)-release
-Python 3.7.4
-numpy 1.19.5
-pandas 1.2.1
-scipy 1.6.0
-statsmodels 0.12.2
+  - R >= 3.6.1
+  - 4.1.2(2)-release
+  - Python 3.7.4
+  - numpy 1.19.5
+  - pandas 1.2.1
+  - scipy 1.6.0
+  - statsmodels 0.12.2
+
 
 The steps and their respective directories are the following
 
