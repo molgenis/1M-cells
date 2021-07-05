@@ -42,6 +42,9 @@ The steps and their respective directories are the following:
 A Seurat object to test with, is supplied here: https://molgenis26.gcc.rug.nl/downloads/1m-scbloodnl/small-test-dataset/
 This contains the v3 samples in the UT condition, as well as the SNP affecting RPS26 co-expression.
 
+## License
+The code availabe in this repository is available under the 2-Clause BSD License: https://opensource.org/licenses/BSD-2-Clause
+
 
 ## Hardware
 Analyses were performed on either a 2019 MacBook Pro (16GB), the Gearshift cluster http://docs.gcc.rug.nl/gearshift/cluster/ or for specifically the dataset normalization via SCTransform, the Peregrine cluster https://wiki.hpc.rug.nl/peregrine/start
