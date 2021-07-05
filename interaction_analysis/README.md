@@ -6,4 +6,4 @@
 - The expression file, which is tab-separated, with the participant names as column names, the expression as rownames, and the normalized gene expression as values.<br/>
 - The covariates file you want to check for an interaction effect (in our case the SLE PRS). The columns are the covariates, and the rows are the participants<br/><br/>
 
-Ordering needs to be the same across the files. The output shows per covariate, the P value of whether there was an interaction.
+Ordering needs to be the same across the files. The output shows per covariate, the P value of whether there was an interaction. (1h@64GB)
