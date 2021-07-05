@@ -1,4 +1,4 @@
-### 1M-cells
+# 1M-cells
 
 This is the repository which contains the code that was used to generate the results and figures of the *“Single-cell RNA-sequencing reveals widespread personalized, context-specific gene expression regulation in immune cells”* paper (https://www.biorxiv.org/content/10.1101/2021.06.04.447088v1)
 
@@ -38,6 +38,10 @@ The steps and their respective directories are the following:
   - Results were visualized using the tools in the respective folder or using the plotting folder: https://github.com/molgenis/1M-cells/tree/master/plotting
 
 
-# test data
+## Test data
 A Seurat object to test with, is supplied here: https://molgenis26.gcc.rug.nl/downloads/1m-scbloodnl/small-test-dataset/
 This contains the v3 samples in the UT condition, as well as the SNP affecting RPS26 co-expression.
+
+
+## Hardware
+Analyses were performed on either a 2019 MacBook Pro (16GB), the Gearshift cluster http://docs.gcc.rug.nl/gearshift/cluster/ or for specifically the dataset normalization via SCTransform, the Peregrine cluster https://wiki.hpc.rug.nl/peregrine/start
