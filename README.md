@@ -23,6 +23,7 @@ External tools used were:
   - SystemGenetics eQTL-mapping-pipeline: https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline
   - PLINK 1.9: https://www.cog-genomics.org/plink/
   - Cellranger 3.0.2: https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/installation
+  - GeneticRiskScoreCalculator: https://github.com/molgenis/systemsgenetics/tree/master/GeneticRiskScoreCalculator
 
 
 The steps and their respective directories are the following:
