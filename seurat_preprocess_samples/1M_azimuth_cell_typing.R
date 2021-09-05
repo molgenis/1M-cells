@@ -178,3 +178,30 @@ ggsave(paste(plot_loc, 'v2_confusion_matrix.pdf', sep = ''), plot = v2_confusion
 v3_confusion_matrix <- create_confusion_matrix(v3@meta.data, 'cell_type_lowerres', 'cell_type_low_pred', 'markers', 'azimuth')
 ggsave(paste(plot_loc, 'v3_confusion_matrix.pdf', sep = ''), plot = v3_confusion_matrix, width = 10 ,height = 10)
 
+
+v2_metadata <- v2_metadata[!is.na(v2_metadata[['cell_type_pred']]) & !is.na(v2_metadata[['assignment']]) & !is.na(v2_metadata[['timepoint']]), ]
+v3_metadata <- v3_metadata[!is.na(v3_metadata[['cell_type_pred']]) & !is.na(v3_metadata[['assignment']]) & !is.na(v3_metadata[['timepoint']]), ]
+v2_metadata <- v2_metadata[!is.na(v2_metadata[['cell_type']]) & !is.na(v2_metadata[['assignment']]) & !is.na(v2_metadata[['timepoint']]), ]
+v3_metadata <- v3_metadata[!is.na(v3_metadata[['cell_type']]) & !is.na(v3_metadata[['assignment']]) & !is.na(v3_metadata[['timepoint']]), ]
+
+
+for(condition in unique(v2_metadata[['timepoint']])){
+  table_to_check <- v2_metadata[v2_metadata[['timepoint']] == condition, ]
+  plot_lr <- create_confusion_matrix(table_to_check, 'cell_type_lowerres', 'cell_type_low_pred', 'markers', 'azimuth')
+  plot_lr_loc <- paste(plot_loc, 'v2_confusion_matrix_cell_type_lowerres_', condition, '.pdf', sep = '')
+  ggsave(plot_lr_loc, plot_lr, width= 10, height = 10)
+  plot_hr <- create_confusion_matrix(table_to_check, 'cell_type', 'cell_type_pred', 'markers', 'azimuth')
+  plot_hr_loc <- paste(plot_loc, 'v2_confusion_matrix_cell_type_', condition, '.pdf', sep = '')
+  ggsave(plot_hr_loc, plot_hr, width= 20, height = 20)
+}
+
+for(condition in unique(v3_metadata[['timepoint']])){
+  table_to_check <- v3_metadata[v3_metadata[['timepoint']] == condition, ]
+  plot_lr <- create_confusion_matrix(table_to_check, 'cell_type_lowerres', 'cell_type_low_pred', 'markers', 'azimuth')
+  plot_lr_loc <- paste(plot_loc, 'v3_confusion_matrix_cell_type_lowerres_', condition, '.pdf', sep = '')
+  ggsave(plot_lr_loc, plot_lr, width= 10, height = 10)
+  plot_hr <- create_confusion_matrix(table_to_check, 'cell_type', 'cell_type_pred', 'markers', 'azimuth')
+  plot_hr_loc <- paste(plot_loc, 'v3_confusion_matrix_cell_type_', condition, '.pdf', sep = '')
+  ggsave(plot_hr_loc, plot_hr, width= 20, height = 20)
+}
+
