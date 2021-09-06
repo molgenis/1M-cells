@@ -133,7 +133,7 @@ v2 <- v2[, !is.na(v2@meta.data$timepoint)]
 v2 <- v2[, !is.na(v2@meta.data$assignment)]
 v2 <- v2[, !is.na(v2@meta.data$cell_type)]
 # create the per-ct data with demux identities
-create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type_lowerres", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
+create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear up memory
 rm(v2)
 
@@ -144,14 +144,8 @@ v3@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
 v3 <- v3[, !is.na(v3@meta.data$timepoint)]
 v3 <- v3[, !is.na(v3@meta.data$assignment)]
 v3 <- v3[, !is.na(v3@meta.data$cell_type)]
-# write the bulk data with demux identities
-create_feature_files_per_condition_bulk(seurat_object=v3, output_loc=v3_features_demux_dir, condition.column.name = "timepoint", symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping, sample.id.column.name="assignment", assay = "SCT", cell_type_column = "cell_type_lowerres")
 # create the per-ct data with demux identities
-create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type_lowerres", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
-# write the bulk data with the soup identities
-create_feature_files_per_condition_bulk(seurat_object=v3, output_loc=v3_features_soup_dir, condition.column.name = "timepoint.soup", symbols.to.ensg=T, symbols.to.ensg.mapping = gene_to_ens_mapping, sample.id.column.name="assignment.soup", assay = "SCT", cell_type_column = "cell_type_lowerres")
-# create the per-ct data with soup identities
-create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint.soup", sample.id.column.name="assignment.soup", cell_type_column = "cell_type_lowerres", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
+create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear up memory
 rm(v3)
 
