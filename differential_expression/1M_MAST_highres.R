@@ -87,7 +87,7 @@ object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_202011
 object_loc_v2_new <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20210905.rds', sep = '')
 object_loc_v3_new <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20210905.rds', sep = '')
 # DE output locations
-mast_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/'
+mast_output_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/'
 
 # for a MAST comparison, also do only paired comparisons
 mast_output_paired_highres_loc_v2 <- paste(mast_output_loc, 'v2_paired_highres_lfc01minpct01_20210905/', sep = '')
@@ -103,7 +103,7 @@ DefaultAssay(v2) <- 'RNA'
 # we've done some refinements at the marker gene level, let's make those changes permanent
 v2@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
 # clean up
-v2 <- v2[, !is.na(v2@meta.data$cell_type) & !is.na(v2@meta.data$assignment) & is.na(v2@meta.data$timepoint)]
+v2 <- v2[, !is.na(v2@meta.data$cell_type) & !is.na(v2@meta.data$assignment) & !is.na(v2@meta.data$timepoint)]
 # write the new object
 saveRDS(v2, object_loc_v2_new)
 # do the mapping
@@ -116,7 +116,7 @@ DefaultAssay(v3) <- 'RNA'
 # we've done some refinements at the marker gene level, let's make those changes permanent
 v3@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
 # clean up
-v3 <- v3[, !is.na(v3@meta.data$cell_type) & !is.na(v3@meta.data$assignment) & is.na(v3@meta.data$timepoint)]
+v3 <- v3[, !is.na(v3@meta.data$cell_type) & !is.na(v3@meta.data$assignment) & !is.na(v3@meta.data$timepoint)]
 # write the new object
 saveRDS(v3, object_loc_v3_new)
 # do the mapping

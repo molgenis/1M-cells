@@ -123,7 +123,7 @@ v2_features_demux_dir <- paste(features_dir, 'v2_sct_mqc_demux_highres_20210905/
 v3_features_demux_dir <- paste(features_dir, 'v3_sct_mqc_demux_highres_20210905/', sep = '')
 
 # for the inhouse eQTL-mapping pipeline, we currently have ENSG numbers instead of gene numbers
-gene_to_ens_mapping <- "/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
+gene_to_ens_mapping <- "/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv"
 
 # read object
 v2 <- readRDS(v2_object_loc)
