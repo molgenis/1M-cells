@@ -12,6 +12,7 @@
 library(MAST)
 library(Seurat)
 library(Matrix)
+library(MetaVolcanoR)
 
 ####################
 # Functions        #
@@ -76,6 +77,119 @@ perform_mast_per_celltype <- function(seurat_object, output_loc, split.column = 
 }
 
 
+write_meta_mast <- function(mast_output_loc_prepend, mast_output_loc_append, mast_meta_output_loc_prepend, cell_types=c('bulk', 'B', 'CD4T', 'CD8T', 'DC', 'NK', 'hemapoietic stem', 'megakaryocyte', 'monocyte', 'plasma B'), conditions=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), mtc_method='bonferroni'){
+  # go through the conditions
+  for(condition in conditions){
+    # check for each cell type
+    for(cell_type in cell_types){
+      # get the mast output
+      mast_loc_v2 <- paste(mast_output_loc_prepend, '2', mast_output_loc_append, cell_type, 'UT', condition, '.tsv', sep = '')
+      mast_loc_v3 <- paste(mast_output_loc_prepend, '3', mast_output_loc_append, cell_type, 'UT', condition, '.tsv', sep = '')
+      try({
+        # read the mast output
+        mast_v2 <- read.table(mast_loc_v2, header=T)
+        mast_v3 <- read.table(mast_loc_v3, header=T)
+        # get the genes that are in both
+        genes_both <- intersect(rownames(mast_v2), rownames(mast_v3))
+        # there need to be genes left for this
+        if(length(genes_both) == 0){
+          print(paste('skipped', condition, cell_type, 'due to there not being gene overlapping in meta-analysis'))
+        }
+        else{
+          # select only those genes
+          mast_v2 <- mast_v2[rownames(mast_v2) %in% genes_both,]
+          mast_v3 <- mast_v3[rownames(mast_v3) %in% genes_both,]
+          # morph P val to minimum
+          if(nrow(mast_v2[mast_v2$p_val == 0, ]) > 0){
+            mast_v2[mast_v2$p_val == 0, ]$p_val <- .Machine$double.xmin
+          }
+          if(nrow(mast_v3[mast_v3$p_val == 0, ]) > 0){
+            mast_v3[mast_v3$p_val == 0, ]$p_val <- .Machine$double.xmin
+          }
+          # add the gene name also in a column
+          mast_v2$gene <- rownames(mast_v2)
+          mast_v3$gene <- rownames(mast_v3)
+          # add the mast results
+          masts <- list()
+          masts$v2 <- mast_v2
+          masts$v3 <- mast_v3
+          # perform the metavolcanor approach
+          meta_degs_comb <- combining_mv(diffexp=masts, pcriteria='p_val', foldchangecol='avg_log2FC', genenamecol = 'gene', collaps = T)
+          # grab the result we care about
+          volcanometa <- meta_degs_comb@metaresult
+          #volcanometa$metap_bonferroni <- volcanometa$metap*length(genes_both)
+          volcanometa[[paste('metap', mtc_method, sep = '_')]] <- p.adjust(volcanometa$metap, method = mtc_method)
+          # add the genes as rownames
+          rownames(volcanometa) <- volcanometa$gene
+          # add a colname append
+          colnames(mast_v2) <- paste(colnames(mast_v2), 'v2', sep = '_')
+          colnames(mast_v3) <- paste(colnames(mast_v3), 'v3', sep = '_')
+          # merge the frames
+          mast <- merge(mast_v2, mast_v3, by=0, all=TRUE)
+          rownames(mast) <- mast$Row.names
+          mast$Row.names <- NULL
+          # also add the volcanometa stuff
+          mast <- merge(mast, volcanometa, by=0, all=TRUE)
+          rownames(mast) <- mast$Row.names
+          mast$Row.names <- NULL
+          #if(nrow(mast[mast$metap_bonferroni > 1, ]) > 0){
+          #  mast[mast$metap_bonferroni > 1, ]$metap_bonferroni <- 1
+          #}
+          # write the result
+          output_loc <- paste(mast_meta_output_loc_prepend, cell_type, 'UT', condition, '.tsv', sep = '')
+          write.table(mast, output_loc, sep = '\t')
+        }
+      })
+    }
+  }
+}
+
+
+compare_overlap_low_to_high_res_de_genes <- function(low_res_output_loc, high_res_output_loc, cell_type_matches, conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_column='metap', sig_cutoff=0.05){
+  # we will have plot for each condition
+  plots_per_condition <- list()
+  # check each condition
+  for(condition in conditions){
+    # we will also have a plot per major cell type
+    plot_per_major <- list()
+    # each name in the cell type matches is the major cell type
+    for(major in names(cell_type_matches)){
+      # save the gene lists in a list we can use for upset
+      gene_lists <- list()
+      # paste together the path to the major MAST output
+      major_output_loc <- paste(low_res_output_loc, major, 'UTX', condition, '.tsv', sep = '')
+      # read the output
+      major_output <- read.table(major_output_loc, sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
+      # get the genes that are significant
+      sig_genes_major <- rownames(major_output[major_output[[sig_column]] < sig_cutoff, ])
+      # add to the list
+      gene_lists[[major]] <- sig_genes_major
+      # get the high resolution cell types this major type is linked to
+      minor_matches <- cell_type_matches[[major]]
+      # check each of these minor cell types
+      for(minor in minor_matches){
+        try({
+          # paste together the path to the minor MAST output
+          minor_output_loc <- paste(high_res_output_loc, minor, 'UTX', condition, '.tsv', sep = '')
+          # read the output
+          minor_output <- read.table(minor_output_loc, sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
+          # get the genes that are significant
+          sig_genes_minor <- rownames(minor_output[minor_output[[sig_column]] < sig_cutoff, ])
+          # add to list
+          gene_lists[[minor]] <- sig_genes_minor
+        })
+      }
+      # create the upset plot
+      p <- upset(data = fromList(gene_lists), nsets = length(names(gene_lists)), order.by = 'freq')
+      # add to the list
+      plot_per_major[[major]] <- p
+    }
+    # add list of plots to condition
+    plots_per_condition[[condition]] <- plot_per_major
+  }
+  return(plots_per_condition)
+}
+
 ####################
 # Main Code        #
 ####################
@@ -90,12 +204,14 @@ object_loc_v3_new <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20
 mast_output_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/differential_expression/seurat_MAST/output/'
 
 # for a MAST comparison, also do only paired comparisons
-mast_output_paired_highres_loc_v2 <- paste(mast_output_loc, 'v2_paired_highres_lfc01minpct01_20210905/', sep = '')
-mast_output_paired_highres_loc_v3 <- paste(mast_output_loc, 'v3_paired_highres_lfc01minpct01_20210905/', sep = '')
+mast_output_paired_highres_loc_v2 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v2_paired_highres_lfc01minpct01_20210905/', sep = '')
+mast_output_paired_highres_loc_v3 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v3_paired_highres_lfc01minpct01_20210905/', sep = '')
 # we'll use the RNA assay
 mast_output_paired_highres_rna_loc_v2 <- paste(mast_output_paired_highres_loc_v2, 'rna/', sep = '')
 mast_output_paired_highres_rna_loc_v3 <- paste(mast_output_paired_highres_loc_v3, 'rna/', sep = '')
 
+# we'll need some plots as well
+mast_overlap_plot_loc <- '/data/scRNA/differential_expression/seurat_MAST/overlap/meta_paired_highres_lfc01minpct01_20210905_meta_paired_lores_lfc01minpct01_20201106/'
 
 # read the object
 v2 <- readRDS(object_loc_v2)
@@ -121,5 +237,20 @@ v3 <- v3[, !is.na(v3@meta.data$cell_type) & !is.na(v3@meta.data$assignment) & !i
 saveRDS(v3, object_loc_v3_new)
 # do the mapping
 perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_highres_rna_loc_v3, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'mono 1', 'mono 2', 'mono 3', 'mono 4'), logfc.threshold = 0.1)
+
+# also perform the meta analysis
+mast_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/'
+mast_output_prepend <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v', sep = '')
+mast_output_append <- '_paired_highres_lfc01minpct01_20210905/rna/'
+# write the location of the combined output
+mast_meta_output_loc <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905//meta_paired_highres_lfc01minpct01_20210905/rna/', sep = '')
+
+# write meta output
+write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'mono 1', 'mono 2', 'mono 4', 'mDC', 'pDC'))
+
+# create plots
+overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC')))
+# save the result
+saveRDS(overlap_plots, paste(mast_overlap_plot_loc,  'overlap_lores_highres.rds', sep = ''))
 
 
