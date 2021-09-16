@@ -53,7 +53,7 @@ plot_celltype_violins <- function(seurat_object, grouping_column='seurat_cluster
 }
 
 
-plot_dimplots <- function(seurat_object, plot_prepend, grouping_columns=c(seurat_clusters), reduction='umap'){
+plot_dimplots <- function(seurat_object, plot_prepend, grouping_columns=c('seurat_clusters'), reduction='umap'){
   # check each of the grouping columns that we have
   for(column in grouping_columns){
     # set up where to save
@@ -126,6 +126,56 @@ split_integrate_and_cluster <- function(seurat_object, split_column, dims=1:30, 
 }
 
 
+split_integrate_and_cluster_old <- function(seurat_object, split_column, sets=list('CA' = c('UT', 'X3hCA', 'X24hCA'), 'MTB' = c('UT', 'X3hMTB', 'X24hMTB'), 'PA' = c('UT', 'X3hPA', 'X24hPA')), dims=1:30, resolution=1.2){
+  # clear any normalization that was already done
+  try({seurat_object@assays$SCT <- NULL})
+  try({seurat_object@assays$RNA@data <- NULL})
+  try({seurat_object@assays$RNA@scale.data <- NULL})
+  try({seurat_object@graphs <- NULL})
+  try({seurat_object@neighbors <- NULL})
+  try({seurat_object@reductions <- NULL})
+  # init list to save results
+  integrated_objects <- list()
+  # save an integrated object per set
+  for(set_name in names(sets)){
+    # grab the set to use
+    set <- sets[[set_name]]
+    # subset to that set
+    seurat_object_set <- seurat_object[, seurat_object@meta.data[[split_column]] %in% set]
+    # split the object by the column to separate objects
+    seurat_object_set.list <- SplitObject(seurat_object_set, split.by = split_column)
+    # normalize and identify variable features for each dataset independently
+    seurat_object_set.list <- lapply(X = seurat_object_set.list, FUN = function(x) {
+      x <- NormalizeData(x)
+      x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+    })
+    # select features that are repeatedly variable across datasets for integration
+    features <- SelectIntegrationFeatures(object.list = seurat_object_set.list)
+    # get the anchors
+    anchors <- FindIntegrationAnchors(object.list = seurat_object_set.list, anchor.features = features)
+    # perform the actual integration
+    seurat_objects_integrated <- IntegrateData(anchorset = anchors)
+    # clear up memory
+    rm(seurat_object)
+    rm(seurat_object_set.list)
+    # use integrated assay
+    DefaultAssay(seurat_objects_integrated) <- "integrated"
+    # Run the standard workflow for visualization and clustering
+    seurat_objects_integrated <- ScaleData(seurat_objects_integrated, verbose = FALSE)
+    seurat_objects_integrated <- RunPCA(seurat_objects_integrated, npcs = length(dims), verbose = FALSE)
+    seurat_objects_integrated <- RunUMAP(seurat_objects_integrated, reduction = "pca", dims = dims)
+    seurat_objects_integrated <- FindNeighbors(seurat_objects_integrated, reduction = "pca", dims = dims)
+    seurat_objects_integrated <- FindClusters(seurat_objects_integrated, resolution = resolution)
+    # switch to RNA slot
+    DefaultAssay(seurat_objects_integrated) <- 'RNA'
+    seurat_objects_integrated <- NormalizeData(seurat_objects_integrated)
+    # add this to the list we were keeping track of
+    integrated_objects[[set_name]] <- seurat_objects_integrated
+  }
+  return(integrated_objects)
+}
+
+
 ####################
 # Main Code        #
 ####################
@@ -167,7 +217,35 @@ rm(v3)
 v3_t <- split_integrate_and_cluster(v3_t, 'timepoint')
 # save the result
 saveRDS(v3_t, object_loc_v3_t_int)
+# also plot here
+plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
 
+
+
+# and of course, using the old style of integration
+object_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/seurat_preprocess_samples/objects/'
+object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
+object_loc_v3_t_int_perpat <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106_T_int_perpat.rds', sep = '')
+# read the object
+v3 <- readRDS(object_loc_v3)
+# subset to what we are interested in
+v3_t <- v3[, as.character(v3@meta.data$cell_type_lowerres) %in% c('CD4T', 'CD8T')]
+# integrate and recluster
+v3_t <- split_integrate_and_cluster_old(v3_t, 'timepoint')
+# save the result
+saveRDS(v3_t, object_loc_v3_t_int_perpat)
+# create the plots that show the measure of integration
+plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+# plot the cell type violins as well
+plot_celltype_violins(v3_t[['CA']], plot_dir = paste(plot_loc_violin, 'v3_t_CA_20210909_int_rna_data_', sep = ''))
+plot_celltype_violins(v3_t[['MTB']], plot_dir = paste(plot_loc_violin, 'v3_t_MTB_20210909_int_rna_data_', sep = ''))
+plot_celltype_violins(v3_t[['PA']], plot_dir = paste(plot_loc_violin, 'v3_t_PA_20210909_int_rna_data_', sep = ''))
+# and finally the feature plots
+plot_celltype_markers(v3_t[['CA']], plot_dir = paste(plot_loc_feature, 'v3_t_CA_20210909_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t[['MTB']], plot_dir = paste(plot_loc_feature, 'v3_t_MTB_20210909_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t[['PA']], plot_dir = paste(plot_loc_feature, 'v3_t_PA_20210909_int_rna_data_', sep = ''))
 
 
 

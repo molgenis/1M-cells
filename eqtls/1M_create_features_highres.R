@@ -127,25 +127,33 @@ gene_to_ens_mapping <- "/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoi
 
 # read object
 v2 <- readRDS(v2_object_loc)
-# we've done some refinements at the marker gene level, let's make those changes permanent
-v2@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
 v2 <- v2[, !is.na(v2@meta.data$timepoint)]
 v2 <- v2[, !is.na(v2@meta.data$assignment)]
 v2 <- v2[, !is.na(v2@meta.data$cell_type)]
+# we've done some refinements at the marker gene level, let's make those changes permanent
+v2@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
+levels(v2@meta.data$cell_type) <- c(levels(v2@meta.data$cell_type), 'cMono', 'ncMono')
+v2@meta.data[v2@meta.data$cell_type %in% c('mono 1', 'mono 4'), 'cell_type'] <- 'cMono'
+v2@meta.data[v2@meta.data$cell_type %in% c('mono 2'), 'cell_type'] <- 'ncMono'
+v2@meta.data$cell_type <- droplevels(v2@meta.data$cell_type)
 # create the per-ct data with demux identities
-create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
+create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = c('cMono', 'ncMono'), conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear up memory
 rm(v2)
 
 # read object
 v3 <- readRDS(v3_object_loc)
-# we've done some refinements at the marker gene level, let's make those changes permanent
-v3@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
 v3 <- v3[, !is.na(v3@meta.data$timepoint)]
 v3 <- v3[, !is.na(v3@meta.data$assignment)]
 v3 <- v3[, !is.na(v3@meta.data$cell_type)]
+# we've done some refinements at the marker gene level, let's make those changes permanent
+v3@meta.data[v3@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
+levels(v3@meta.data$cell_type) <- c(levels(v3@meta.data$cell_type), 'cMono', 'ncMono')
+v3@meta.data[v3@meta.data$cell_type %in% c('mono 1', 'mono 4'), 'cell_type'] <- 'cMono'
+v3@meta.data[v3@meta.data$cell_type %in% c('mono 2'), 'cell_type'] <- 'ncMono'
+v3@meta.data$cell_type <- droplevels(v3@meta.data$cell_type)
 # create the per-ct data with demux identities
-create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
+create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = c('cMono', 'ncMono'), conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "cell_type", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear up memory
 rm(v3)
 

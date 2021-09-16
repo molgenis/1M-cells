@@ -13,6 +13,7 @@ library(MAST)
 library(Seurat)
 library(Matrix)
 library(MetaVolcanoR)
+library(UpSetR)
 
 ####################
 # Functions        #
@@ -217,26 +218,38 @@ mast_overlap_plot_loc <- '/data/scRNA/differential_expression/seurat_MAST/overla
 v2 <- readRDS(object_loc_v2)
 DefaultAssay(v2) <- 'RNA'
 # we've done some refinements at the marker gene level, let's make those changes permanent
+v2 <- v2[, !is.na(v2@meta.data$timepoint)]
+v2 <- v2[, !is.na(v2@meta.data$assignment)]
+v2 <- v2[, !is.na(v2@meta.data$cell_type)]
+# we've done some refinements at the marker gene level, let's make those changes permanent
 v2@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
+levels(v2@meta.data$cell_type) <- c(levels(v2@meta.data$cell_type), 'cMono', 'ncMono')
+v2@meta.data[v2@meta.data$cell_type %in% c('mono 1', 'mono 4'), 'cell_type'] <- 'cMono'
+v2@meta.data[v2@meta.data$cell_type %in% c('mono 2'), 'cell_type'] <- 'ncMono'
+v2@meta.data$cell_type <- droplevels(v2@meta.data$cell_type)
 # clean up
 v2 <- v2[, !is.na(v2@meta.data$cell_type) & !is.na(v2@meta.data$assignment) & !is.na(v2@meta.data$timepoint)]
 # write the new object
 saveRDS(v2, object_loc_v2_new)
 # do the mapping
-perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_highres_rna_loc_v2, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'mono 1', 'mono 2', 'mono 3', 'mono 4'), logfc.threshold = 0.1)
+perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_highres_rna_loc_v2, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'cMono', 'ncMono'), logfc.threshold = 0.1)
 
 
 # read the object
 v3 <- readRDS(object_loc_v3)
 DefaultAssay(v3) <- 'RNA'
 # we've done some refinements at the marker gene level, let's make those changes permanent
-v3@meta.data[v2@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
+v3@meta.data[v3@meta.data$cell_type == 'NK', 'cell_type'] <- 'NKdim'
+levels(v3@meta.data$cell_type) <- c(levels(v3@meta.data$cell_type), 'cMono', 'ncMono')
+v3@meta.data[v3@meta.data$cell_type %in% c('mono 1', 'mono 4'), 'cell_type'] <- 'cMono'
+v3@meta.data[v3@meta.data$cell_type %in% c('mono 2'), 'cell_type'] <- 'ncMono'
+v3@meta.data$cell_type <- droplevels(v3@meta.data$cell_type)
 # clean up
 v3 <- v3[, !is.na(v3@meta.data$cell_type) & !is.na(v3@meta.data$assignment) & !is.na(v3@meta.data$timepoint)]
 # write the new object
 saveRDS(v3, object_loc_v3_new)
 # do the mapping
-perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_highres_rna_loc_v3, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'mono 1', 'mono 2', 'mono 3', 'mono 4'), logfc.threshold = 0.1)
+perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_highres_rna_loc_v3, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'cMono', 'ncMono'), logfc.threshold = 0.1)
 
 # also perform the meta analysis
 mast_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/'
@@ -246,10 +259,10 @@ mast_output_append <- '_paired_highres_lfc01minpct01_20210905/rna/'
 mast_meta_output_loc <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905//meta_paired_highres_lfc01minpct01_20210905/rna/', sep = '')
 
 # write meta output
-write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'mono 1', 'mono 2', 'mono 4', 'mDC', 'pDC'))
+write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'cMono', 'ncMono', 'mDC', 'pDC'))
 
 # create plots
-overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC')))
+overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC'), 'monocyte' = c('cMono', 'ncMono')))
 # save the result
 saveRDS(overlap_plots, paste(mast_overlap_plot_loc,  'overlap_lores_highres.rds', sep = ''))
 
