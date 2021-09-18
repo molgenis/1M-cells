@@ -18,12 +18,14 @@ plot_celltype_markers <- function(seurat_object, grouping_column='seurat_cluster
   Idents(seurat_object) <- grouping_column
   # set correct assay
   DefaultAssay(seurat_object) <- assay
+  # set a standard value
+  seurat_object$clusters <- seurat_object[[grouping_column]]
   for(gene in celltype_marker_genes){
     if(gene %in% rownames(seurat_object)){
       p <- FeaturePlot(seurat_object, features = c(gene), slot=slot)
       # replace RNA_snn_res.1  with whatever your cluster column is called in metadata
-      p$data$clusters <- seurat_object[[grouping_column]]
-      LabelClusters(plot = p, id = grouping_column)
+      p$data$clusters <- seurat_object$clusters
+      LabelClusters(plot = p, id = 'clusters')
       ggsave(paste(plot_dir,gene,".png", sep=""), dpi=600, width=10, height=10)
     }
     else{
@@ -156,7 +158,6 @@ split_integrate_and_cluster_old <- function(seurat_object, split_column, sets=li
     # perform the actual integration
     seurat_objects_integrated <- IntegrateData(anchorset = anchors)
     # clear up memory
-    rm(seurat_object)
     rm(seurat_object_set.list)
     # use integrated assay
     DefaultAssay(seurat_objects_integrated) <- "integrated"
@@ -199,14 +200,18 @@ v3_t <- subset_and_recluster(v3, 'cell_type_lowerres', c('CD4T', 'CD8T'))
 saveRDS(v3_t, object_loc_v3_t)
 
 v3_t  <- NormalizeData(v3_t)
-plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20210909_rna_data_', sep = ''))
+plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20201106_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20201106_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
+plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20201106_rna_data_', sep = ''))
+plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20201106_rna_data_', sep = ''))
+plot_celltype_markers(v3_t, plot_dir = paste(plot_loc_feature, 'v3_t_20201106_rna_data_', sep = ''))
 
 
 
 # let's try again, but this time with integration
 object_loc <- '/data/p287578/1M_cells_scRNAseq/seurat_preprocess_samples/objects/'
 object_loc_v3 <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106.rds', sep = '')
-object_loc_v3_t_int <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106_T_int.rds', sep = '')
+object_loc_v3_t_int <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20210914_T_int.rds', sep = '')
 # read the object
 v3 <- readRDS(object_loc_v3)
 # subset to what we are interested in
@@ -219,6 +224,9 @@ v3_t <- split_integrate_and_cluster(v3_t, 'timepoint')
 saveRDS(v3_t, object_loc_v3_t_int)
 # also plot here
 plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20210914_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
+plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20210914_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t, plot_dir = paste(plot_loc_feature, 'v3_t_20210914_int_rna_data_', sep = ''))
 
 
 
@@ -235,17 +243,21 @@ v3_t <- split_integrate_and_cluster_old(v3_t, 'timepoint')
 # save the result
 saveRDS(v3_t, object_loc_v3_t_int_perpat)
 # create the plots that show the measure of integration
-plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
-plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
-plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20210914_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_20201106_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
+plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20201106_int_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
 # plot the cell type violins as well
-plot_celltype_violins(v3_t[['CA']], plot_dir = paste(plot_loc_violin, 'v3_t_CA_20210909_int_rna_data_', sep = ''))
-plot_celltype_violins(v3_t[['MTB']], plot_dir = paste(plot_loc_violin, 'v3_t_MTB_20210909_int_rna_data_', sep = ''))
-plot_celltype_violins(v3_t[['PA']], plot_dir = paste(plot_loc_violin, 'v3_t_PA_20210909_int_rna_data_', sep = ''))
+plot_celltype_violins(v3_t[['CA']], plot_dir = paste(plot_loc_violin, 'v3_t_CA_20201106_int_rna_data_', sep = ''))
+plot_celltype_violins(v3_t[['MTB']], plot_dir = paste(plot_loc_violin, 'v3_t_CA_20201106_int_rna_data_', sep = ''))
+plot_celltype_violins(v3_t[['PA']], plot_dir = paste(plot_loc_violin, 'v3_t_CA_20201106_int_rna_data_', sep = ''))
 # and finally the feature plots
-plot_celltype_markers(v3_t[['CA']], plot_dir = paste(plot_loc_feature, 'v3_t_CA_20210909_int_rna_data_', sep = ''))
-plot_celltype_markers(v3_t[['MTB']], plot_dir = paste(plot_loc_feature, 'v3_t_MTB_20210909_int_rna_data_', sep = ''))
-plot_celltype_markers(v3_t[['PA']], plot_dir = paste(plot_loc_feature, 'v3_t_PA_20210909_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t[['CA']], plot_dir = paste(plot_loc_feature, 'v3_t_CA_20201106_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t[['MTB']], plot_dir = paste(plot_loc_feature, 'v3_t_MTB_20201106_int_rna_data_', sep = ''))
+plot_celltype_markers(v3_t[['PA']], plot_dir = paste(plot_loc_feature, 'v3_t_PA_20201106_int_rna_data_', sep = ''))
+# check the old assignments as well
+plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
+plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
+plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 
 
 

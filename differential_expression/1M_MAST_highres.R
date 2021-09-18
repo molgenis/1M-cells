@@ -262,8 +262,36 @@ mast_meta_output_loc <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_202
 write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'cMono', 'ncMono', 'mDC', 'pDC'))
 
 # create plots
-overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC'), 'monocyte' = c('cMono', 'ncMono')))
+overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC'), 'monocyte' = c('cMono', 'ncMono'), 'NK' = c('NKdim', 'NKbright')))
 # save the result
 saveRDS(overlap_plots, paste(mast_overlap_plot_loc,  'overlap_lores_highres.rds', sep = ''))
 
+pdf(paste(mast_overlap_plot_loc,  'overlap_lores_highres_monocyte.pdf', sep = ''), width = 5, height = 5)
+overlap_plots[['UT']][['monocyte']]
+overlap_plots[['3hCA']][['monocyte']]
+overlap_plots[['24hCA']][['monocyte']]
+overlap_plots[['3hMTB']][['monocyte']]
+overlap_plots[['24hMTB']][['monocyte']]
+overlap_plots[['3hPA']][['monocyte']]
+overlap_plots[['24hPA']][['monocyte']]
+dev.off()
 
+pdf(paste(mast_overlap_plot_loc,  'overlap_lores_highres_NK.pdf', sep = ''), width = 5, height = 5)
+overlap_plots[['UT']][['NK']]
+overlap_plots[['3hCA']][['NK']]
+overlap_plots[['24hCA']][['NK']]
+overlap_plots[['3hMTB']][['NK']]
+overlap_plots[['24hMTB']][['NK']]
+overlap_plots[['3hPA']][['NK']]
+overlap_plots[['24hPA']][['NK']]
+dev.off()
+
+pdf(paste(mast_overlap_plot_loc,  'overlap_lores_highres_DC.pdf', sep = ''), width = 5, height = 5)
+overlap_plots[['UT']][['DC']]
+overlap_plots[['3hCA']][['DC']]
+overlap_plots[['24hCA']][['DC']]
+overlap_plots[['3hMTB']][['DC']]
+overlap_plots[['24hMTB']][['DC']]
+overlap_plots[['3hPA']][['DC']]
+overlap_plots[['24hPA']][['DC']]
+dev.off()
