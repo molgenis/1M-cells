@@ -203,7 +203,6 @@ v3_t  <- NormalizeData(v3_t)
 plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20201106_rna_data_', sep = ''), grouping_columns = c('seurat_clusters', 'timepoint'))
 plot_dimplots(seurat_object = v3_t, paste(plot_loc_dim, 'v3_t_20201106_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20201106_rna_data_', sep = ''))
-plot_celltype_violins(v3_t, plot_dir = paste(plot_loc_violin, 'v3_t_20201106_rna_data_', sep = ''))
 plot_celltype_markers(v3_t, plot_dir = paste(plot_loc_feature, 'v3_t_20201106_rna_data_', sep = ''))
 
 
@@ -259,5 +258,37 @@ plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_2020110
 plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 
+
+
+v3_t[['CA']] <- AddMetaData(v3_t[['CA']], v3_predicted@meta.data['predicted.celltype.l2'])
+v3_t[['MTB']] <- AddMetaData(v3_t[['MTB']], v3_predicted@meta.data['predicted.celltype.l2'])
+v3_t[['PA']] <- AddMetaData(v3_t[['PA']], v3_predicted@meta.data['predicted.celltype.l2'])
+
+labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+labels_t_highres <- c('th2 CD4T', 'naive CD4T', 'th1 CD4T', 'memory CD8T', 'naive CD8T', 'naive CD4T transitioning to stim', 'reg CD4T', 'memory CD8T left and naive CD8T right', 'cyto CD4T', 'double negative T', 'memory CD8T', 'memory CD8T left', 'T helper')
+
+v3_t[['CA']]@meta.data$cell_type_t <- v3_t[['CA']]@meta.data$cell_type
+levels(v3_t[['CA']]@meta.data$cell_type_t) <- c(levels(v3_t[['CA']]@meta.data$cell_type_t), 'other')
+v3_t[['CA']]@meta.data[!(v3_t[['CA']]@meta.data$cell_type_t %in% labels_t_highres), 'cell_type_t'] <- 'other'
+v3_t[['CA']]@meta.data$predicted.celltype.l2.t <- v3_t[['CA']]@meta.data$predicted.celltype.l2
+levels(v3_t[['CA']]@meta.data$predicted.celltype.l2.t) <- c(levels(v3_t[['CA']]@meta.data$predicted.celltype.l2.t), 'other')
+v3_t[['CA']]@meta.data[!(v3_t[['CA']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+
+v3_t[['MTB']]@meta.data$cell_type_t <- v3_t[['MTB']]@meta.data$cell_type
+levels(v3_t[['MTB']]@meta.data$cell_type_t) <- c(levels(v3_t[['MTB']]@meta.data$cell_type_t), 'other')
+v3_t[['MTB']]@meta.data[!(v3_t[['MTB']]@meta.data$cell_type_t %in% labels_t_highres), 'cell_type_t'] <- 'other'
+v3_t[['MTB']]@meta.data$predicted.celltype.l2.t <- v3_t[['MTB']]@meta.data$predicted.celltype.l2
+levels(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t) <- c(levels(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t), 'other')
+v3_t[['MTB']]@meta.data[!(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+
+
+v3_t_ca_p1 <- DimPlot(v3_t[['CA']], group.by = 'cell_type_t')
+v3_t_ca_p2 <- DimPlot(v3_t[['CA']], group.by = 'predicted.celltype.l2.t')
+plot_grid(v3_t_ca_p1, v3_t_ca_p2, ncol=1, nrow=2)
+ggsave(paste(plot_loc_dim, 'v3_t_CA_20201106_int_rna_data_cttvspcl2t.pdf', sep = ''), width = 20, height = 20)
+v3_t_mtb_p1 <- DimPlot(v3_t[['MTB']], group.by = 'cell_type_t')
+v3_t_mtb_p2 <- DimPlot(v3_t[['MTB']], group.by = 'predicted.celltype.l2.t')
+plot_grid(v3_t_mtb_p1, v3_t_mtb_p2, ncol=1, nrow=2)
+ggsave(paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_cttvspcl2t.pdf', sep = ''), width = 20, height = 20)
 
 
