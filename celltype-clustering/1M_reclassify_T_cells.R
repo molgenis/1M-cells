@@ -177,6 +177,42 @@ split_integrate_and_cluster_old <- function(seurat_object, split_column, sets=li
 }
 
 
+# add metadata that is based on existing metadata in the seurat object
+add_imputed_meta_data <- function(seurat_object, column_to_transform, column_to_reference, column_to_create){
+  # add the column
+  seurat_object@meta.data[column_to_create] <- NA
+  # go through the grouping we have for the entire object
+  for(group in unique(seurat_object@meta.data[[column_to_transform]])){
+    # subset to get only this group
+    seurat_group <- seurat_object[,seurat_object@meta.data[[column_to_transform]] == group]
+    best_group <- 'unknown'
+    best_number <- 0
+    # check against the reference column
+    for(reference in unique(seurat_group@meta.data[[column_to_reference]])){
+      # we don't care for the NA reference, if we had all data, we wouldn't need to do this anyway
+      if(is.na(reference) == F){
+        # grab the number of cells in this group, with this reference
+        number_of_reference_in_group <- nrow(seurat_group@meta.data[seurat_group@meta.data[[column_to_reference]] == reference & is.na(seurat_group@meta.data[[column_to_reference]]) == F,])
+        correctpercent <- number_of_reference_in_group/ncol(seurat_group)
+        print(paste(group,"matches",reference,correctpercent,sep=" "))
+        # update numbers if better match
+        if(number_of_reference_in_group > best_number){
+          best_number <- number_of_reference_in_group
+          best_group <- reference
+        }
+      }
+    }
+    print(paste("setting ident:",best_group,"for group", group, sep=" "))
+    # set this best identity
+    seurat_object@meta.data[seurat_object@meta.data[[column_to_transform]] == group,][column_to_create] <- best_group
+    # force cleanup
+    rm(seurat_group)
+  }
+  return(seurat_object)
+}
+
+
+
 ####################
 # Main Code        #
 ####################
@@ -190,6 +226,10 @@ plot_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-typ
 plot_loc_violin <- paste(plot_loc, 'violin_plots/', sep = '')
 plot_loc_feature <- paste(plot_loc, 'feature_plots/', sep = '')
 plot_loc_dim <- paste(plot_loc, 'dimplots/', sep = '')
+# classifications
+classifications_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/seurat_multimodal/classifications/'
+classifications_loc_v2 <- paste(classifications_loc, 'cluster_azi_t_classifications_v2.tsv', sep = '')
+classifications_loc_v3 <- paste(classifications_loc, 'cluster_azi_t_classifications_v3.tsv', sep = '')
 
 # read the object
 v3 <- readRDS(object_loc_v3)
@@ -258,12 +298,16 @@ plot_dimplots(seurat_object = v3_t[['CA']], paste(plot_loc_dim, 'v3_t_CA_2020110
 plot_dimplots(seurat_object = v3_t[['MTB']], paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 plot_dimplots(seurat_object = v3_t[['PA']], paste(plot_loc_dim, 'v3_t_PA_20201106_int_rna_data_old_', sep = ''), grouping_columns = c('cell_type', 'cell_type_lowerres'))
 
+# read the Azimuth prediction we did before
+object_loc_v3_azt <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201106_azimuth.rds', sep = '')
+v3_predicted <- readRDS(object_loc_v3_azt)
 
-
+# add the Azimuth labels
 v3_t[['CA']] <- AddMetaData(v3_t[['CA']], v3_predicted@meta.data['predicted.celltype.l2'])
 v3_t[['MTB']] <- AddMetaData(v3_t[['MTB']], v3_predicted@meta.data['predicted.celltype.l2'])
 v3_t[['PA']] <- AddMetaData(v3_t[['PA']], v3_predicted@meta.data['predicted.celltype.l2'])
 
+# these are the labels that are possible
 labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
 labels_t_highres <- c('th2 CD4T', 'naive CD4T', 'th1 CD4T', 'memory CD8T', 'naive CD8T', 'naive CD4T transitioning to stim', 'reg CD4T', 'memory CD8T left and naive CD8T right', 'cyto CD4T', 'double negative T', 'memory CD8T', 'memory CD8T left', 'T helper')
 
@@ -281,6 +325,13 @@ v3_t[['MTB']]@meta.data$predicted.celltype.l2.t <- v3_t[['MTB']]@meta.data$predi
 levels(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t) <- c(levels(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t), 'other')
 v3_t[['MTB']]@meta.data[!(v3_t[['MTB']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
 
+v3_t[['PA']]@meta.data$cell_type_t <- v3_t[['PA']]@meta.data$cell_type
+levels(v3_t[['PA']]@meta.data$cell_type_t) <- c(levels(v3_t[['PA']]@meta.data$cell_type_t), 'other')
+v3_t[['PA']]@meta.data[!(v3_t[['PA']]@meta.data$cell_type_t %in% labels_t_highres), 'cell_type_t'] <- 'other'
+v3_t[['PA']]@meta.data$predicted.celltype.l2.t <- v3_t[['PA']]@meta.data$predicted.celltype.l2
+levels(v3_t[['PA']]@meta.data$predicted.celltype.l2.t) <- c(levels(v3_t[['PA']]@meta.data$predicted.celltype.l2.t), 'other')
+v3_t[['PA']]@meta.data[!(v3_t[['PA']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+
 
 v3_t_ca_p1 <- DimPlot(v3_t[['CA']], group.by = 'cell_type_t')
 v3_t_ca_p2 <- DimPlot(v3_t[['CA']], group.by = 'predicted.celltype.l2.t')
@@ -290,5 +341,23 @@ v3_t_mtb_p1 <- DimPlot(v3_t[['MTB']], group.by = 'cell_type_t')
 v3_t_mtb_p2 <- DimPlot(v3_t[['MTB']], group.by = 'predicted.celltype.l2.t')
 plot_grid(v3_t_mtb_p1, v3_t_mtb_p2, ncol=1, nrow=2)
 ggsave(paste(plot_loc_dim, 'v3_t_MTB_20201106_int_rna_data_cttvspcl2t.pdf', sep = ''), width = 20, height = 20)
+
+# classify the T cells, by assigning the clusters based on the cell type with the largest proportion in that cluster
+v3_t[['CA']] <- add_imputed_meta_data(v3_t[['CA']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+v3_t[['MTB']] <- add_imputed_meta_data(v3_t[['MTB']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+v3_t[['PA']] <- add_imputed_meta_data(v3_t[['PA']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+
+# create a table with just the predictions, making sure we don't have any double entries, and not overwriting the T classifications
+v3_t_table <- v3_t[['CA']]@meta.data['clustered.celltype.l2.t']
+v3_t_table <- rbind(v3_t[['MTB']]@meta.data[v3_t[['MTB']]@meta.data[['clustered.celltype.l2.t']] != 'other' & rownames(v3_t[['MTB']]@meta.data) %in% rownames(v3_t_table), ]['clustered.celltype.l2.t'])
+v3_t_table <- rbind(v3_t[['PA']]@meta.data[v3_t[['PA']]@meta.data[['clustered.celltype.l2.t']] != 'other' & rownames(v3_t[['PA']]@meta.data) %in% rownames(v3_t_table), ]['clustered.celltype.l2.t'])
+# add the cell barcodes as a column (I just like it more that way)
+v3_t_table$barcode <- rownames(v3_t_table)
+# and reorder the way we like
+v3_t_table <- v3_t_table[, c('barcode', 'clustered.celltype.l2.t')]
+# write the result somewhere
+t_classification_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/seurat_multimodal/classifications/'
+t_classification_loc_v3 <- paste(t_classification_loc, 'v3_azi_to_cluster_l2_cell_types.tsv', sep = '')
+write.table(v3_t_table, t_classification_loc_v3, sep = '\t', row.names = F, col.names = T, quote = F)
 
 
