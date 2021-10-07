@@ -349,8 +349,8 @@ v3_t[['PA']] <- add_imputed_meta_data(v3_t[['PA']], 'seurat_clusters', 'predicte
 
 # create a table with just the predictions, making sure we don't have any double entries, and not overwriting the T classifications
 v3_t_table <- v3_t[['CA']]@meta.data['clustered.celltype.l2.t']
-v3_t_table <- rbind(v3_t[['MTB']]@meta.data[v3_t[['MTB']]@meta.data[['clustered.celltype.l2.t']] != 'other' & rownames(v3_t[['MTB']]@meta.data) %in% rownames(v3_t_table), ]['clustered.celltype.l2.t'])
-v3_t_table <- rbind(v3_t[['PA']]@meta.data[v3_t[['PA']]@meta.data[['clustered.celltype.l2.t']] != 'other' & rownames(v3_t[['PA']]@meta.data) %in% rownames(v3_t_table), ]['clustered.celltype.l2.t'])
+v3_t_table <- rbind(v3_t_table, v3_t[['MTB']]@meta.data[v3_t[['MTB']]@meta.data[['clustered.celltype.l2.t']] != 'other' & !(rownames(v3_t[['MTB']]@meta.data) %in% rownames(v3_t_table)), ]['clustered.celltype.l2.t'])
+v3_t_table <- rbind(v3_t_table, v3_t[['PA']]@meta.data[v3_t[['PA']]@meta.data[['clustered.celltype.l2.t']] != 'other' & !(rownames(v3_t[['PA']]@meta.data) %in% rownames(v3_t_table)), ]['clustered.celltype.l2.t'])
 # add the cell barcodes as a column (I just like it more that way)
 v3_t_table$barcode <- rownames(v3_t_table)
 # and reorder the way we like
@@ -359,5 +359,65 @@ v3_t_table <- v3_t_table[, c('barcode', 'clustered.celltype.l2.t')]
 t_classification_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/seurat_multimodal/classifications/'
 t_classification_loc_v3 <- paste(t_classification_loc, 'v3_azi_to_cluster_l2_cell_types.tsv', sep = '')
 write.table(v3_t_table, t_classification_loc_v3, sep = '\t', row.names = F, col.names = T, quote = F)
+
+
+# now everything for v2 as well
+object_loc_v2 <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029.rds', sep = '')
+object_loc_v2_t_int_perpat <- paste(object_loc, '1M_v3_mediumQC_ctd_rnanormed_demuxids_20201029_T_int_perpat.rds', sep = '')
+v2 <- readRDS(object_loc_v2)
+# subset to what we are interested in
+v2_t <- v2[, as.character(v2@meta.data$cell_type_lowerres) %in% c('CD4T', 'CD8T')]
+# clear memory
+rm(v2)
+# integrate and recluster
+v2_t <- split_integrate_and_cluster_old(v2_t, 'timepoint')
+# save the result
+saveRDS(v2_t, object_loc_v2_t_int_perpat)
+
+# read the Azimuth prediction we did before
+object_loc_v2_azt <- paste(object_loc, '1M_v2_mediumQC_ctd_rnanormed_demuxids_20201029_azimuth.rds', sep = '')
+v2_predicted <- readRDS(object_loc_v2_azt)
+
+# add the Azimuth labels
+v2_t[['CA']] <- AddMetaData(v2_t[['CA']], v2_predicted@meta.data['predicted.celltype.l2'])
+v2_t[['MTB']] <- AddMetaData(v2_t[['MTB']], v2_predicted@meta.data['predicted.celltype.l2'])
+v2_t[['PA']] <- AddMetaData(v2_t[['PA']], v2_predicted@meta.data['predicted.celltype.l2'])
+
+# clear memory
+rm(v2_predicted)
+
+v2_t[['CA']]@meta.data$predicted.celltype.l2.t <- v2_t[['CA']]@meta.data$predicted.celltype.l2
+levels(v2_t[['CA']]@meta.data$predicted.celltype.l2.t) <- c(levels(v2_t[['CA']]@meta.data$predicted.celltype.l2.t), 'other')
+v2_t[['CA']]@meta.data[!(v2_t[['CA']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+v2_t[['MTB']]@meta.data$predicted.celltype.l2.t <- v2_t[['MTB']]@meta.data$predicted.celltype.l2
+levels(v2_t[['MTB']]@meta.data$predicted.celltype.l2.t) <- c(levels(v2_t[['MTB']]@meta.data$predicted.celltype.l2.t), 'other')
+v2_t[['MTB']]@meta.data[!(v2_t[['MTB']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+v2_t[['PA']]@meta.data$predicted.celltype.l2.t <- v2_t[['PA']]@meta.data$predicted.celltype.l2
+levels(v2_t[['PA']]@meta.data$predicted.celltype.l2.t) <- c(levels(v2_t[['PA']]@meta.data$predicted.celltype.l2.t), 'other')
+v2_t[['PA']]@meta.data[!(v2_t[['PA']]@meta.data$predicted.celltype.l2.t %in% labels_t_azimuth), 'predicted.celltype.l2.t'] <- 'other'
+
+
+# these are the labels that are possible
+labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+
+# classify the T cells, by assigning the clusters based on the cell type with the largest proportion in that cluster
+v2_t[['CA']] <- add_imputed_meta_data(v2_t[['CA']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+v2_t[['MTB']] <- add_imputed_meta_data(v2_t[['MTB']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+v2_t[['PA']] <- add_imputed_meta_data(v2_t[['PA']], 'seurat_clusters', 'predicted.celltype.l2.t', 'clustered.celltype.l2.t')
+
+# create a table with just the predictions, making sure we don't have any double entries, and not overwriting the T classifications
+v2_t_table <- v2_t[['CA']]@meta.data['clustered.celltype.l2.t']
+v2_t_table <- rbind(v2_t_table, v2_t[['MTB']]@meta.data[v2_t[['MTB']]@meta.data[['clustered.celltype.l2.t']] != 'other' & !(rownames(v2_t[['MTB']]@meta.data) %in% rownames(v2_t_table)), ]['clustered.celltype.l2.t'])
+v2_t_table <- rbind(v2_t_table, v2_t[['PA']]@meta.data[v2_t[['PA']]@meta.data[['clustered.celltype.l2.t']] != 'other' & !(rownames(v2_t[['PA']]@meta.data) %in% rownames(v2_t_table)), ]['clustered.celltype.l2.t'])
+# add the cell barcodes as a column (I just like it more that way)
+v2_t_table$barcode <- rownames(v2_t_table)
+# and reorder the way we like
+v2_t_table <- v2_t_table[, c('barcode', 'clustered.celltype.l2.t')]
+# write the result somewhere
+t_classification_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/seurat_multimodal/classifications/'
+t_classification_loc_v2 <- paste(t_classification_loc, 'v2_azi_to_cluster_l2_cell_types.tsv', sep = '')
+write.table(v2_t_table, t_classification_loc_v2, sep = '\t', row.names = F, col.names = T, quote = F)
+
+
 
 

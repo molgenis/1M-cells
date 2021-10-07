@@ -210,6 +210,13 @@ mast_output_paired_highres_loc_v3 <- paste(mast_output_loc, 'paired_highres_lfc0
 # we'll use the RNA assay
 mast_output_paired_highres_rna_loc_v2 <- paste(mast_output_paired_highres_loc_v2, 'rna/', sep = '')
 mast_output_paired_highres_rna_loc_v3 <- paste(mast_output_paired_highres_loc_v3, 'rna/', sep = '')
+# additionally, we will do a separate T cell DE analysis
+mast_output_paired_t_loc_v2 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v2_paired_t_lfc01minpct01_20210905/', sep = '')
+mast_output_paired_t_loc_v3 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v3_paired_t_lfc01minpct01_20210905/', sep = '')
+# and the assignments for these T cells needs to come from somewhere as well
+t_classifications_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/cell-type-classifying/seurat_multimodal/classifications/'
+t_classifications_loc_v2 <- paste(t_classifications, 'v2_azi_to_cluster_l2_cell_types.tsv', sep = '')
+t_classifications_loc_v3 <- paste(t_classifications, 'v3_azi_to_cluster_l2_cell_types.tsv', sep = '')
 
 # we'll need some plots as well
 mast_overlap_plot_loc <- '/data/scRNA/differential_expression/seurat_MAST/overlap/meta_paired_highres_lfc01minpct01_20210905_meta_paired_lores_lfc01minpct01_20201106/'
@@ -233,6 +240,18 @@ v2 <- v2[, !is.na(v2@meta.data$cell_type) & !is.na(v2@meta.data$assignment) & !i
 saveRDS(v2, object_loc_v2_new)
 # do the mapping
 perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_highres_rna_loc_v2, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'cMono', 'ncMono'), logfc.threshold = 0.1)
+# now for our T cell stuff
+v2 <- readRDS(object_loc_v2)
+DefaultAssay(v2) <- 'RNA'
+v2 <- v2[, !is.na(v2@meta.data$timepoint)]
+v2 <- v2[, !is.na(v2@meta.data$assignment)]
+# add the T classifications
+t_classifications_v2 <- read.table(t_classifications_loc_v2, sep = '\t', row.names = 1, stringsAsFactors = F)
+v2 <- AddMetaData(v2, t_classifications_loc_v2['clustered.celltype.l2'])
+# remove what we don't care about
+v2 <- v2[, !is.na(v2@meta.data$clustered.celltype.l2)]
+v2 <- v2[, v2@meta.data$clustered.celltype.l2 != 'unknown']
+perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_t_rna_loc_v2, cell_types_to_use = NULL, logfc.threshold = 0.1)
 
 
 # read the object
@@ -250,6 +269,19 @@ v3 <- v3[, !is.na(v3@meta.data$cell_type) & !is.na(v3@meta.data$assignment) & !i
 saveRDS(v3, object_loc_v3_new)
 # do the mapping
 perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_highres_rna_loc_v3, cell_types_to_use = c('NKdim', 'NKbright', 'mDC', 'pDC', 'cMono', 'ncMono'), logfc.threshold = 0.1)
+# now for our T cell stuff
+v3 <- readRDS(object_loc_v3)
+DefaultAssay(v3) <- 'RNA'
+v3 <- v3[, !is.na(v3@meta.data$timepoint)]
+v3 <- v3[, !is.na(v3@meta.data$assignment)]
+# add the T classifications
+t_classifications_v3 <- read.table(t_classifications_loc_v3, sep = '\t', row.names = 1, stringsAsFactors = F)
+v3 <- AddMetaData(v3, t_classifications_loc_v3['clustered.celltype.l2'])
+# remove what we don't care about
+v3 <- v3[, !is.na(v3@meta.data$clustered.celltype.l2)]
+v3 <- v3[, v3@meta.data$clustered.celltype.l2 != 'unknown']
+perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_t_rna_loc_v3, cell_types_to_use = NULL, logfc.threshold = 0.1)
+
 
 # also perform the meta analysis
 mast_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/'
