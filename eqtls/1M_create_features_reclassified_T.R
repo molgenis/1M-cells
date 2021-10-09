@@ -128,7 +128,7 @@ t_classification_loc_v2 <- paste(t_classification_loc, 'v2_azi_to_cluster_l2_cel
 t_classification_loc_v3 <- paste(t_classification_loc, 'v3_azi_to_cluster_l2_cell_types.tsv', sep = '')
 
 # for the inhouse eQTL-mapping pipeline, we currently have ENSG numbers instead of gene numbers
-gene_to_ens_mapping <- paste('/groups/umcg-bios/', read_partition, '/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv', sep = '')
+gene_to_ens_mapping <- paste('/groups/umcg-bios/', read_partition, '/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv', sep =)
 
 # read object and filter
 v2 <- readRDS(v2_object_loc)
@@ -151,7 +151,7 @@ v3 <- v3[, !is.na(v3@meta.data$timepoint)]
 v3 <- v3[, !is.na(v3@meta.data$assignment)]
 # add the T reclassifications
 t_classification_v3 <- read.table(t_classification_loc_v3, sep = '\t', header = T, row.names = 1)
-v3 <- AddMetaData(t_classification_v3, t_classification_v3['clustered.celltype.l2.t'])
+v3 <- AddMetaData(v3, t_classification_v3['clustered.celltype.l2.t'])
 # make sure only T cells are left
 v3 <- v3[, !is.na(v3@meta.data$clustered.celltype.l2.t)]
 v3 <- v3[, v3@meta.data$clustered.celltype.l2.t != 'unknown']
