@@ -23,7 +23,7 @@ write_confinements <- function(eqtl_output_loc, output_prepend, per_ct=F, file_n
     # check each cell type then
     for(cell_type in names(eqtl_lists)){
       # grab that output
-      eqtls_ct <- get_snp_gene_combinations(eqtl_lists[[cell_type]])
+      eqtls_ct <- get_snp_gene_combinations(eqtl_lists[[cell_type]], gene_column = gene_column)
       # get a file name without spaces, because that is just easier to work with
       cell_type_safe <- gsub(' ', '_', cell_type)
       # paste together the output location
@@ -35,7 +35,7 @@ write_confinements <- function(eqtl_output_loc, output_prepend, per_ct=F, file_n
   # if not per cell type, basically do the same, but with all the output at once
   else{
     # grab everything at once, regardless of cell type
-    eqtls <- get_snp_gene_combinations(eqtl_lists)
+    eqtls <- get_snp_gene_combinations(eqtl_lists, gene_column = gene_column)
     # paste together the output location
     confinement_file_loc <- paste(output_prepend, output_append, sep = '')
     # write the result
@@ -152,6 +152,33 @@ get_significant_snp_gene_combos <- function(eqtl_output_loc, significance_column
 }
 
 
+####################
+# Main code        #
+####################
+
+# set the location of the of the eqtl output
+eqtl_output_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_hires_20211008_reclassified_T_eqtlgenlead/results/'
+# set the output of the confinement file
+full_confinement_prepend <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sig_hires_20211008_reclassified_T_eqtlgenlead'
+# cell type specific prepend file
+ct_specific <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sig_hires_20211008_reclassified_T_eqtlgenlead_'
+# these are the labels that are possible
+labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+# we corrected for spaces
+labels_t_azimuth_nospace <- gsub(' ', '_', labels_t_azimuth)
+# write the confinement files
+write_confinements(eqtl_output_loc, full_confinement_prepend, cell_types = labels_t_azimuth_nospace, gene_column = 'ProbeName')
+write_confinements(eqtl_output_loc, ct_specific, per_ct = T, cell_types = labels_t_azimuth_nospace, gene_column = 'ProbeName')
+
+# the same for unconfined now
+eqtl_output_unconfined_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_hires_20211008_reclassified_T_unconfined/results/'
+# set the output of the confinement file
+full_unconfined_confinement_prepend <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sig_hires_20211008_reclassified_T_unconfined'
+# cell type specific prepend file
+ct_specific_unconfined <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sig_hires_20211008_reclassified_T_unconfined_'
+# write the confinement files
+write_confinements(eqtl_output_unconfined_loc, full_unconfined_confinement_prepend, cell_types = labels_t_azimuth_nospace, top_esnp_only = T, gene_column = 'ProbeName')
+write_confinements(eqtl_output_unconfined_loc, ct_specific_unconfined, per_ct = T, cell_types = labels_t_azimuth_nospace, top_esnp_only = T, gene_column = 'ProbeName')
 
 
 
