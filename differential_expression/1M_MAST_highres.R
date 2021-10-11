@@ -211,8 +211,8 @@ mast_output_paired_highres_loc_v3 <- paste(mast_output_loc, 'paired_highres_lfc0
 mast_output_paired_highres_rna_loc_v2 <- paste(mast_output_paired_highres_loc_v2, 'rna/', sep = '')
 mast_output_paired_highres_rna_loc_v3 <- paste(mast_output_paired_highres_loc_v3, 'rna/', sep = '')
 # additionally, we will do a separate T cell DE analysis
-mast_output_paired_t_loc_v2 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v2_paired_t_lfc01minpct01_20210905/', sep = '')
-mast_output_paired_t_loc_v3 <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v3_paired_t_lfc01minpct01_20210905/', sep = '')
+mast_output_paired_t_loc_v2 <- paste(mast_output_loc, 'paired_t_lfc01minpct01_20210905/v2_paired_t_lfc01minpct01_20210905/', sep = '')
+mast_output_paired_t_loc_v3 <- paste(mast_output_loc, 'paired_t_lfc01minpct01_20210905/v3_paired_t_lfc01minpct01_20210905/', sep = '')
 mast_output_paired_t_rna_loc_v2 <- paste(mast_output_paired_highres_loc_v2, 'rna/', sep = '')
 mast_output_paired_t_rna_loc_v3 <- paste(mast_output_paired_highres_loc_v3, 'rna/', sep = '')
 # and the assignments for these T cells needs to come from somewhere as well
@@ -286,7 +286,7 @@ perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_t_
 
 
 # also perform the meta analysis
-mast_output_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/'
+mast_output_local_loc <- '/data/scRNA/differential_expression/seurat_MAST/output/'
 mast_output_prepend <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905/v', sep = '')
 mast_output_append <- '_paired_highres_lfc01minpct01_20210905/rna/'
 # write the location of the combined output
@@ -294,6 +294,16 @@ mast_meta_output_loc <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_202
 
 # write meta output
 write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'cMono', 'ncMono', 'mDC', 'pDC'))
+
+# now for T as well
+t_mast_output_prepend <- paste(mast_output_local_loc, 'paired_t_lfc01minpct01_20210905/v', sep = '')
+t_mast_output_append <- '_paired_t_lfc01minpct01_20210905/rna/'
+t_mast_meta_output_loc <- paste(mast_output_local_loc, 'paired_t_lfc01minpct01_20210905/meta_paired_t_lfc01minpct01_20210905/rna/', sep = '')
+# these are the labels we want to look at
+labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+# write the meta results
+write_meta_mast(t_mast_output_prepend, t_mast_output_append, t_mast_meta_output_loc, cell_types = labels_t_azimuth)
+
 
 # create plots
 overlap_plots <- compare_overlap_low_to_high_res_de_genes('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/differential_expression/seurat_MAST/output/paired_highres_lfc01minpct01_20210905/meta_paired_highres_lfc01minpct01_20210905/rna/', list('DC' = c('mDC', 'pDC'), 'monocyte' = c('cMono', 'ncMono'), 'NK' = c('NKdim', 'NKbright')))
