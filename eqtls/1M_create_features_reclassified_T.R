@@ -128,7 +128,7 @@ t_classification_loc_v2 <- paste(t_classification_loc, 'v2_azi_to_cluster_l2_cel
 t_classification_loc_v3 <- paste(t_classification_loc, 'v3_azi_to_cluster_l2_cell_types.tsv', sep = '')
 
 # for the inhouse eQTL-mapping pipeline, we currently have ENSG numbers instead of gene numbers
-gene_to_ens_mapping <- paste('/groups/umcg-bios/', read_partition, '/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv', sep =)
+gene_to_ens_mapping <- paste('/groups/umcg-bios/', read_partition, '/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/resources/features_v3.tsv', sep = '')
 
 # read object and filter
 v2 <- readRDS(v2_object_loc)
@@ -140,8 +140,12 @@ v2 <- AddMetaData(v2, t_classification_v2['clustered.celltype.l2.t'])
 # make sure only T cells are left
 v2 <- v2[, !is.na(v2@meta.data$clustered.celltype.l2.t)]
 v2 <- v2[, v2@meta.data$clustered.celltype.l2.t != 'unknown']
+# reclassify the memory cells together
+v2@meta.data$clustered.celltype.l2.t.merged <- v2@meta.data$clustered.celltype.l2.t
+v2@meta.data[v2@meta.data$clustered.celltype.l2.t %in% c('CD4 TCM', 'CD4 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD4 Memory'
+v2@meta.data[v2@meta.data$clustered.celltype.l2.t %in% c('CD8 TCM', 'CD8 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD8 Memory'
 # create the per-ct data with demux identities
-create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "clustered.celltype.l2.t", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
+create_feature_files_per_condition(seurat_object=v2, output_loc=v2_features_demux_dir, cell_types_to_output = c('CD4 Memory', 'CD8 Memory'), conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "clustered.celltype.l2.t.merged", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear memory
 rm(v2)
 
@@ -155,6 +159,10 @@ v3 <- AddMetaData(v3, t_classification_v3['clustered.celltype.l2.t'])
 # make sure only T cells are left
 v3 <- v3[, !is.na(v3@meta.data$clustered.celltype.l2.t)]
 v3 <- v3[, v3@meta.data$clustered.celltype.l2.t != 'unknown']
+# reclassify the memory cells together
+v3@meta.data$clustered.celltype.l2.t.merged <- v3@meta.data$clustered.celltype.l2.t
+v3@meta.data[v3@meta.data$clustered.celltype.l2.t %in% c('CD4 TCM', 'CD4 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD4 Memory'
+v3@meta.data[v3@meta.data$clustered.celltype.l2.t %in% c('CD8 TCM', 'CD8 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD8 Memory'
 # create the per-ct data with demux identities
 create_feature_files_per_condition(seurat_object=v3, output_loc=v3_features_demux_dir, cell_types_to_output = NULL, conditions_to_output = NULL, condition.column.name = "timepoint", sample.id.column.name="assignment", cell_type_column = "clustered.celltype.l2.t", assay = "SCT", symbols.to.ensg = T, symbols.to.ensg.mapping=gene_to_ens_mapping, prepend_1 = T)
 # clear memory
