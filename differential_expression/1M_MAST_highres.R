@@ -464,7 +464,7 @@ v2 <- v2[, v2@meta.data$clustered.celltype.l2.t != 'unknown']
 v2@meta.data$clustered.celltype.l2.t.merged <- v2@meta.data$clustered.celltype.l2.t
 v2@meta.data[v2@meta.data$clustered.celltype.l2.t %in% c('CD4 TCM', 'CD4 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD4 Memory'
 v2@meta.data[v2@meta.data$clustered.celltype.l2.t %in% c('CD8 TCM', 'CD8 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD8 Memory'
-perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_t_rna_loc_v2, cell.type.column = 'clustered.celltype.l2.t.merged', cell_types_to_use = c('CD4 Memory', 'CD8 Memory'), logfc.threshold = 0.1)
+perform_mast_per_celltype(seurat_object = v2, output_loc = mast_output_paired_t_rna_loc_v2, cell.type.column = 'clustered.celltype.l2.t.merged', cell_types_to_use = NULL, logfc.threshold = 0.1)
 rm(v2)
 
 # read the object
@@ -497,7 +497,7 @@ v3 <- v3[, v3@meta.data$clustered.celltype.l2.t != 'unknown']
 v3@meta.data$clustered.celltype.l2.t.merged <- v3@meta.data$clustered.celltype.l2.t
 v3@meta.data[v3@meta.data$clustered.celltype.l2.t %in% c('CD4 TCM', 'CD4 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD4 Memory'
 v3@meta.data[v3@meta.data$clustered.celltype.l2.t %in% c('CD8 TCM', 'CD8 TEM'), 'clustered.celltype.l2.t.merged'] <- 'CD8 Memory'
-perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_t_rna_loc_v3, cell.type.column = 'clustered.celltype.l2.t', cell_types_to_use = c('CD4 Memory', 'CD8 Memory'), logfc.threshold = 0.1)
+perform_mast_per_celltype(seurat_object = v3, output_loc = mast_output_paired_t_rna_loc_v3, cell.type.column = 'clustered.celltype.l2.t.merged', cell_types_to_use = NULL, logfc.threshold = 0.1)
 
 
 # also perform the meta analysis
@@ -506,18 +506,37 @@ mast_output_prepend <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_2021
 mast_output_append <- '_paired_highres_lfc01minpct01_20210905/rna/'
 # write the location of the combined output
 mast_meta_output_loc <- paste(mast_output_loc, 'paired_highres_lfc01minpct01_20210905//meta_paired_highres_lfc01minpct01_20210905/rna/', sep = '')
+mast_meta_output_local_loc <- paste(mast_output_local_loc, 'paired_highres_lfc01minpct01_20210905//meta_paired_highres_lfc01minpct01_20210905/rna/', sep = '')
 
 # write meta output
 write_meta_mast(mast_output_prepend, mast_output_append, mast_meta_output_loc, cell_types = c('NKdim', 'NKbright', 'cMono', 'ncMono', 'mDC', 'pDC'))
 
 # now for T as well
-t_mast_output_prepend <- paste(mast_output_local_loc, 'paired_t_lfc01minpct01_20210905/v', sep = '')
+t_mast_output_prepend <- paste(mast_meta_output_local_loc, 'paired_t_lfc01minpct01_20210905/v', sep = '')
 t_mast_output_append <- '_paired_t_lfc01minpct01_20210905/rna/'
 t_mast_meta_output_loc <- paste(mast_output_local_loc, 'paired_t_lfc01minpct01_20210905/meta_paired_t_lfc01minpct01_20210905/rna/', sep = '')
 # these are the labels we want to look at
 labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+labels_memory <- c('CD4 Memory', 'CD8 Memory')
 # write the meta results
 write_meta_mast(t_mast_output_prepend, t_mast_output_append, t_mast_meta_output_loc, cell_types = labels_t_azimuth)
+
+
+sig_output_loc_hires <- '/data/scRNA/differential_expression/sigs/meta_paired_highres_lfc01minpct01_20210905/rna/'
+sig_down_output_loc_hires <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_highres_lfc01minpct01_20210905/rna/'
+sig_up_output_loc_hires <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_highres_lfc01minpct01_20210905/rna/'
+# write the sinificant genes to files
+get_significant_genes(mast_meta_output_local_loc, sig_output_loc_hires)
+get_significant_genes(mast_meta_output_local_loc, sig_down_output_loc_hires, only_negative = T)
+get_significant_genes(mast_meta_output_local_loc, sig_up_output_loc_hires, only_positive = T)
+# we will write the significant T genes to files
+sig_output_loc_t <- '/data/scRNA/differential_expression/sigs/meta_paired_t_lfc01minpct01_20210905/rna/'
+sig_down_output_loc_t <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_t_lfc01minpct01_20210905/rna/'
+sig_up_output_loc_t <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_t_lfc01minpct01_20210905/rna/'
+# write the sinificant genes to files
+get_significant_genes(t_mast_meta_output_loc, sig_output_loc_t)
+get_significant_genes(t_mast_meta_output_loc, sig_down_output_loc_t, only_negative = T)
+get_significant_genes(t_mast_meta_output_loc, sig_up_output_loc_t, only_positive = T)
 
 
 # create plots

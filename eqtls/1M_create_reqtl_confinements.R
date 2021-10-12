@@ -164,6 +164,7 @@ full_confinement_prepend <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/
 ct_specific <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sig_hires_20211008_reclassified_T_eqtlgenlead_'
 # these are the labels that are possible
 labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 TCM', 'CD8 TEM', 'MAIT', 'CD8 TEM', 'dnT', 'CD4 TEM', 'CD8 TCM', 'CD8 Proliferating')
+labels_t_azimuth <- c('CD8 Naive', 'CD4 CTL', 'CD4 Naive', 'CD4 Memory', 'CD8 Memory', 'MAIT', 'dnT', 'CD8 Proliferating') # combined the two memory types
 # we corrected for spaces
 labels_t_azimuth_nospace <- gsub(' ', '_', labels_t_azimuth)
 # write the confinement files
@@ -180,5 +181,11 @@ ct_specific_unconfined <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/on
 write_confinements(eqtl_output_unconfined_loc, full_unconfined_confinement_prepend, cell_types = labels_t_azimuth_nospace, top_esnp_only = T, gene_column = 'ProbeName')
 write_confinements(eqtl_output_unconfined_loc, ct_specific_unconfined, per_ct = T, cell_types = labels_t_azimuth_nospace, top_esnp_only = T, gene_column = 'ProbeName')
 
+# do for the high res mapping we did before as well
+eqtl_output_loc_hr <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_highres_20210905_confine_lead_snp_gene/results/'
+ct_specific_hr <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/confine/sct_mqc_demux_highres_20210905_eqtlgenlead_'
+# these we want to look at
+labels_highres <- c('cMono', 'ncMono', 'mDC', 'pDC', 'NKdim', 'NKbright')
+write_confinements(eqtl_output_loc_hr, ct_specific_hr, per_ct = T, cell_types = labels_highres, gene_column = 'ProbeName')
 
 
