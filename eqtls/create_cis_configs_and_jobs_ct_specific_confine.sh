@@ -43,7 +43,7 @@ do
     mkdir -p ${JOBS_LOC}
     echo ${job_location}
     # the confinements don't have '_expression' in them, so we need to strip that
-    expressionless_ct=$(echo ${fbasename} | tr -d '_expression')
+    expressionless_ct=$(echo ${fbasename} | sed 's/_expression//g'
 
   # create the config file
 echo "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>
