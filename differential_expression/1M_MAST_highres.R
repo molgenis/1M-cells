@@ -523,8 +523,8 @@ write_meta_mast(t_mast_output_prepend, t_mast_output_append, t_mast_meta_output_
 
 
 sig_output_loc_hires <- '/data/scRNA/differential_expression/sigs/meta_paired_highres_lfc01minpct01_20210905/rna/'
-sig_down_output_loc_hires <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_highres_lfc01minpct01_20210905/rna/'
-sig_up_output_loc_hires <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_highres_lfc01minpct01_20210905/rna/'
+sig_down_output_loc_hires <- '/data/scRNA/differential_expression/sigs_neg/meta_paired_highres_lfc01minpct01_20210905/rna/'
+sig_up_output_loc_hires <- '/data/scRNA/differential_expression/sigs_pos/meta_paired_highres_lfc01minpct01_20210905/rna/'
 # write the sinificant genes to files
 get_significant_genes(mast_meta_output_local_loc, sig_output_loc_hires)
 get_significant_genes(mast_meta_output_local_loc, sig_down_output_loc_hires, only_negative = T)
