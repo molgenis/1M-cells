@@ -480,7 +480,7 @@ heatmap.3 <- function(x,
   return(retval)
 }
 
-get_pathway_table <- function(pathway_output_loc, append='_sig_up_pathways.txt', sig_val_to_use = 'q.value.Bonferroni', significance_cutoff=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
+get_pathway_table <- function(pathway_output_loc, append='_sig_up_pathways.txt', sig_val_to_use = 'q.value.Bonferroni', sig_val_to_store=NULL, significance_cutoff=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
   # put all results in a list
   pathways_analysis <- list()
   # put all results in a shared DF
@@ -504,7 +504,15 @@ get_pathway_table <- function(pathway_output_loc, append='_sig_up_pathways.txt',
           pathways[[newcolname]] <- as.numeric(rownames(pathways))
         }
         else{
-          pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+          # get the significance value to put in the table, the default is the same as the significance value to 
+          sig_val_to_for_storing <- sig_val_to_use
+          if(!is.null(sig_val_to_store)){
+            sig_val_to_for_storing <- sig_val_to_store
+          }
+          pathways[[newcolname]] <- log10(pathways[[sig_val_to_for_storing]])
+          #pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
+          # log transform the P values
+          #pathways[[newcolname]] <- log(pathways[[sig_val_to_use]], base = 15)*-1
         }
         pathways$id_name <- paste(pathways$ID, pathways$Name, sep = '_')
         # reduce to the only two columns we care about
@@ -720,6 +728,112 @@ get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_v
   return(most_varied)
 }
 
+
+get_number_of_hits_pathways <- function(pathway_output_loc, append='_sig_up_pathways.txt', cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB')){
+  # get pathways per cell type and condition combination
+  pathways_per_ct_tp <- get_pathway_tables(pathway_output_loc=pathway_output_loc, append=append, cell_types=cell_types, stims=stims)
+  # store the percentage somewhere
+  per_cell_type_pathways <- list()
+  # check each cell type
+  for(key in names(pathways_per_ct_tp)){
+    # grab the data
+    pathways <- pathways_per_ct_tp[[key]]
+    # get the fractions
+    fractions <- as.list(pathways$Hit.Count.in.Query.List/pathways$Hit.Count.in.Genome)
+    # the pathway names will be the keys
+    keys <- pathways$Name
+    # if the names are not unique, we'll have to add the ID as well
+    if(length(keys) != length(unique(keys))){
+      keys <- paste(pathways$Name, pathways$ID, sep = '_')
+    }
+    # set the keys on the list
+    names(fractions) <- keys
+    # now put these into the list
+    per_cell_type_pathways[[key]] <- fractions
+  }
+  return(per_cell_type_pathways)
+}
+
+
+pathway_hits_to_table <- function(pathway_per_cond_and_ct){
+  # there will be an overarching table
+  all_pathways <- NULL
+  # we will check each key, which is a combination of the cell type and condition combination
+  for(key in names(pathway_per_cond_and_ct)){
+    # get the list
+    this_combination <- pathway_per_cond_and_ct[[key]]
+    # put into data table
+    this_pathways_table <- data.table(pathways=names(this_combination), values=as.vector(unlist(this_combination)))
+    # set the column name to contain the key, it's what we use in most other places
+    colnames(this_pathways_table) <- c('pathway', key)
+    # merge together if not the first entry
+    if(is.null(all_pathways)){
+      all_pathways <- this_pathways_table
+    }
+    else{
+      all_pathways <- merge(all_pathways, this_pathways_table, by='pathway', all = T)
+    }
+  }
+  # turn into dataframe object we usually use
+  all_pathways <- data.frame(all_pathways)
+  # we usually have the name of the pathway as rownames
+  rownames(all_pathways) <- all_pathways$pathway
+  # remove the column with pathways, as it is the rowname now
+  all_pathways$pathway <- NULL
+  return(data.frame(all_pathways))
+}
+
+
+create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT',
+                                                       cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono'))){
+  # we'll store per stimulation
+  plot_frames_per_stim <- list()
+  # check each stim
+  for(stim in stims){
+    # init the list we will use
+    plot_frame_ct <- list()
+    # check each major cell type
+    for(cell_type_major in names(cell_type_sets)){
+      # grab the subcell types
+      sub_cell_type <- cell_type_sets[[cell_type_major]]
+      # init the table
+      p_and_frac_tbl_ct <- NULL
+      # check each subceltype
+      for(i in 1:length(sub_cell_type)){
+        # paste the column together (they are always combined with the normal condition)
+        ct_and_tp_col <- paste(sub_cell_type[i], normal, stim, sep = '')
+        # grab ranking or p
+        pathway_p_or_ranking_ct_tp <- pathway_p_or_ranking_table[, c(ct_and_tp_col), drop = F]
+        # set a name for the column with the p or rank
+        colnames(pathway_p_or_ranking_ct_tp) <- c('p_or_rank')
+        # the fractions as well
+        pathway_fraction_table_ct_tp <- pathway_fraction_table[, c(ct_and_tp_col), drop = F]
+        # set a name for the column fraction
+        colnames(pathway_fraction_table_ct_tp) <- c('fraction')
+        # join them by the rownames
+        pathway_p_or_ranking_and_fraction <- merge(pathway_fraction_table_ct_tp, pathway_p_or_ranking_ct_tp, by=0, all=T)
+        # when merging on rownames with data.frame objects, the row names are added under Row.names. This is rediculous, so let's fix that
+        pathway_p_or_ranking_and_fraction$pathway <- pathway_p_or_ranking_and_fraction$Row.names
+        pathway_p_or_ranking_and_fraction$Row.names <- NULL
+        # set the cell type
+        pathway_p_or_ranking_and_fraction$cell_type <- sub_cell_type[i]
+        # add to the existing table
+        if(is.null(p_and_frac_tbl_ct)){
+          p_and_frac_tbl_ct <- pathway_p_or_ranking_and_fraction
+        }
+        else{
+          p_and_frac_tbl_ct <- rbind(p_and_frac_tbl_ct, pathway_p_or_ranking_and_fraction)
+        }
+      }
+      # add to list of each cell type
+      plot_frame_ct[[cell_type_major]] <- p_and_frac_tbl_ct
+    }
+    plot_frames_per_stim[[stim]] <- plot_frame_ct
+  }
+  return(plot_frames_per_stim)
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -789,13 +903,126 @@ rownames(pathway_up_df_monocyte) <- gsub('\\d+_', '', rownames(pathway_up_df_mon
 # plot all mono
 heatmap.3(pathway_up_df_monocyte, to_na=0, dendrogram = 'none', labRow = NA)
 # now for each pathogen
-for(timepoint in c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+pdf('~/Desktop/all_pathways_monocyte.pdf', width=9, height=12)
+for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
   # subset to that timepoint
   pathway_up_df_monocyte_tp <- pathway_up_df_monocyte[, colnames(pathway_up_df_monocyte)[grep(timepoint, colnames(pathway_up_df_monocyte))]]
   # remove the labels of the cell type
-  colnames(pathway_up_df_monocyte_tp) <- gsub(timepoint, '', colnames(pathway_up_df_monocyte_tp))
+  colnames(pathway_up_df_monocyte_tp) <- gsub(paste('UT', timepoint, sep = ''), '', colnames(pathway_up_df_monocyte_tp))
   # remove completely empty rows
   pathway_up_df_monocyte_tp <- pathway_up_df_monocyte_tp[rowSums(pathway_up_df_monocyte_tp) != 0, ]
   # plot
-  heatmap.3(pathway_up_df_monocyte_tp, to_na=0, dendrogram = 'none', labRow = NA, main = paste('monocyte', timepoint), margins = c(12,4))
+  heatmap.3(pathway_up_df_monocyte_tp, to_na=0, dendrogram = 'none', labRow = NA, main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,4))
 }
+dev.off()
+# do the same, but select on variation first
+pdf('~/Desktop/varying_pathways_monocyte.pdf', width=9, height=12)
+for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # subset to that timepoint
+  pathway_up_df_monocyte_tp <- pathway_up_df_monocyte[, colnames(pathway_up_df_monocyte)[grep(timepoint, colnames(pathway_up_df_monocyte))]]
+  # remove the labels of the cell type
+  colnames(pathway_up_df_monocyte_tp) <- gsub(paste('UT', timepoint, sep = ''), '', colnames(pathway_up_df_monocyte_tp))
+  # remove completely empty rows
+  pathway_up_df_monocyte_tp <- pathway_up_df_monocyte_tp[rowSums(pathway_up_df_monocyte_tp) != 0, ]
+  # for variation selection, we can't leave the zeroes in
+  pathway_up_df_monocyte_tp_zerosafe <- pathway_up_df_monocyte_tp
+  pathway_up_df_monocyte_tp_zerosafe[pathway_up_df_monocyte_tp_zerosafe == 0] <- max(pathway_up_df_monocyte_tp_zerosafe)
+  # select by variation
+  most_varied_pathways <- get_most_varying_from_df(pathway_up_df_monocyte_tp_zerosafe, top_so_many = 20)
+  pathway_up_df_monocyte_tp_vary <- pathway_up_df_monocyte_tp[most_varied_pathways, ]
+  # plot
+  heatmap.3(pathway_up_df_monocyte_tp_vary, to_na=0, dendrogram = 'none', main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,20))
+}
+dev.off()
+
+# now only look specifically at immune pathways
+pathway_up_df_monocyte_immuneonly <- pathway_up_df_monocyte[rownames(pathway_up_df_monocyte) %in% filtered_names, ]
+# now for each pathogen
+pdf('~/Desktop/immune_pathways_monocyte.pdf', width=9, height=12)
+for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # subset to that timepoint
+  pathway_up_df_monocyte_immuneonly_tp <- pathway_up_df_monocyte_immuneonly[, colnames(pathway_up_df_monocyte_immuneonly)[grep(timepoint, colnames(pathway_up_df_monocyte))]]
+  # remove the labels of the cell type
+  colnames(pathway_up_df_monocyte_immuneonly_tp) <- gsub(paste('UT', timepoint, sep = ''), '', colnames(pathway_up_df_monocyte_immuneonly_tp))
+  # remove completely empty rows
+  pathway_up_df_monocyte_immuneonly_tp <- pathway_up_df_monocyte_immuneonly_tp[rowSums(pathway_up_df_monocyte_immuneonly_tp) != 0, ]
+  # plot
+  heatmap.3(pathway_up_df_monocyte_immuneonly_tp, to_na=0, dendrogram = 'none', labRow = NA, main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,4))
+}
+dev.off()
+# do the same, but select on variation first
+pdf('~/Desktop/immune_varying_pathways_monocyte.pdf', width=9, height=12)
+for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # subset to that timepoint
+  pathway_up_df_monocyte_immuneonly_tp <- pathway_up_df_monocyte_immuneonly[, colnames(pathway_up_df_monocyte_immuneonly)[grep(timepoint, colnames(pathway_up_df_monocyte_immuneonly))]]
+  # remove the labels of the cell type
+  colnames(pathway_up_df_monocyte_immuneonly_tp) <- gsub(paste('UT', timepoint, sep = ''), '', colnames(pathway_up_df_monocyte_immuneonly_tp))
+  # remove completely empty rows
+  pathway_up_df_monocyte_immuneonly_tp <- pathway_up_df_monocyte_immuneonly_tp[rowSums(pathway_up_df_monocyte_immuneonly_tp) != 0, ]
+  # for variation selection, we can't leave the zeroes in
+  pathway_up_df_monocyte_immuneonly_tp_zerosafe <- pathway_up_df_monocyte_immuneonly_tp
+  pathway_up_df_monocyte_immuneonly_tp_zerosafe[pathway_up_df_monocyte_immuneonly_tp_zerosafe == 0] <- max(pathway_up_df_monocyte_immuneonly_tp_zerosafe)
+  # select by variation
+  most_varied_pathways <- get_most_varying_from_df(pathway_up_df_monocyte_immuneonly_tp_zerosafe[ ,c('cMono', 'ncMono')], top_so_many = 10)
+  pathway_up_df_monocyte_immuneonly_tp_vary <- pathway_up_df_monocyte_immuneonly_tp[most_varied_pathways, ]
+  # plot
+  heatmap.3(pathway_up_df_monocyte_immuneonly_tp_vary, to_na=0, dendrogram = 'none', main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,20))
+}
+dev.off()
+
+
+
+
+# read the 
+#pathway_up_df_low_monocyte_p <- get_pathway_table(pathway_output_up_lowres_loc, cell_types = c('monocyte'), append = '_sig_up_pathways.txt', use_ranking = F)
+# read the 
+pathway_up_df_high_monocyte_p <- get_pathway_table(pathway_output_up_highres_loc, cell_types = c('cMono', 'ncMono'), append = '_reactome.txt', use_ranking = F)
+# add the rownames as a column, to allow the data tables to be merged
+#pathway_up_df_low_monocyte_p$pathway <- rownames(pathway_up_df_low_monocyte_p)
+#pathway_up_df_high_monocyte_p$pathway <- rownames(pathway_up_df_high_monocyte_p)
+# merge together
+#pathway_up_df_monocyte_p <- merge(pathway_up_df_low_monocyte_p, pathway_up_df_high_monocyte_p, by='pathway', all = T)
+# add back the rownames from the column we put them in
+#rownames(pathway_up_df_monocyte_p) <- pathway_up_df_monocyte_p$pathway
+# we no longer need the rownames as a column, so let's remove it
+#pathway_up_df_monocyte_p$pathway <- NULL
+# to zero transformation after merging
+pathway_up_df_monocyte_p <- pathway_up_df_high_monocyte_p
+pathway_up_df_monocyte_p[is.na(pathway_up_df_monocyte_p)] <- 0
+# remove the number prepend, it should not be necessary if using only one data source
+rownames(pathway_up_df_monocyte_p) <- gsub('\\d+_', '', rownames(pathway_up_df_monocyte_p))
+# get the fraction of genes in each pathway
+pathway_up_df_monocyte_fractions_list <- get_number_of_hits_pathways('/data/scRNA/pathways/mast/meta_paired_highres_lfc01minpct01_20210905/rna/sigs_pos/', append = '_reactome.txt', cell_types = c('cMono', 'ncMono'))
+# convert to a table
+pathway_up_df_monocyte_fractions <- pathway_hits_to_table(pathway_up_df_monocyte_fractions_list)
+pathway_up_df_monocyte_fractions[is.na(pathway_up_df_monocyte_fractions)] <- 0
+# confine to only immune
+pathway_up_df_monocyte_immuneonly_p <- pathway_up_df_monocyte_p[rownames(pathway_up_df_monocyte_p) %in% filtered_names, ]
+pathway_up_df_monocyte_fractions_immuneonly <- pathway_up_df_monocyte_fractions[rownames(pathway_up_df_monocyte_fractions) %in% filtered_names, ]
+# now we'll plot everything
+pdf('~/Desktop/immune_varying_pathways_monocyte_p.pdf', width=9, height=12)
+for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
+  # subset to that timepoint
+  pathway_up_df_monocyte_immuneonly_tp_p <- pathway_up_df_monocyte_immuneonly_p[, colnames(pathway_up_df_monocyte_immuneonly_p)[grep(timepoint, colnames(pathway_up_df_monocyte_immuneonly_p))]]
+  pathway_up_df_monocyte_fractions_immuneonly_tp <- pathway_up_df_monocyte_fractions_immuneonly[, colnames(pathway_up_df_monocyte_fractions_immuneonly)[grep(timepoint, colnames(pathway_up_df_monocyte_fractions_immuneonly))]]
+  # remove the labels of the cell type
+  #colnames(pathway_up_df_monocyte_immuneonly_tp_p) <- gsub(paste('UT', timepoint, sep = ''), '', colnames(pathway_up_df_monocyte_immuneonly_tp_p))
+  # remove completely empty rows
+  pathway_up_df_monocyte_immuneonly_tp_p <- pathway_up_df_monocyte_immuneonly_tp_p[rowSums(pathway_up_df_monocyte_immuneonly_tp_p) != 0, ]
+  pathway_up_df_monocyte_fractions_immuneonly_tp <- pathway_up_df_monocyte_fractions_immuneonly_tp[rowSums(pathway_up_df_monocyte_fractions_immuneonly_tp) != 0, ]
+  # for variation selection, we can't leave the zeroes in
+  pathway_up_df_monocyte_immuneonly_tp_zerosafe_p <- pathway_up_df_monocyte_immuneonly_tp_p*-1
+  pathway_up_df_monocyte_immuneonly_tp_zerosafe_p[pathway_up_df_monocyte_immuneonly_tp_zerosafe_p == 0] <- max(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p)
+  # select by variation
+  most_varied_pathways_p <- get_most_varying_from_df(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p[ ,c('cMono', 'ncMono')], top_so_many = 10)
+  pathway_up_df_monocyte_immuneonly_tp_vary_p <- pathway_up_df_monocyte_immuneonly_tp_p[most_varied_pathways_p, ]
+  pathway_up_df_monocyte_fractions_immuneonly_tp_vary <- pathway_up_df_monocyte_fractions_immuneonly_tp[most_varied_pathways_p, ]
+  # plot
+  #heatmap.3(pathway_up_df_monocyte_immuneonly_tp_vary_p*-1, to_na=0, dendrogram = 'none', main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,20), breaks = seq(from = 0, to = (max(pathway_up_df_monocyte_immuneonly_tp_vary_p*-1)), length.out = 10), col=(brewer.pal(9,"YlOrRd")))
+  create_dotplot_per_condition_and_celltypes(pathway_up_df_monocyte_immuneonly_tp_vary_p, pathway_up_df_monocyte_fractions_immuneonly_tp_vary, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')))
+}
+dev.off()
+
+
+
+
