@@ -10,14 +10,15 @@
 ####################
 
 library(data.table)
+require("heatmap.plus")
+library(RColorBrewer)
+library(VennDiagram)
+
 
 ####################
 # Functions        #
 ####################
 
-require("heatmap.plus")
-library(RColorBrewer)
-library(VennDiagram)
 
 
 heatmap.3 <- function(x,
@@ -708,7 +709,7 @@ get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
 }
 
 
-get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_varying=T){
+get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_varying=T, minimal_difference=NULL){
   # now calculate the sd over this set of columns
   sds <- apply(dataframe, 1, sd, na.rm=T)
   # add the sds as a column
@@ -785,7 +786,35 @@ pathway_hits_to_table <- function(pathway_per_cond_and_ct){
 
 
 create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT',
-                                                       cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono'))){
+                                                       cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL){
+  # we'll store per stimulation
+  plot_frames_per_stim <- get_plot_frames_per_condition_and_celltypes(pathway_p_or_ranking_table, pathway_fraction_table, stims=stims, normal=normal, cell_type_sets=cell_type_sets, use_most_varied=use_most_varied, top_so_many=top_so_many, minimal_difference = minimal_difference)
+  # create list to store the lists of ggplot plots
+  plots_per_stim <- list()
+  # check each stim
+  for(stim in stims){
+    # create a list to store the ggplots
+    plots_per_ct <- list()
+    # check each cell type
+    for(cell_type in names(cell_type_sets)){
+      # fetch the plot data
+      plot_data_stim_ct <- plot_frames_per_stim[[stim]][[cell_type]]
+      # create the plot
+      p <- ggplot(data=plot_data_stim_ct, mapping = aes(x=cell_type, y=pathway, color=p_or_rank, size=fraction)) +
+        geom_point() +
+        scale_color_gradient(low='red', high='yellow')
+      # put into list
+      plots_per_ct[[cell_type]] <-p
+    }
+    # put in list
+    plots_per_stim[[stim]] <- plots_per_ct
+  }
+  return(plots_per_stim)
+}
+
+
+get_plot_frames_per_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT',
+                                                        cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL){
   # we'll store per stimulation
   plot_frames_per_stim <- list()
   # check each stim
@@ -794,14 +823,20 @@ create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_tabl
     plot_frame_ct <- list()
     # check each major cell type
     for(cell_type_major in names(cell_type_sets)){
+      print(paste('plotframe:', stim, cell_type_major, sep = ''))
       # grab the subcell types
       sub_cell_type <- cell_type_sets[[cell_type_major]]
       # init the table
       p_and_frac_tbl_ct <- NULL
+      # create columns of the sub cell types we will use
+      append_colnames <- paste(normal, stim, sep = '')
+      ct_and_tp_cols <- paste(sub_cell_type, append_colnames, sep = '')
+      # filter by existing columns
+      ct_and_tp_cols <- intersect(ct_and_tp_cols, colnames(pathway_p_or_ranking_table))
       # check each subceltype
-      for(i in 1:length(sub_cell_type)){
+      for(i in 1:length(ct_and_tp_cols)){
         # paste the column together (they are always combined with the normal condition)
-        ct_and_tp_col <- paste(sub_cell_type[i], normal, stim, sep = '')
+        ct_and_tp_col <- ct_and_tp_cols[i]
         # grab ranking or p
         pathway_p_or_ranking_ct_tp <- pathway_p_or_ranking_table[, c(ct_and_tp_col), drop = F]
         # set a name for the column with the p or rank
@@ -813,7 +848,7 @@ create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_tabl
         # join them by the rownames
         pathway_p_or_ranking_and_fraction <- merge(pathway_fraction_table_ct_tp, pathway_p_or_ranking_ct_tp, by=0, all=T)
         # when merging on rownames with data.frame objects, the row names are added under Row.names. This is rediculous, so let's fix that
-        pathway_p_or_ranking_and_fraction$pathway <- pathway_p_or_ranking_and_fraction$Row.names
+        pathway_p_or_ranking_and_fraction$pathway <- as.vector(unlist(pathway_p_or_ranking_and_fraction$Row.names))
         pathway_p_or_ranking_and_fraction$Row.names <- NULL
         # set the cell type
         pathway_p_or_ranking_and_fraction$cell_type <- sub_cell_type[i]
@@ -823,6 +858,33 @@ create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_tabl
         }
         else{
           p_and_frac_tbl_ct <- rbind(p_and_frac_tbl_ct, pathway_p_or_ranking_and_fraction)
+        }
+      }
+      # subset to most varied if requested
+      if(use_most_varied & length(ct_and_tp_cols) > 1){
+        # we will do most varied for the sub cell types, so that's those
+        vars_to_check <- pathway_p_or_ranking_table[, c(ct_and_tp_cols)]
+        # convert zero to max if ranked
+        if(sum(vars_to_check) > 0){
+          vars_to_check[vars_to_check==0] <- max(vars_to_check)
+        }
+        # sign flip if p value
+        else{
+          vars_to_check <- vars_to_check*-1
+        }
+        # remove completely empty rows
+        vars_to_check <- vars_to_check[rowSums(vars_to_check) != 0, ]
+        # get most variation
+        most_varied <- get_most_varying_from_df(vars_to_check, top_so_many = top_so_many, minimal_difference = minimal_difference)
+        # subset to these most varied
+        p_and_frac_tbl_ct <- p_and_frac_tbl_ct[p_and_frac_tbl_ct$pathway %in% most_varied, ]
+      }
+      else if(use_most_varied & length(ct_and_tp_cols) == 1){
+        # sort by the variable
+        p_and_frac_tbl_ct <- p_and_frac_tbl_ct[order(p_and_frac_tbl_ct[[1]]), ,drop = F]
+        # confine to smallest values if there are more that the top x we requestedd
+        if(nrow(p_and_frac_tbl_ct) > top_so_many){
+          p_and_frac_tbl_ct <- p_and_frac_tbl_ct[1:top_so_many, ,drop = F]
         }
       }
       # add to list of each cell type
@@ -874,10 +936,6 @@ pathways <- pathways[pathways$V3 == 'Homo sapiens', ]
 pathway_mappings <- read.table('/data/scRNA/pathways/ReactomePathwaysRelation.tsv', sep = '\t')
 # get the filtered names
 filtered_names <- get_filtered_pathway_names(pathways, pathway_mappings, 'R-HSA-168256')
-# get all the pathway output
-pathway_list <- get_pathway_tables(pathways_up_loc, cell_types = c('monocyte'))
-# filter on immune
-filtered_pathway_list <- filter_pathways_on_category(pathway_list, filtered_names)
 
 # location of the lower resolution output
 pathway_output_up_lowres_loc <- paste('/data/scRNA/pathways/mast/meta_paired_lores_lfc01minpct01_20201106/rna/sigs_pos/')
@@ -974,18 +1032,7 @@ dev.off()
 
 
 # read the 
-#pathway_up_df_low_monocyte_p <- get_pathway_table(pathway_output_up_lowres_loc, cell_types = c('monocyte'), append = '_sig_up_pathways.txt', use_ranking = F)
-# read the 
 pathway_up_df_high_monocyte_p <- get_pathway_table(pathway_output_up_highres_loc, cell_types = c('cMono', 'ncMono'), append = '_reactome.txt', use_ranking = F)
-# add the rownames as a column, to allow the data tables to be merged
-#pathway_up_df_low_monocyte_p$pathway <- rownames(pathway_up_df_low_monocyte_p)
-#pathway_up_df_high_monocyte_p$pathway <- rownames(pathway_up_df_high_monocyte_p)
-# merge together
-#pathway_up_df_monocyte_p <- merge(pathway_up_df_low_monocyte_p, pathway_up_df_high_monocyte_p, by='pathway', all = T)
-# add back the rownames from the column we put them in
-#rownames(pathway_up_df_monocyte_p) <- pathway_up_df_monocyte_p$pathway
-# we no longer need the rownames as a column, so let's remove it
-#pathway_up_df_monocyte_p$pathway <- NULL
 # to zero transformation after merging
 pathway_up_df_monocyte_p <- pathway_up_df_high_monocyte_p
 pathway_up_df_monocyte_p[is.na(pathway_up_df_monocyte_p)] <- 0
@@ -996,6 +1043,9 @@ pathway_up_df_monocyte_fractions_list <- get_number_of_hits_pathways('/data/scRN
 # convert to a table
 pathway_up_df_monocyte_fractions <- pathway_hits_to_table(pathway_up_df_monocyte_fractions_list)
 pathway_up_df_monocyte_fractions[is.na(pathway_up_df_monocyte_fractions)] <- 0
+# remove full zero rows
+pathway_up_df_monocyte_p <- pathway_up_df_monocyte_p[rowSums(pathway_up_df_monocyte_p) != 0, ]
+pathway_up_df_monocyte_fractions <- pathway_up_df_monocyte_fractions[rowSums(pathway_up_df_monocyte_fractions) != 0, ]
 # confine to only immune
 pathway_up_df_monocyte_immuneonly_p <- pathway_up_df_monocyte_p[rownames(pathway_up_df_monocyte_p) %in% filtered_names, ]
 pathway_up_df_monocyte_fractions_immuneonly <- pathway_up_df_monocyte_fractions[rownames(pathway_up_df_monocyte_fractions) %in% filtered_names, ]
@@ -1012,17 +1062,52 @@ for(timepoint in c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA')){
   pathway_up_df_monocyte_fractions_immuneonly_tp <- pathway_up_df_monocyte_fractions_immuneonly_tp[rowSums(pathway_up_df_monocyte_fractions_immuneonly_tp) != 0, ]
   # for variation selection, we can't leave the zeroes in
   pathway_up_df_monocyte_immuneonly_tp_zerosafe_p <- pathway_up_df_monocyte_immuneonly_tp_p*-1
-  pathway_up_df_monocyte_immuneonly_tp_zerosafe_p[pathway_up_df_monocyte_immuneonly_tp_zerosafe_p == 0] <- max(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p)
+  #pathway_up_df_monocyte_immuneonly_tp_zerosafe_p[pathway_up_df_monocyte_immuneonly_tp_zerosafe_p == 0] <- max(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p)
   # select by variation
-  most_varied_pathways_p <- get_most_varying_from_df(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p[ ,c('cMono', 'ncMono')], top_so_many = 10)
+  most_varied_pathways_p <- get_most_varying_from_df(pathway_up_df_monocyte_immuneonly_tp_zerosafe_p, top_so_many = 10)
   pathway_up_df_monocyte_immuneonly_tp_vary_p <- pathway_up_df_monocyte_immuneonly_tp_p[most_varied_pathways_p, ]
   pathway_up_df_monocyte_fractions_immuneonly_tp_vary <- pathway_up_df_monocyte_fractions_immuneonly_tp[most_varied_pathways_p, ]
   # plot
   #heatmap.3(pathway_up_df_monocyte_immuneonly_tp_vary_p*-1, to_na=0, dendrogram = 'none', main = paste('monocyte', 'UT', 'vs', timepoint), margins = c(12,20), breaks = seq(from = 0, to = (max(pathway_up_df_monocyte_immuneonly_tp_vary_p*-1)), length.out = 10), col=(brewer.pal(9,"YlOrRd")))
-  create_dotplot_per_condition_and_celltypes(pathway_up_df_monocyte_immuneonly_tp_vary_p, pathway_up_df_monocyte_fractions_immuneonly_tp_vary, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')))
+  plots_condition_celltype <- create_dotplot_per_condition_and_celltypes(pathway_up_df_monocyte_immuneonly_tp_vary_p, pathway_up_df_monocyte_fractions_immuneonly_tp_vary, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')), stims = c(timepoint))
+  plots_condition_celltype[[timepoint]][['monocyte']]
 }
 dev.off()
 
 
+pathway_up_df_monocyte_immuneonly_p <- pathway_up_df_monocyte_p[rownames(pathway_up_df_monocyte_p) %in% filtered_names, ]
+pathway_up_df_monocyte_fractions_immuneonly <- pathway_up_df_monocyte_fractions[rownames(pathway_up_df_monocyte_fractions) %in% filtered_names, ]
+plots_per_cond_p <- create_dotplot_per_condition_and_celltypes(pathway_up_df_monocyte_immuneonly_p, pathway_up_df_monocyte_fractions_immuneonly, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')), use_most_varied = T)
+
+pathway_up_df_high_monocyte_rank <- pathway_up_df_high_monocyte
+rownames(pathway_up_df_high_monocyte_rank) <- gsub('\\d+_', '',rownames(pathway_up_df_high_monocyte_rank))
+pathway_up_df_high_monocyte_immuneonly_rank <- pathway_up_df_high_monocyte_rank[rownames(pathway_up_df_high_monocyte_rank) %in% filtered_names, ]
+plots_per_cond_rank <- create_dotplot_per_condition_and_celltypes(pathway_up_df_high_monocyte_immuneonly_rank, pathway_up_df_monocyte_fractions_immuneonly, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')), use_most_varied = T)
+
+# read the 
+pathway_up_df_monocyte_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, cell_types = c('cMono', 'ncMono'), append = '_reactome.txt', use_ranking = F, sig_val_to_store = 'p.value')
+# remove the number prepend, it should not be necessary if using only one data source
+rownames(pathway_up_df_monocyte_p_nominal) <- gsub('\\d+_', '', rownames(pathway_up_df_monocyte_p_nominal))
+# filter by immune
+pathway_up_df_monocyte_immuneonly_p_nominal <- pathway_up_df_monocyte_p_nominal[rownames(pathway_up_df_monocyte_p_nominal) %in% filtered_names, ]
+# to zero transformation after merging
+pathway_up_df_monocyte_immuneonly_p_nominal[is.na(pathway_up_df_monocyte_immuneonly_p_nominal)] <- 0
+# plot
+plots_per_cond_nominal <- create_dotplot_per_condition_and_celltypes(pathway_up_df_monocyte_immuneonly_p_nominal, pathway_up_df_monocyte_fractions_immuneonly, cell_type_sets = list('monocyte' = c('ncMono', 'cMono')), use_most_varied = T)
+
+
+# read the 
+pathway_up_df_all_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, append = '_reactome.txt', use_ranking = F, sig_val_to_store = 'p.value', cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'))
+rownames(pathway_up_df_all_p_nominal) <- gsub('\\d+_', '', rownames(pathway_up_df_all_p_nominal))
+pathway_up_df_all_p_nominal <- pathway_up_df_all_p_nominal[rownames(pathway_up_df_all_p_nominal) %in% filtered_names, ]
+# spaces to dots
+colnames(pathway_up_df_all_p_nominal) <- gsub(' ', '.', colnames(pathway_up_df_all_p_nominal))
+# get the fraction of genes in each pathway
+pathway_up_df_all_fractions_list <- get_number_of_hits_pathways('/data/scRNA/pathways/mast/meta_paired_highres_lfc01minpct01_20210905/rna/sigs_pos/', append = '_reactome.txt', cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'))
+pathway_up_df_all_fractions_list <- pathway_hits_to_table(pathway_up_df_all_fractions_list)
+pathway_up_df_all_fractions_list[is.na(pathway_up_df_all_fractions_list)] <- 0
+# to zero transformation after merging
+pathway_up_df_all_p_nominal[is.na(pathway_up_df_all_p_nominal)] <- 0
+plots_per_cond_nominal <- create_dotplot_per_condition_and_celltypes(pathway_up_df_all_p_nominal, pathway_up_df_all_fractions_list, use_most_varied = T, cell_type_sets=list('CD4T' = c('CD4.Naive', 'CD4.Memory'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('CD8.Naive', 'CD8.Memory'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), minimal_difference = 1)
 
 
