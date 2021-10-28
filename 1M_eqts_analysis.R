@@ -32,7 +32,7 @@ harmonize_PRS_to_gt_format <- function(prs_table){
 }
 
 
-perform_eqts <- function(prs_table, expression_table, method='spearman', score_col='SCORESUM'){
+perform_eqts <- function(prs_table, expression_table, method='spearman', score_col='SCORESUM', keep_fails=T){
   # confine to data we have in both
   participants_both <- intersect(prs_table[['IID']], colnames(expression_table))
   prs_table <- prs_table[match(participants_both, prs_table[['IID']]), ]
@@ -41,19 +41,53 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
   expression_table <- expression_table[apply(expression_table, 1, var) != 0, ]
   # check the expression of each gene
   res <- apply(expression_table, 1, function(row){
-    result_gene <- NULL
-    # calculate the correlation
-    if(method == 'spearman'){
-      result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
-      result_row <- list('p.value' = result_gene$p.value, 'rho' = as.vector(unlist(result_gene$estimate['rho'])), 'alternative' = result_gene$alternative, 'S' = as.vector(unlist(result_gene$statistic['S'])))
-    }
-    else{
-      result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
-      result_row <- list('p.value' = result_gene$p.value, 'rho' = as.vector(unlist(result_gene$estimate['rho'])), 'alternative' = result_gene$alternative, 'S' = as.vector(unlist(result_gene$statistic['S'])))
-    }
+    result_row <- NULL
+    # get the number of participants
+    n <- length(row)
+    # depending on the data, sometimes doing the analysis, we need to catch these instances
+    tryCatch({
+      # calculate the correlation
+      if(method == 'spearman'){
+        result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
+        result_row <- list( 'method' = method,
+                          'alternative' = result_gene$alternative, 
+                          'n' = n,
+                          'S' = as.vector(unlist(result_gene$statistic['S'])), 
+                          'rho' = as.vector(unlist(result_gene$estimate['rho'])), 
+                          'p.value' = result_gene$p.value)
+      }
+      else{
+        result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
+        result_row <- list( 'method' = method,
+                          'alternative' = result_gene$alternative, 
+                          'n' = n,
+                          'S' = as.vector(unlist(result_gene$statistic['S'])), 
+                          'rho' = as.vector(unlist(result_gene$estimate['rho'])), 
+                          'p.value' = result_gene$p.value)
+      }
+    },
+    # so in case of an error, we will return an mostly empty row
+    error = function(e){
+      message('analysis impossible for a gene')
+      print(e)
+      # create empty entry
+      result_row <- list( 'method' = method,
+                          'alternative' = NA, 
+                          'n' = n,
+                          'S' = NA, 
+                          'rho' = NA, 
+                          'p.value' = NA)
+    })
+    return(result_row)
   })
   # turn into a dataframe
   res_df <- do.call(rbind.data.frame, res)
+  # order by the p value
+  res_df <- res_df[order(res_df[['p.value']]), ]
+  # maybe we want to remove what we could not test, this is important to note when talking about the MTC!
+  if(!keep_fails){
+    res_df <- res_df[!is.na(res_df[['p.value']]), ]
+  }
   # add MTC
   res_df$BH <- p.adjust(res_df$p.value, method = 'BH')
   res_df$bonferroni <- p.adjust(res_df$p.value, method = 'bonferroni')
@@ -73,11 +107,11 @@ perform_eqts_cts <- function(expression_loc, prs_table, result_loc, cell_types =
     # setup an output location
     output_loc_result <- paste(result_loc, '/', cell_type, '.tsv', sep = '')
     # write the result
-    write.table(result_cell_type, output_loc_result, row.names = T, col.names = T, sep = '\t', quote = F)
+    write.table(result_cell_type, output_loc_result, col.names = T, sep = '\t', quote = F)
     # report the findings if requested
     if(!is.null(report_sig_col)){
       number_of_sigs <- nrow(result_cell_type[result_cell_type[[report_sig_col]] < report_sig_cutoff, ])
-      print(paste('found', str(number_of_sigs), 'in', output_loc_result))
+      print(paste('found', as.character(number_of_sigs), 'in', output_loc_result))
     }
   }
 }
@@ -95,6 +129,88 @@ perform_eqts_conditions <- function(expression_loc, prs_table, result_loc, condi
   }
 }
 
+
+plot_eqts <- function(expression_table, prs_table, gene_name){
+  # subset to what is available in both
+  participants_both <- intersect(prs_table[['IID']], colnames(expression_table))
+  # get the entries, in order
+  prs_table <- prs_table[match(participants_both, prs_table[['IID']]), ]
+  expression_table <- expression_table[, match(participants_both, colnames(expression_table))]
+  # extract the gene
+  expression_row  <- expression_table[gene_name, ]
+  expression  <- as.vector(unlist(expression_row))
+  # turn into a plotting table
+  plot_table <- data.frame(part = participants_both, prs = prs_table[['SCORESUM']], expression = expression, stringsAsFactors = F)
+  # create the plot
+  p <- ggplot(data = plot_table, mapping = aes(x = prs, y = expression)) +
+    geom_point() +
+    #geom_smooth(method = 'lm', formula = expression~prs) +
+    xlab(paste('PRS')) + 
+    ylab(paste('expression of', gene_name)) +
+    ggtitle(paste('eQTS of PRS and', gene_name))
+  
+  return(p)
+}
+
+get_exp_now <- function(condition, cell_type, path=NULL, chem=NULL){
+  full_output_loc <- NULL
+  # check if the user gave us a path
+  if(!is.null(path)){
+    full_output_loc <- paste(path, '/', condition, '/', cell_type, '_expression.tsv', sep = '')
+  }
+  else if(is.null(path) & !is.null(chem)){
+    if(chem == 'v2'){
+      full_output_loc <- paste(v2_exp_l, '/', condition, '/', cell_type, '_expression.tsv', sep = '')
+    }
+    else if(chem == 'v3'){
+      full_output_loc <- paste(v3_exp_l, '/', condition, '/', cell_type, '_expression.tsv', sep = '')
+    }
+    else{
+      stop('expression chemistry must be v2 or v3')
+    }
+  }
+  else{
+    stop('supply either the base expression path, or the chemistry (v2 or v3)')
+  }
+  # read the expression matrix
+  expression <- read.table(full_output_loc, sep = '\t', header = T, row.names=1, check.names = F)
+  return(expression)
+}
+
+
+get_res_now <- function(condition, cell_type, path=NULL, chem=NULL){
+  full_output_loc <- NULL
+  # check if the user gave us a path
+  if(!is.null(path)){
+    full_output_loc <- paste(path, '/', condition, '/', cell_type, '.tsv', sep = '')
+  }
+  else if(is.null(path) & !is.null(chem)){
+    if(chem == 'v2'){
+      full_output_loc <- paste(v2_res, '/', condition, '/', cell_type, '.tsv', sep = '')
+    }
+    else if(chem == 'v3'){
+      full_output_loc <- paste(v3_res, '/', condition, '/', cell_type, '.tsv', sep = '')
+    }
+    else{
+      stop('expression chemistry must be v2 or v3')
+    }
+  }
+  else{
+    stop('supply either the base expression path, or the chemistry (v2 or v3)')
+  }
+  # read the expression matrix
+  result <- read.table(full_output_loc, sep = '\t', header = T, row.names=1, check.names = F)
+  return(result)
+}
+
+# utility function to save me from passing large variable names around every time
+set_global_feature_loc <- function(v2_exp_l='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v2_sct_mqc_demux_lores_20201029/', v3_exp_l='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v3_sct_mqc_demux_lores_20201106/'){
+  # set the global paths of a couple of variables we keep using
+  v2_exp_l <<- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v2_sct_mqc_demux_lores_20201029/'
+  v3_exp_l <<- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v3_sct_mqc_demux_lores_20201106/'
+  v2_res <<-'/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/v2_sct_mqc_demux_lores_20201029/'
+  v3_res <<-'/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/v3_sct_mqc_demux_lores_20201106/'
+}
 
 #########################
 # main code             #
@@ -118,6 +234,4 @@ prs_table <- read.table(prs_loc, sep = '\t', header = T, stringsAsFactors = F)
 # turn into compatible format
 prs_table <- harmonize_PRS_to_gt_format(prs_table)
 # do the eqts stuff
-perform_eqts_conditions <- perform_eqts_conditions(expression_data_root_loc, prs_table, eqts_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
-
-
+perform_eqts_conditions(expression_data_root_loc, prs_table, eqts_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
