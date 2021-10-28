@@ -710,6 +710,21 @@ get_most_varied_pathways <- function(pathway_table, top_so_many=10, use_sd_metho
 
 
 get_most_varying_from_df <- function(dataframe, top_so_many=10, dont_get_least_varying=T, minimal_difference=NULL){
+  # sometimes we want to set a cutoff of a minimal value
+  if(!is.null(minimal_difference)){
+    max_difference <- apply(dataframe, 1, function(x){
+      # extract the minimum and maximum variable
+      min_val <- min(as.vector(unlist(x)))
+      max_val <- max(as.vector(unlist(x)))
+      # check the difference
+      diffr_max <- diff(c(min_val, max_val))
+      # turn it into an absolute value (easier for the next step)
+      diffr_abs <- abs(diffr_max)
+      return(diffr_abs)
+    })
+    # can now filtering on this
+    dataframe <- dataframe[max_difference >= minimal_difference, ]
+  }
   # now calculate the sd over this set of columns
   sds <- apply(dataframe, 1, sd, na.rm=T)
   # add the sds as a column
@@ -786,9 +801,9 @@ pathway_hits_to_table <- function(pathway_per_cond_and_ct){
 
 
 create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT',
-                                                       cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL){
+                                                       cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL, order_by_diff=F){
   # we'll store per stimulation
-  plot_frames_per_stim <- get_plot_frames_per_condition_and_celltypes(pathway_p_or_ranking_table, pathway_fraction_table, stims=stims, normal=normal, cell_type_sets=cell_type_sets, use_most_varied=use_most_varied, top_so_many=top_so_many, minimal_difference = minimal_difference)
+  plot_frames_per_stim <- get_plot_frames_per_condition_and_celltypes(pathway_p_or_ranking_table, pathway_fraction_table, stims=stims, normal=normal, cell_type_sets=cell_type_sets, use_most_varied=use_most_varied, top_so_many=top_so_many, minimal_difference = minimal_difference, order_by_diff = order_by_diff)
   # create list to store the lists of ggplot plots
   plots_per_stim <- list()
   # check each stim
@@ -814,7 +829,7 @@ create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_tabl
 
 
 get_plot_frames_per_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT',
-                                                        cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL){
+                                                        cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL,order_by_diff=F){
   # we'll store per stimulation
   plot_frames_per_stim <- list()
   # check each stim
@@ -887,6 +902,31 @@ get_plot_frames_per_condition_and_celltypes <- function(pathway_p_or_ranking_tab
           p_and_frac_tbl_ct <- p_and_frac_tbl_ct[1:top_so_many, ,drop = F]
         }
       }
+      if(order_by_diff & length(ct_and_tp_cols) > 1){
+        # check which pathways we have left
+        pathways_left <- p_and_frac_tbl_ct$pathway
+        # now get back the original values
+        vars_to_check <- pathway_p_or_ranking_table[, c(ct_and_tp_cols)]
+        # remove the ones we already removed
+        vars_to_check[rownames(vars_to_check) %in% pathways_left, ]
+        # get the differences in the row
+        max_difference <- apply(vars_to_check, 1, function(x){
+          # extract the minimum and maximum variable
+          min_val <- min(as.vector(unlist(x)))
+          max_val <- max(as.vector(unlist(x)))
+          # check the difference
+          diffr_max <- diff(c(min_val, max_val))
+          # turn it into an absolute value (easier for the next step)
+          diffr_abs <- abs(diffr_max)
+          return(diffr_abs)
+        })
+        # use these to order
+        val_order <- order(max_difference)
+        # get the pathways for those
+        pathway_ordered <- rownames(vars_to_check[val_order, ])
+        # now turn into factor
+        p_and_frac_tbl_ct$pathway <- factor(as.character(p_and_frac_tbl_ct$pathway), levels=as.character(pathway_ordered), ordered=T)
+      }
       # add to list of each cell type
       plot_frame_ct[[cell_type_major]] <- p_and_frac_tbl_ct
     }
@@ -894,7 +934,6 @@ get_plot_frames_per_condition_and_celltypes <- function(pathway_p_or_ranking_tab
   }
   return(plot_frames_per_stim)
 }
-
 
 get_color_coding_dict <- function(){
   # set the condition colors
