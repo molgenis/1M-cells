@@ -481,7 +481,7 @@ heatmap.3 <- function(x,
   return(retval)
 }
 
-get_pathway_table <- function(pathway_output_loc, append='_sig_up_pathways.txt', sig_val_to_use = 'q.value.Bonferroni', sig_val_to_store=NULL, significance_cutoff=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
+get_pathway_table <- function(pathway_output_loc, append='_sig_up_pathways.txt', sig_val_to_use = 'q.value.FDR', sig_val_to_store=NULL, significance_cutoff=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
   # put all results in a list
   pathways_analysis <- list()
   # put all results in a shared DF
@@ -935,6 +935,39 @@ get_plot_frames_per_condition_and_celltypes <- function(pathway_p_or_ranking_tab
   return(plot_frames_per_stim)
 }
 
+
+print_listed_ggplot_objects <- function(list_in_lists, output_loc, extention='pdf', width = 10, height = 10, xlab=NULL, labs=NULL){
+  # check each element
+  for(key in names(list_in_lists)){
+    # get the actual element
+    element <- list_in_lists[[key]]
+    # paste together the output loc
+    output_loc_nest <- paste(output_loc, key, '.', sep = '')
+    # check if we are at the last leaves, or need to nest further
+    if(is.ggplot(element)){
+      # finish the path
+      output_loc_final <- paste(output_loc_nest, extention, sep = '')
+      # get the object
+      p <- element
+      # check for extra parameters
+      if(!is.null(xlab)){
+        p <- p + xlab
+      }
+      if(!is.null(labs)){
+        p <- p + labs
+      }
+      print(output_loc_final)
+      # save the object
+      ggsave(output_loc_final, p, width = width, height = height)
+    }
+    else{
+      # if we are nested further, we can recursively use this function again
+      print_listed_ggplot_objects(element, output_loc_nest, extention = extention, width = width, height = height, xlab = xlab, labs = labs)
+    }
+  }
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -1136,7 +1169,7 @@ plots_per_cond_nominal <- create_dotplot_per_condition_and_celltypes(pathway_up_
 
 
 # read the 
-pathway_up_df_all_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, append = '_reactome.txt', use_ranking = F, sig_val_to_store = 'p.value', cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'))
+pathway_up_df_all_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, append = '_reactome.txt', use_ranking = F, cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'))
 rownames(pathway_up_df_all_p_nominal) <- gsub('\\d+_', '', rownames(pathway_up_df_all_p_nominal))
 pathway_up_df_all_p_nominal <- pathway_up_df_all_p_nominal[rownames(pathway_up_df_all_p_nominal) %in% filtered_names, ]
 # spaces to dots
@@ -1149,4 +1182,4 @@ pathway_up_df_all_fractions_list[is.na(pathway_up_df_all_fractions_list)] <- 0
 pathway_up_df_all_p_nominal[is.na(pathway_up_df_all_p_nominal)] <- 0
 plots_per_cond_nominal <- create_dotplot_per_condition_and_celltypes(pathway_up_df_all_p_nominal, pathway_up_df_all_fractions_list, use_most_varied = T, cell_type_sets=list('CD4T' = c('CD4.Naive', 'CD4.Memory'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('CD8.Naive', 'CD8.Memory'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), minimal_difference = 1)
 
-
+print_listed_ggplot_objects(plots_per_cond_nominal, '/data/scRNA/pathways/plots/de_pathways/meta_paired_highres_lfc01minpct01_20210905/rna/sigs_pos/', extention='pdf', width = 10, height = 10, xlab=xlab('cell type'), labs=labs(size='fraction', color='-log P value'))
