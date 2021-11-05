@@ -130,7 +130,7 @@ perform_eqts_conditions <- function(expression_loc, prs_table, result_loc, condi
 }
 
 
-plot_eqts <- function(expression_table, prs_table, gene_name){
+plot_eqts <- function(expression_table, prs_table, gene_name, score_col='SCORESUM'){
   # subset to what is available in both
   participants_both <- intersect(prs_table[['IID']], colnames(expression_table))
   # get the entries, in order
@@ -140,7 +140,7 @@ plot_eqts <- function(expression_table, prs_table, gene_name){
   expression_row  <- expression_table[gene_name, ]
   expression  <- as.vector(unlist(expression_row))
   # turn into a plotting table
-  plot_table <- data.frame(part = participants_both, prs = prs_table[['SCORESUM']], expression = expression, stringsAsFactors = F)
+  plot_table <- data.frame(part = participants_both, prs = prs_table[[score_col]], expression = expression, stringsAsFactors = F)
   # create the plot
   p <- ggplot(data = plot_table, mapping = aes(x = prs, y = expression)) +
     geom_point() +
@@ -151,6 +151,12 @@ plot_eqts <- function(expression_table, prs_table, gene_name){
   
   return(p)
 }
+
+
+met_analyse_eqts <- function(named_eqts_outputs, output_loc){
+  
+}
+
 
 get_exp_now <- function(condition, cell_type, path=NULL, chem=NULL){
   full_output_loc <- NULL
@@ -217,21 +223,36 @@ set_global_feature_loc <- function(v2_exp_l='/groups/umcg-bios/tmp01/projects/1M
 #########################
 
 # location of the files
-prs_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/full.phiauto.cyto.pgs.profile'
+prs_ra_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA_GWASmeta_European_v2/ra_Okada2013_full_lld_pgs_20211104.txt'
+prs_sle_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/ea_imputed_mergedChroms_removedNa_removedDuplicates_selectedColumns/sle_Langefeld2017_full_lld_pgs_20211104.txt'
 expression_data_root_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v2_sct_mqc_demux_lores_20201029/'
 expression_data_root_loc2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/features/inhouse_eQTL_mapping_pipeline/v3_sct_mqc_demux_lores_20201106/'
 
 # location of the eQTS output
-eqts_output_loc_v2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/v2_sct_mqc_demux_lores_20201029/'
-eqts_output_loc_v3 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/v3_sct_mqc_demux_lores_20201106/'
+eqts_sle_output_loc_v2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/SLE/v2_sct_mqc_demux_lores_20201029/'
+eqts_sle_output_loc_v3 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/SLE/v3_sct_mqc_demux_lores_20201106/'
+eqts_ra_output_loc_v2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA/v2_sct_mqc_demux_lores_20201029/'
+eqts_ra_output_loc_v3 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA/v3_sct_mqc_demux_lores_20201106/'
+
 
 # set up which cell types and conditions we want to use
 cell_types <- c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK')
 conditions <- c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA')
 
 # read the prs table
-prs_table <- read.table(prs_loc, sep = '\t', header = T, stringsAsFactors = F)
+prs_ra_table <- read.table(prs_ra_loc, sep = '\t', header = T, stringsAsFactors = F)
 # turn into compatible format
-prs_table <- harmonize_PRS_to_gt_format(prs_table)
+#prs_ra_table <- harmonize_PRS_to_gt_format(prs_ra_table)
 # do the eqts stuff
-perform_eqts_conditions(expression_data_root_loc, prs_table, eqts_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+perform_eqts_conditions(expression_data_root_loc, prs_ra_table, eqts_ra_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+perform_eqts_conditions(expression_data_root_loc2, prs_ra_table, eqts_ra_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+
+
+# read the prs table
+prs_sle_table <- read.table(prs_sle_loc, sep = '\t', header = T, stringsAsFactors = F)
+# turn into compatible format
+#prs_sle_table <- harmonize_PRS_to_gt_format(prs_sle_table)
+# do the eqts stuff
+perform_eqts_conditions(expression_data_root_loc, prs_sle_table, eqts_sle_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+perform_eqts_conditions(expression_data_root_loc2, prs_sle_table, eqts_sle_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+
