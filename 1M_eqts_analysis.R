@@ -153,9 +153,161 @@ plot_eqts <- function(expression_table, prs_table, gene_name, score_col='SCORESU
 }
 
 
-met_analyse_eqts <- function(named_eqts_outputs, output_loc){
-  
+r_to_z <- function(r){
+  # z' 0.5[ln(1+r) - ln(1-r)]
+  # given an r of 0.4:
+  # z' = 0.5[ln(1+r) - ln(1-r)]
+  # z' = 0.5[ln(1.4) - ln(0.6)]
+  # z' = 0.5[0.37 - -0.51]
+  # z = 0.5[0.84]
+  # z = 0.42
+  left_side <- log(1+r)
+  right_side <- log(1-r)
+  left_minus_right <- left_side - right_side
+  z <- 0.5 * left_minus_right
+  return(z)
 }
+
+meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_column='rho', mtc_correct_skipped_entries=F, weights=NULL){
+  # initialize the table we will use 
+  eqts_tables <- NULL
+  # check each eQTLS to get a meta-analysis for
+  for(eqts_name in names(eqts_outputs)){
+    # read the file
+    eqts_at_index <- read.table(eqts_outputs[[eqts_name]], sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
+    # change the column names so that we can find them back after merging
+    colnames(eqts_at_index) <- paste(colnames(eqts_at_index), '.', eqts_name, sep = '')
+    # add the gene as a column
+    eqts_at_index$gene <- rownames(eqts_at_index)
+    # because I'm neurotic, make it so that the gene is the first entry in the table (shuffling the last column to the front)
+    eqts_at_index[, c(1, 2:ncol(eqts_at_index))] <- eqts_at_index[, c(ncol(eqts_at_index), 1:ncol(eqts_at_index)-1)]
+    # correct the column names as well
+    colnames(eqts_at_index) <- c(colnames(eqts_at_index)[ncol(eqts_at_index)], colnames(eqts_at_index)[1:(ncol(eqts_at_index)-1)])
+    # add the Z score
+    eqts_at_index$z <- r_to_z(eqts_at_index[[paste(r_column, '.', eqts_name, sep = '')]])
+    # depending on if the user has data.table, use data.table to merge('should be a lot faster')
+    if(do_data_table){
+      # change to a data.table
+      eqts_at_index <- data.table(eqts_at_index)
+    }
+    # check if this is the first table
+    if(is.null(eqts_tables)){
+      eqts_tables <- eqts_at_index
+    }
+    # otherwise paste them together
+    else{
+      eqts_tables <- merge(eqts_tables, eqts_at_index, by='gene', all = T)
+    }
+  }
+  # transform into regular dataframe again
+  if(do_data_table){
+    eqts_tables <- data.frame(eqts_tables)
+  }
+  # get the columns with the Zs
+  z_column_names <- paste('z.', names(eqts_outputs), sep = '')
+  # get the columns with the ns
+  n_column_names <- paste('n.', names(eqts_outputs), sep = '')
+  # check for weights, and set a default first
+  weight_to_use <- rep(1, times = length(z_column_names))
+  if(!is.null(weights)){
+    # if weights were supplied, use them
+    weight_to_use <- weights
+  }
+  # meta-analyse all entries
+  weighted_zs <- apply(eqts_tables, 1, function(x){
+    # grab the z-scores for this
+    zscores <- as.numeric(as.vector(unlist(x[z_column_names])))
+    # grab the ns for this
+    ns <- as.numeric(as.vector(unlist(x[n_column_names])))
+    # set a default response meaning we could not calculate the p
+    weighted_z <- NA 
+    # only do a complete meta-analysis
+    if(sum(is.na(zscores)) != 0 & sum(is.na(zscores)) != 0 & !is.na(sum(is.na(zscores)))  & !is.na(sum(is.na(zscores)))){
+      # initialize the sum of the ns
+      n_summed <- 0
+      # initialize z
+      weighted_z <- 0
+      # check each variable
+      for(i in 1:length(zscores)){
+        # add to the weighted z
+        weighted_z <- weighted_z + sqrt(ns[i]) * weight_to_use[i] * zscores[i]
+        # and to the sum of n
+        n_summed <- n_summed + (ns[i] * weight_to_use[i])
+      }
+      # finish the formula
+      weighted_z <- weighted_z / sqrt(n_summed)
+    }
+    return(weighted_z)
+  })
+  # set this weighted z as a column
+  eqts_tables$weighted_meta_z <- as.vector(unlist(weighted_zs))
+  # calculate p from weighted z
+  eqts_tables$meta_p <- 2*pnorm(-abs(eqts_tables$weighted_meta_z))
+  # subset for a set of gene names and p values
+  eqts_table_ss <- eqts_tables[, c('gene', 'meta_p')]
+  # remove na entries before doing multiple test correction, unless specified to not to do
+  if(mtc_correct_skipped_entries == F){
+    eqts_table_ss <- eqts_table_ss[!is.na(eqts_table_ss$meta_p), , drop = F]
+  }
+  # apply multiple testing
+  eqts_table_ss$meta_BH <- p.adjust(eqts_table_ss$meta_p, method = c('BH'))
+  eqts_table_ss$meta_conferroni <- p.adjust(eqts_table_ss$meta_p, method = c('bonferroni'))
+  # initialize because there might not be variables for excluded genes
+  eqts_tables$meta_BH <- NA
+  eqts_tables$meta_bonferroni <- NA
+  # match these values back to the main table
+  eqts_tables[!is.na(eqts_tables$meta_p), 'meta_BH'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_BH']
+  eqts_tables[!is.na(eqts_tables$meta_p), 'meta_bonferroni'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_bonferroni']
+  # write the result
+  write.table(eqts_tables, output_loc, sep = '\t', col.names=T, quote = F)
+}
+
+
+meta_analyse_eqts_conditions <- function(base_eqts_paths, output_loc, conditions=c('UT', '3hCA', '24hCA', '3hMBT', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), file_append='.tsv'){
+  # go through each condition
+  for(condition in conditions){
+    # reserve space for the paths
+    condition_eqts_paths <- list()
+    # add the paths to the path vector
+    for(eqts_base in names(base_eqts_paths)){
+      # get the path at that index
+      path_this_index <- base_eqts_paths[[eqts_base]]
+      # create the path to the condition
+      condition_eqts_path <- paste(path_this_index, '/', condition, '/', sep = '')
+      # add this to our paths
+      condition_eqts_paths[[eqts_base]] <- condition_eqts_path 
+    }
+    # and the path of the result
+    output_loc_condition <- paste(output_loc, '/', condition, '/', sep = '')
+    # now do all cell types
+    meta_analyse_eqts_cell_types(condition_eqts_paths, output_loc_condition, cell_types = cell_types, file_append = file_append)
+  }
+}
+
+
+meta_analyse_eqts_cell_types <- function(base_eqts_paths, output_loc, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), file_append='.tsv'){
+  # go through each condition
+  for(cell_type in cell_types){
+    # reserve space for the paths
+    cell_type_eqts_paths <- list()
+    # add the paths to the path vector
+    for(eqts_base in names(base_eqts_paths)){
+      # get the path at that index
+      path_this_index <- base_eqts_paths[[eqts_base]]
+      # create the path to the cell_type
+      cell_type_eqts_path <- paste(path_this_index, '/', cell_type, file_append, sep = '')
+      # add this to our paths
+      cell_type_eqts_paths[[eqts_base]] <- cell_type_eqts_path 
+    }
+    # and the path of the result
+    output_loc_condition <- paste(output_loc, '/', cell_type, '.tsv', sep = '')
+    # do the actual meta-analysis now
+    meta_analyse_eqts(eqts_outputs = cell_type_eqts_paths, output_loc = output_loc_condition)
+  }
+}
+  
+
+
 
 
 get_exp_now <- function(condition, cell_type, path=NULL, chem=NULL){
@@ -231,8 +383,10 @@ expression_data_root_loc2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq
 # location of the eQTS output
 eqts_sle_output_loc_v2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/SLE/v2_sct_mqc_demux_lores_20201029/'
 eqts_sle_output_loc_v3 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/SLE/v3_sct_mqc_demux_lores_20201106/'
+eqts_sle_output_loc_meta <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/SLE/meta_sct_mqc_demux_lores_20201106/'
 eqts_ra_output_loc_v2 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA/v2_sct_mqc_demux_lores_20201029/'
 eqts_ra_output_loc_v3 <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA/v3_sct_mqc_demux_lores_20201106/'
+eqts_ra_output_loc_meta <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/PRS/RA/meta_sct_mqc_demux_lores_20201106/'
 
 
 # set up which cell types and conditions we want to use
@@ -246,13 +400,14 @@ prs_ra_table <- read.table(prs_ra_loc, sep = '\t', header = T, stringsAsFactors 
 # do the eqts stuff
 perform_eqts_conditions(expression_data_root_loc, prs_ra_table, eqts_ra_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
 perform_eqts_conditions(expression_data_root_loc2, prs_ra_table, eqts_ra_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
-
+meta_analyse_eqts_conditions(base_eqts_paths=list('v2' = eqts_ra_output_loc_v2, 'v3' = eqts_ra_output_loc_v3), output_loc = eqts_ra_output_loc_meta, conditions=c('UT', '3hCA', '24hCA', '3hMBT', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), file_append='.tsv')
+  
 
 # read the prs table
 prs_sle_table <- read.table(prs_sle_loc, sep = '\t', header = T, stringsAsFactors = F)
 # turn into compatible format
 #prs_sle_table <- harmonize_PRS_to_gt_format(prs_sle_table)
 # do the eqts stuff
-perform_eqts_conditions(expression_data_root_loc, prs_sle_table, eqts_sle_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
-perform_eqts_conditions(expression_data_root_loc2, prs_sle_table, eqts_sle_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
-
+perform_eqts_conditions(expression_data_root_loc, prs_sle_table, eqts_sle_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='sle_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+perform_eqts_conditions(expression_data_root_loc2, prs_sle_table, eqts_sle_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='sle_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
+meta_analyse_eqts_conditions(base_eqts_paths = list('v2' = eqts_sle_output_loc_v2, 'v3' = eqts_sle_output_loc_v3), output_loc = eqts_sle_output_loc_meta)
