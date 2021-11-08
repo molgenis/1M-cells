@@ -95,13 +95,17 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
 }
 
 
-perform_eqts_cts <- function(expression_loc, prs_table, result_loc, cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL){
+perform_eqts_cts <- function(expression_loc, prs_table, result_loc, confine=NULL, cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL){
   # check each cell type
   for(cell_type in cell_types){
     # paste together the location
     output_loc_cell_type <- paste(expression_loc, cell_type, exp_file_append, sep = '')
     # read the file
     expression_cell_type <- read.table(output_loc_cell_type, header = T, row.names = 1, sep = '\t', stringsAsFactors = F, check.names = F)
+    # confine to what we have confined, if requested
+    if(!is.null(confine)){
+      expression_cell_type <- expression_cell_type[rownames(expression_cell_type) %in% confine, ]
+    }
     # perform the analysis
     result_cell_type <- perform_eqts(prs_table = prs_table, expression_table = expression_cell_type, method = method, score_col = score_col)
     # setup an output location
@@ -117,7 +121,7 @@ perform_eqts_cts <- function(expression_loc, prs_table, result_loc, cell_types =
 }
 
 
-perform_eqts_conditions <- function(expression_loc, prs_table, result_loc, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL){
+perform_eqts_conditions <- function(expression_loc, prs_table, result_loc, confine = NULL, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='SCORESUM', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL){
   # check each timepoint
   for(condition in conditions){
     # paste the path together
@@ -125,7 +129,7 @@ perform_eqts_conditions <- function(expression_loc, prs_table, result_loc, condi
     # set the expression path
     expression_loc_condition <- paste(expression_loc, '/', condition, '/', sep = '')
     # do this analysis for this condition
-    perform_eqts_cts(expression_loc_condition, prs_table, output_loc_condition, cell_types = cell_types, method=method, score_col=score_col, exp_file_append=exp_file_append, report_sig_col=report_sig_col, report_sig_cutoff=report_sig_cutoff)
+    perform_eqts_cts(expression_loc_condition, prs_table, output_loc_condition, confine = confine, cell_types = cell_types, method=method, score_col=score_col, exp_file_append=exp_file_append, report_sig_col=report_sig_col, report_sig_cutoff=report_sig_cutoff)
   }
 }
 
@@ -171,7 +175,7 @@ r_to_z <- function(r){
 meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_column='rho', mtc_correct_skipped_entries=F, weights=NULL){
   # initialize the table we will use 
   eqts_tables <- NULL
-  # check each eQTLS to get a meta-analysis for
+  # check each eQTS to get a meta-analysis for
   for(eqts_name in names(eqts_outputs)){
     # read the file
     eqts_at_index <- read.table(eqts_outputs[[eqts_name]], sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
@@ -184,9 +188,11 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
     # correct the column names as well
     colnames(eqts_at_index) <- c(colnames(eqts_at_index)[ncol(eqts_at_index)], colnames(eqts_at_index)[1:(ncol(eqts_at_index)-1)])
     # add the Z score
-    eqts_at_index$z <- r_to_z(eqts_at_index[[paste(r_column, '.', eqts_name, sep = '')]])
+    eqts_at_index[[paste('z', '.', eqts_name, sep = '')]] <- r_to_z(eqts_at_index[[paste(r_column, '.', eqts_name, sep = '')]])
     # depending on if the user has data.table, use data.table to merge('should be a lot faster')
     if(do_data_table){
+      # load the data.table library
+      require('data.table')
       # change to a data.table
       eqts_at_index <- data.table(eqts_at_index)
     }
