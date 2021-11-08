@@ -45,7 +45,7 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
     # get the number of participants
     n <- length(row)
     # create empty entry
-    result_row <- list( 'method' = method,
+    result_row <- list( 'method' = as.vector(unlist(method)),
                         'alternative' = NA, 
                         'n' = n,
                         'S' = NA, 
@@ -56,8 +56,8 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
       # calculate the correlation
       if(method == 'spearman'){
         result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
-        result_row <- list( 'method' = method,
-                          'alternative' = result_gene$alternative, 
+        result_row <- list( 'method' = as.vector(unlist(method)),
+                          'alternative' = as.vector(unlist(result_gene$alternative)), 
                           'n' = n,
                           'S' = as.vector(unlist(result_gene$statistic['S'])), 
                           'rho' = as.vector(unlist(result_gene$estimate['rho'])), 
@@ -65,8 +65,8 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
       }
       else{
         result_gene <- cor.test(as.vector(unlist(row)), prs_table[[score_col]], method = method)
-        result_row <- list( 'method' = method,
-                          'alternative' = result_gene$alternative, 
+        result_row <- list( 'method' = as.vector(unlist(method)),
+                            'alternative' = as.vector(unlist(result_gene$alternative)),
                           'n' = n,
                           'S' = as.vector(unlist(result_gene$statistic['S'])), 
                           'rho' = as.vector(unlist(result_gene$estimate['rho'])), 
@@ -117,8 +117,9 @@ perform_eqts_cts <- function(expression_loc, prs_table, result_loc, confine=NULL
     result_cell_type <- perform_eqts(prs_table = prs_table, expression_table = expression_cell_type, method = method, score_col = score_col)
     # setup an output location
     output_loc_result <- paste(result_loc, '/', cell_type, '.tsv', sep = '')
+    
     # write the result
-    write.table(result_cell_type, output_loc_result, col.names = T, sep = '\t', quote = F)
+    write.table(result_cell_type, output_loc_result, col.names = T, sep = '\t', quote = F, row.names = T)
     # report the findings if requested
     if(!is.null(report_sig_col)){
       number_of_sigs <- nrow(result_cell_type[result_cell_type[[report_sig_col]] < report_sig_cutoff, ])
@@ -185,32 +186,37 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
   # check each eQTS to get a meta-analysis for
   for(eqts_name in names(eqts_outputs)){
     # read the file
-    eqts_at_index <- read.table(eqts_outputs[[eqts_name]], sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
-    # change the column names so that we can find them back after merging
-    colnames(eqts_at_index) <- paste(colnames(eqts_at_index), '.', eqts_name, sep = '')
-    # add the gene as a column
-    eqts_at_index$gene <- rownames(eqts_at_index)
-    # because I'm neurotic, make it so that the gene is the first entry in the table (shuffling the last column to the front)
-    eqts_at_index[, c(1, 2:ncol(eqts_at_index))] <- eqts_at_index[, c(ncol(eqts_at_index), 1:ncol(eqts_at_index)-1)]
-    # correct the column names as well
-    colnames(eqts_at_index) <- c(colnames(eqts_at_index)[ncol(eqts_at_index)], colnames(eqts_at_index)[1:(ncol(eqts_at_index)-1)])
-    # add the Z score
-    eqts_at_index[[paste('z', '.', eqts_name, sep = '')]] <- r_to_z(eqts_at_index[[paste(r_column, '.', eqts_name, sep = '')]])
-    # depending on if the user has data.table, use data.table to merge('should be a lot faster')
-    if(do_data_table){
-      # load the data.table library
-      require('data.table')
-      # change to a data.table
-      eqts_at_index <- data.table(eqts_at_index)
-    }
-    # check if this is the first table
-    if(is.null(eqts_tables)){
-      eqts_tables <- eqts_at_index
-    }
-    # otherwise paste them together
-    else{
-      eqts_tables <- merge(eqts_tables, eqts_at_index, by='gene', all = T)
-    }
+    tryCatch({
+      eqts_at_index <- read.table(eqts_outputs[[eqts_name]], sep = '\t', header = T, row.names = 1, stringsAsFactors = F)
+      # change the column names so that we can find them back after merging
+      colnames(eqts_at_index) <- paste(colnames(eqts_at_index), '.', eqts_name, sep = '')
+      # add the gene as a column
+      eqts_at_index$gene <- rownames(eqts_at_index)
+      # because I'm neurotic, make it so that the gene is the first entry in the table (shuffling the last column to the front)
+      eqts_at_index[, c(1, 2:ncol(eqts_at_index))] <- eqts_at_index[, c(ncol(eqts_at_index), 1:ncol(eqts_at_index)-1)]
+      # correct the column names as well
+      colnames(eqts_at_index) <- c(colnames(eqts_at_index)[ncol(eqts_at_index)], colnames(eqts_at_index)[1:(ncol(eqts_at_index)-1)])
+      # add the Z score
+      eqts_at_index[[paste('z', '.', eqts_name, sep = '')]] <- r_to_z(eqts_at_index[[paste(r_column, '.', eqts_name, sep = '')]])
+      # depending on if the user has data.table, use data.table to merge('should be a lot faster')
+      if(do_data_table){
+        # load the data.table library
+        require('data.table')
+        # change to a data.table
+        eqts_at_index <- data.table(eqts_at_index)
+      }
+      # check if this is the first table
+      if(is.null(eqts_tables)){
+        eqts_tables <- eqts_at_index
+      }
+      # otherwise paste them together
+      else{
+        eqts_tables <- merge(eqts_tables, eqts_at_index, by='gene', all = T)
+      }
+    }, error = function(e){
+      print('skipped file')
+      print(e)
+    })
   }
   # transform into regular dataframe again
   if(do_data_table){
@@ -228,6 +234,8 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
   }
   # meta-analyse all entries
   weighted_zs <- apply(eqts_tables, 1, function(x){
+    # replace spaces? why does this happen?
+    #x[z_column_names] <- gsub(' ' , '', ) # CHECK
     # grab the z-scores for this
     zscores <- as.numeric(as.vector(unlist(x[z_column_names])))
     # grab the ns for this
@@ -235,7 +243,7 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
     # set a default response meaning we could not calculate the p
     weighted_z <- NA 
     # only do a complete meta-analysis
-    if(sum(is.na(zscores)) != 0 & sum(is.na(zscores)) != 0 & !is.na(sum(is.na(zscores)))  & !is.na(sum(is.na(zscores)))){
+    if(!is.na(sum(is.na(zscores))) & sum(is.na(zscores)) == 0){
       # initialize the sum of the ns
       n_summed <- 0
       # initialize z
@@ -250,10 +258,15 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
       # finish the formula
       weighted_z <- weighted_z / sqrt(n_summed)
     }
+    else{
+      print('zcores or ns are NA')
+      print(zscores)
+      print(ns)
+    }
     return(weighted_z)
   })
   # set this weighted z as a column
-  eqts_tables$weighted_meta_z <- as.vector(unlist(weighted_zs))
+  eqts_tables$weighted_meta_z <- weighted_zs
   # calculate p from weighted z
   eqts_tables$meta_p <- 2*pnorm(-abs(eqts_tables$weighted_meta_z))
   # subset for a set of gene names and p values
@@ -264,13 +277,16 @@ meta_analyse_eqts <- function(eqts_outputs, output_loc, do_data_table=T, r_colum
   }
   # apply multiple testing
   eqts_table_ss$meta_BH <- p.adjust(eqts_table_ss$meta_p, method = c('BH'))
-  eqts_table_ss$meta_conferroni <- p.adjust(eqts_table_ss$meta_p, method = c('bonferroni'))
+  eqts_table_ss$meta_bonferroni <- p.adjust(eqts_table_ss$meta_p, method = c('bonferroni'))
   # initialize because there might not be variables for excluded genes
   eqts_tables$meta_BH <- NA
   eqts_tables$meta_bonferroni <- NA
   # match these values back to the main table
-  eqts_tables[!is.na(eqts_tables$meta_p), 'meta_BH'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_BH']
-  eqts_tables[!is.na(eqts_tables$meta_p), 'meta_bonferroni'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_bonferroni']
+  if(nrow(eqts_tables) > 0 & nrow(eqts_table_ss) > 0){
+    #which only makes sense if there are any results
+    eqts_tables[!is.na(eqts_tables$meta_p), 'meta_BH'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_BH']
+    eqts_tables[!is.na(eqts_tables$meta_p), 'meta_bonferroni'] <- eqts_table_ss[match(eqts_tables[!is.na(eqts_tables$meta_p), 'gene'], eqts_table_ss$gene), 'meta_bonferroni']
+  }
   # write the result
   write.table(eqts_tables, output_loc, sep = '\t', col.names=T, quote = F)
 }
@@ -413,8 +429,8 @@ prs_ra_table <- read.table(prs_ra_loc, sep = '\t', header = T, stringsAsFactors 
 # do the eqts stuff
 perform_eqts_conditions(expression_data_root_loc, prs_ra_table, eqts_ra_output_loc_v2, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
 perform_eqts_conditions(expression_data_root_loc2, prs_ra_table, eqts_ra_output_loc_v3, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types = c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), method='spearman', score_col='ra_pgs_phiauto', exp_file_append='_expression.tsv', report_sig_col=NULL, report_sig_cutoff=NULL)
-meta_analyse_eqts_conditions(base_eqts_paths=list('v2' = eqts_ra_output_loc_v2, 'v3' = eqts_ra_output_loc_v3), output_loc = eqts_ra_output_loc_meta, conditions=c('UT', '3hCA', '24hCA', '3hMBT', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), file_append='.tsv')
-  
+meta_analyse_eqts_conditions(base_eqts_paths=list('v2' = eqts_ra_output_loc_v2, 'v3' = eqts_ra_output_loc_v3), output_loc = eqts_ra_output_loc_meta, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), file_append='.tsv')
+
 
 # read the prs table
 prs_sle_table <- read.table(prs_sle_loc, sep = '\t', header = T, stringsAsFactors = F)
