@@ -41,9 +41,16 @@ perform_eqts <- function(prs_table, expression_table, method='spearman', score_c
   expression_table <- expression_table[apply(expression_table, 1, var) != 0, ]
   # check the expression of each gene
   res <- apply(expression_table, 1, function(row){
-    result_row <- NULL
+    #result_row <- NULL #instead make empty entry
     # get the number of participants
     n <- length(row)
+    # create empty entry
+    result_row <- list( 'method' = method,
+                        'alternative' = NA, 
+                        'n' = n,
+                        'S' = NA, 
+                        'rho' = NA, 
+                        'p.value' = NA)
     # depending on the data, sometimes doing the analysis, we need to catch these instances
     tryCatch({
       # calculate the correlation
