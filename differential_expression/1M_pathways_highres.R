@@ -817,7 +817,11 @@ create_dotplot_per_condition_and_celltypes <- function(pathway_p_or_ranking_tabl
       # create the plot
       p <- ggplot(data=plot_data_stim_ct, mapping = aes(x=cell_type, y=pathway, color=p_or_rank, size=fraction)) +
         geom_point() +
-        scale_color_gradient(low='red', high='yellow')
+        scale_color_gradient(low='red', high='yellow') + 
+        theme(text = element_text(size = 15)) + 
+        xlab('cell type') + 
+        ylab('Pathways') + 
+        labs(color = '-log10(p)')
       # put into list
       plots_per_ct[[cell_type]] <-p
     }
@@ -1169,7 +1173,7 @@ plots_per_cond_nominal <- create_dotplot_per_condition_and_celltypes(pathway_up_
 
 
 # read the 
-pathway_up_df_all_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, append = '_reactome.txt', use_ranking = F, cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'))
+pathway_up_df_all_p_nominal <- get_pathway_table(pathway_output_up_highres_loc, append = '_reactome.txt', use_ranking = F, cell_types = c('CD4 Naive', 'CD4 Memory', 'pDC', 'mDC','CD8 Naive', 'CD8 Memory', 'NKbright', 'NKdim','cMono', 'ncMono'), sig_val_to_use = 'q.value.FDR.B.Y')
 rownames(pathway_up_df_all_p_nominal) <- gsub('\\d+_', '', rownames(pathway_up_df_all_p_nominal))
 pathway_up_df_all_p_nominal <- pathway_up_df_all_p_nominal[rownames(pathway_up_df_all_p_nominal) %in% filtered_names, ]
 # spaces to dots
