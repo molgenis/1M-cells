@@ -125,11 +125,11 @@ compare_overlap_low_to_high_res_egenes_venn <- function(low_res_output_loc, high
                                               fill = c(alpha("#440154ff",0.3), alpha('#21908dff',0.3), alpha('#fde725ff',0.3)))
     # plot straight away if requested
     if(!is.null(output_loc)){
-      result_loc <- paste(output_loc, '/', major, '.tiff', sep = '')
+      result_loc <- paste(output_loc, '/', major, '.svg', sep = '')
       print(paste('writing', result_loc))
       venn.diagram(x = genes_per_major_cell_type[[major]], filename=result_loc, category.names=names(genes_per_major_cell_type[[major]]), 
                    cat.col = c("#440154ff", '#21908dff', '#fde725ff'), col=c("#440154ff", '#21908dff', '#fde725ff'),
-                   fill = c(alpha("#440154ff",0.3), alpha('#21908dff',0.3), alpha('#fde725ff',0.3)))
+                   fill = c(alpha("#440154ff",0.3), alpha('#21908dff',0.3), alpha('#fde725ff',0.3)), imagetype='svg')
     }
   }
   return(plot_per_major_cell_type)
@@ -151,6 +151,12 @@ plot_venns <- function(venn_data_per_condition){
 lowres_eQTL_output <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/'
 highres_eQTL_output <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_highres_20210905_confine_lead_snp_gene/results/'
 highres_T_eQTL_output <- '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_hires_20211008_reclassified_T_eqtlgenlead/results/'
+
+# set locations of output
+lowres_eQTL_output <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/'
+highres_eQTL_output <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_highres_20210905_confine_lead_snp_gene/results/'
+highres_T_eQTL_output <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_hires_20211008_reclassified_T_eqtlgenlead/results/'
+
 
 plots_per_condition <- compare_overlap_low_to_high_res_egenes(T, lowres_eQTL_output, highres_eQTL_output, list('DC' = c('mDC', 'pDC'), 'monocyte' = c('ncMono', 'cMono'), 'NK' = c('NKdim', 'NKbright')))
 
@@ -187,4 +193,5 @@ dev.off()
 venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_eQTL_output, list('DC' = c('mDC', 'pDC'), 'monocyte' = c('ncMono', 'cMono'), 'NK' = c('NKdim', 'NKbright')), output_loc='/data/scRNA/eQTL_mapping/major_vs_minor_overlap/')
 venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_T_eQTL_output, list('CD4T' = c('CD4_Naive', 'CD4_Memory'), 'CD8T' = c('CD8_Naive', 'CD8_Memory')), output_loc='/data/scRNA/eQTL_mapping/major_vs_minor_overlap/')
 
-
+venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_eQTL_output, list('DC' = c('mDC', 'pDC'), 'monocyte' = c('ncMono', 'cMono'), 'NK' = c('NKdim', 'NKbright')), output_loc='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/major_vs_minor_overlap/')
+venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_T_eQTL_output, list('CD4T' = c('CD4_Naive', 'CD4_Memory'), 'CD8T' = c('CD8_Naive', 'CD8_Memory')), output_loc='//groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/major_vs_minor_overlap/')
