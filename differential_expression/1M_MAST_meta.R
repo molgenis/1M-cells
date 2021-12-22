@@ -423,7 +423,7 @@ get_significant_genes <- function(mast_output_loc, sig_output_loc, pval_column='
   }
 }
 
-get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonferroni', cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
+get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonferroni', sig_cutoff=0.05, cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('X3hCA', 'X24hCA', 'X3hPA', 'X24hPA', 'X3hMTB', 'X24hMTB'), use_ranking=F){
   # put all results in a list
   pathways_analysis <- list()
   # put all results in a shared DF
@@ -439,6 +439,8 @@ get_pathway_table <- function(pathway_output_loc, sig_val_to_use = 'q.value.Bonf
         filepath <- paste(pathway_output_loc, cell_type, 'UT',stim,'_sig_up_pathways.txt', sep = '')
         # read the file
         pathways <- read.table(filepath, sep = '\t', header = T, quote="", fill = F, comment.char = "", colClasses = c('character', 'character', 'character', 'character', 'double', 'double', 'double', 'double', 'integer', 'integer', 'character'))
+        # filter by significance
+        pathways <- pathways[pathways[[sig_val_to_use]] < sig_cutoff, ]
         # create column name
         newcolname <- paste(cell_type, 'UT', stim, sep = '')
         # get the log2 of the significance value

@@ -64,6 +64,7 @@ heatmap.3 <- function(x,
                       ColSideColorsSize = 1,
                       RowSideColorsSize = 1,
                       to_na=NULL,
+                      extreme=NULL,
                       KeyValueName="Value",...){
 
   invalid <- function (x) {
@@ -227,7 +228,11 @@ heatmap.3 <- function(x,
     else breaks <- length(col) + 1
   }
   if (length(breaks) == 1) {
-    if (!symbreaks)
+    if(!is.null(extreme)){
+      extreme <- extreme
+      breaks <- seq(-extreme, extreme, length = breaks)
+    }
+    else if (!symbreaks)
       breaks <- seq(min(x, na.rm = na.rm), max(x, na.rm = na.rm),
                     length = breaks)
     else {
@@ -789,6 +794,11 @@ pathways_to_hm_colors <- function(expression_heatmap, pathways_named_lists){
   return(colors_m)
 }
 
+
+plot_pathway_genes_heatmap <- function(expression_df, pathway_gene_list_loc, ){
+  
+}
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -912,3 +922,14 @@ colors_pathways_v3_de_all_hm <- pathways_to_hm_colors(v3_expression_mono_de_all_
 heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'expression', RowSideColors = t(colors_m))
 # exclude UT
 heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
+# now do specifically for our four sets
+for(pathway in names(pathways_list)){
+  # read the annotation file
+  genes_pathway_loc <- pathways_list[[pathway]]
+  # get the genes in the pathway
+  genes_pathway <- read.table(genes_pathway_loc, header=F, stringsAsFactors = F)$V1
+  # subset the heatmap to just these genes
+  v3_expression_mono_de_all_hm_pathway <- v3_expression_mono_de_all_hm[rownames(v3_expression_mono_de_all_hm) %in% genes_pathway, ]
+  heatmap.3(t(v3_expression_mono_de_all_hm_pathway[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), to_na = 0, dendrogram = 'none', labCol = NA, main = paste('Differentially Expressed Genes in\n', pathway, sep = ''), xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC', margins = c(5,7), extreme = 6)
+}
+
