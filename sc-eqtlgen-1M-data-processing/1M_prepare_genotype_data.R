@@ -217,6 +217,58 @@ get_relevant_descriptions <- function(variables_per_table){
 
 
 
+# add the stimulation tags, so UT, x hours after stim y, etc.
+check_missingnes <- function(stim_mapping_loc, ids_available){
+  # grab the timepoints
+  tps <- read.table(stim_mapping_loc, header = T, stringsAsFactors = F, row.names = 1)
+  # we know now how many entries we will have
+  presence_per_lane <- matrix(, ncol=2, nrow=nrow(tps), dimnames = list(rownames(tps), c('n_total', 'n_present')))
+  # check the timepoints
+  for(lane in rownames(tps)){
+    # initialize counter
+    nr_present_lane <- 0
+    nr_total_lane <- 0
+    # check the lanes
+    for(tp in colnames(tps)){
+      # only apply if there are actually rows with lane in the object
+      participants.as.string <- tps[lane,tp]
+      # split the participant line by comma to get the participants for the timepoint
+      participants.this.tp <- strsplit(participants.as.string, ",")[[1]]
+      # only if present we can continue
+      if(!is.na(participants.this.tp)){
+        # check how many are in the ids vector
+        present <- sum(participants.this.tp %in% as.character(ids_available))
+        # add to the counter for this lane
+        nr_present_lane <- nr_present_lane + present
+        # and the overall counter
+        nr_total_lane <- nr_total_lane + length(participants.this.tp)
+      }
+    }
+    presence_per_lane[lane, 'n_total'] <- nr_total_lane
+    presence_per_lane[lane, 'n_present'] <- nr_present_lane
+  }
+  return(presence_per_lane)
+}
+
+
+check_missingnes_wmatching <- function(stim_mapping_loc, ids_available, mapping_table=NA, from_column=NA, to_column=NA){
+  # by default we will just check the given IDs
+  ids_to_check <- ids_available
+  # but we will convert if necessary
+  if(!is.na(mapping_table) & !is.na(from_column) &!is.na(to_column)){
+    # grab the timepoints
+    tps <- read.table(stim_mapping_loc, header = T, stringsAsFactors = F, row.names = 1)
+    # set the ids we want
+    ids_to_check <- mapping_table[match(ids_to_check, mapping_table[[from_column]]), 'to_column']
+  }
+  # now do the actual analysis
+  presence_per_lane <- check_tags(stim_mapping_loc, ids_available)
+  return(presence_per_lane)
+}
+
+
+
+
 # location of the LL to pseudo
 ll_to_pseudo_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_pseudo_ids.txt'
 pseudo_int_to_ext_loc <- '/groups/umcg-lifelines/tmp01/releases/pheno_lifelines_restructured/v1/phenotype_linkage_file_project_pseudo_id.txt'
@@ -251,6 +303,9 @@ full_id_table_X1$exp <- exp_to_ll[match(full_id_table_X1$ll, exp_to_ll$ll), 'Exp
 # link the age and gender to this
 full_id_table_X1 <- cbind(full_id_table_X1, age_metadata[match(full_id_table_X1$exp, age_metadata$ExpNr), c('Gender', 'age_range')])
 
+# check where we have lanes that are complete
+stim_mapping_loc <- "/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_lane_to_tp.tsv"
+check_missingnes(stim_mapping_loc, full_id_table_X1[!is.na(full_id_table_X1$ugli), ]$exp)
 
 
 # let's do the same for the NG 2018 paper
