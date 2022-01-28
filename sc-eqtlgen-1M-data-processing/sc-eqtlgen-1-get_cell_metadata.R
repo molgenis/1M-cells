@@ -1,18 +1,24 @@
 library(Seurat)
 
-get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell_type_column='cell_type', assignment_column='assignment', timepoints=NULL, cell_types=NULL, assignments=NULL, doRNA=T, doSCT=T){
+get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell_type_column='cell_type', assignment_column='assignment', timepoints=NULL, cell_types=NULL, assignments=NULL, doRNA=T, doSCT=T, verbose=F){
   # check which conditions we have
   conditions_to_use <- unique(metadata[[timepoint_column]])
   # subset if requested
   if(!is.null(timepoints)){
     conditions_to_use <- intersect(conditions_to_use, timepoints)
   }
+  # get rid of NAs
+  conditions_to_use <- setdiff(conditions_to_use, c(NA))
   # save the tables somewhere
   per_condition <- list()
   # check each condition
   for(condition in conditions_to_use){
+    if(verbose){
+      print(paste('from', as.character(nrow(metadata)), 'subsetting'))
+      print(paste('doing condition', condition))
+    }
     # subset to the specific condition
-    cells_condition <- metadata[metadata[[timepoint_column]] == condition, ]
+    cells_condition <- metadata[!is.na(metadata[[timepoint_column]]) & metadata[[timepoint_column]] == condition, ]
     
     # next, check the cell types
     cell_types_to_use <- unique(cells_condition[[cell_type_column]])
@@ -20,17 +26,25 @@ get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell
     if(!is.null(cell_types)){
       cell_types_to_use <- intersect(cell_types_to_use, cell_types)
     }
+    # get rid of NAs
+    cell_types_to_use <- setdiff(cell_types_to_use, c(NA))
     per_condition_per_celltype <- list()
     # check each cell type
     for(cell_type in cell_types_to_use){
+      if(verbose){
+        print(paste('from', as.character(nrow(cells_condition)), 'subsetting'))
+        print(paste('doing cell type', cell_type))
+      }
       # subset to specific cell type
-      cells_condition_celltype <- cells_condition[cells_condition[[cell_type_column]] == cell_type, ]
+      cells_condition_celltype <- cells_condition[!is.na(cells_condition[[cell_type_column]]) & cells_condition[[cell_type_column]] == cell_type, ]
       # get the participants to use
       participants_to_use <- unique(cells_condition_celltype[[assignment_column]])
       # subset if requested
       if(!is.null(assignments)){
         participants_to_use <- intersect(participants_to_use, assignments)
       }
+      # get rid of NAs
+      participants_to_use <- setdiff(participants_to_use, c(NA))
       # we will do these covariates
       covar_columns <- c()
       if(doRNA){
@@ -59,8 +73,12 @@ get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell
       
       # check each participant
       for(participant in participants_to_use){
+        if(verbose){
+          print(paste('doing participant', participant))
+        }
         # subset to that participant
-        cells_condition_celltype_participant <- cells_condition_celltype[cells_condition_celltype[[assignment_column]] == participant, ]
+        cells_condition_celltype_participant <- cells_condition_celltype[!is.na(cells_condition_celltype[[assignment_column]]) & cells_condition_celltype[[assignment_column]] == participant, ]
+        
         # grab the number of cells
         nCell <- nrow(cells_condition_celltype_participant)
         # that is a metric we always want
@@ -119,8 +137,36 @@ get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell
 # read the ng2018 file
 ng2018_object_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/clustering/pilot3_seurat3_200420_sct_azimuth.rds'
 ng2018 <- readRDS(ng2018_object_loc)
+# grab the covariates into lists
 ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'orig.ident', 'cell_type', 'sample', doRNA=F) # there is no condition, so orig.ident is used as a dummy variable
 
+# create column for lower res ct annotation
 ng2018@meta.data$cell_type_lowerres <- NA
+# get a character representation of the columns because I don't like Factors
+ng2018@meta.data$cell_type_char <- as.character(ng2018@meta.data$cell_type)
+
+# create groups
+plasma <- 'Plasma'
+b <- c('B')
+cd4t <- c('CD4+ T')
+cd8t <- c('CD8+ T')
+dc <- c('pDC', 'mDC')
+monocyte <- c('cMonocyte', 'ncMonocyte')
+nk <- c('CD56(dim) NK', 'CD56(bright) NK')
+megakaryocyte <- c('Megakaryocyte')
+# use groups to get lower resolution cell type
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% plasma, 'cell_type_lowerres'] <- 'plasma'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% b, 'cell_type_lowerres'] <- 'B'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% cd4t, 'cell_type_lowerres'] <- 'CD4T'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% cd8t, 'cell_type_lowerres'] <- 'CD8T'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% dc, 'cell_type_lowerres'] <- 'DC'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% monocyte, 'cell_type_lowerres'] <- 'monocyte'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% nk, 'cell_type_lowerres'] <- 'NK'
+ng2018@meta.data[ng2018@meta.data$cell_type_char %in% megakaryocyte, 'cell_type_lowerres'] <- 'megakaryocyte'
+# remove our helper column
+ng2018@meta.data$cell_type_char <- NULL
+
+
+ng2018_lr_covars <- get_relevant_covariates(ng2018@meta.data, 'orig.ident', 'cell_type_lowerres', 'sample', doRNA=F, verbose = T) # there is no condition, so orig.ident is used as a dummy variable
 
 
