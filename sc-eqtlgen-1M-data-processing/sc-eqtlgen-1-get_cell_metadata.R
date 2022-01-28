@@ -116,9 +116,11 @@ get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell
   return(per_condition)
 }
 
+# read the ng2018 file
 ng2018_object_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/clustering/pilot3_seurat3_200420_sct_azimuth.rds'
-ng2018_covars <- readRDS(ng2018_object_loc)
+ng2018 <- readRDS(ng2018_object_loc)
 ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'orig.ident', 'cell_type', 'sample', doRNA=F) # there is no condition, so orig.ident is used as a dummy variable
 
+ng2018@meta.data$cell_type_lowerres <- NA
 
 
