@@ -137,8 +137,10 @@ get_relevant_covariates <- function(metadata, timepoint_column='timepoint', cell
 # read the ng2018 file
 ng2018_object_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/clustering/pilot3_seurat3_200420_sct_azimuth.rds'
 ng2018 <- readRDS(ng2018_object_loc)
+# add dummy UT column
+ng2018@meta.data$timepoint <- 'UT'
 # grab the covariates into lists
-ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'orig.ident', 'cell_type', 'sample', doRNA=F) # there is no condition, so orig.ident is used as a dummy variable
+ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'timepoint', 'cell_type', 'sample', doRNA=F) # there is no condition, so orig.ident is used as a dummy variable
 
 # create column for lower res ct annotation
 ng2018@meta.data$cell_type_lowerres <- NA
@@ -167,6 +169,6 @@ ng2018@meta.data[ng2018@meta.data$cell_type_char %in% megakaryocyte, 'cell_type_
 ng2018@meta.data$cell_type_char <- NULL
 
 
-ng2018_lr_covars <- get_relevant_covariates(ng2018@meta.data, 'orig.ident', 'cell_type_lowerres', 'sample', doRNA=F, verbose = T) # there is no condition, so orig.ident is used as a dummy variable
+ng2018_lr_covars <- get_relevant_covariates(ng2018@meta.data, 'timepoint', 'cell_type_lowerres', 'sample', doRNA=F, verbose = T) # there is no condition, so orig.ident is used as a dummy variable
 
 
