@@ -140,7 +140,7 @@ ng2018 <- readRDS(ng2018_object_loc)
 # add dummy UT column
 ng2018@meta.data$timepoint <- 'UT'
 # grab the covariates into lists
-ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'timepoint', 'cell_type', 'sample', doRNA=F) # there is no condition, so orig.ident is used as a dummy variable
+ng2018_covars <- get_relevant_covariates(ng2018@meta.data, 'timepoint', 'cell_type', 'sample', doRNA=F)
 
 # create column for lower res ct annotation
 ng2018@meta.data$cell_type_lowerres <- NA
