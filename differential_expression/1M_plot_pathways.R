@@ -924,6 +924,7 @@ heatmap.3(t(v3_expression_mono_de_all_hm), col=rev(brewer.pal(10,"RdBu")), margi
 heatmap.3(t(v3_expression_mono_de_all_hm[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), margins=c(6,8), to_na = 0, dendrogram = 'none', labCol = NA, ColSideColors = colors_pathways_v3_de_all_hm, ColSideColorsSize = 3, main = 'Differentially Expressed Genes', xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC')
 # now do specifically for our four sets
 for(pathway in names(pathways_list)){
+  table_also <- T
   # read the annotation file
   genes_pathway_loc <- pathways_list[[pathway]]
   # get the genes in the pathway
@@ -931,5 +932,14 @@ for(pathway in names(pathways_list)){
   # subset the heatmap to just these genes
   v3_expression_mono_de_all_hm_pathway <- v3_expression_mono_de_all_hm[rownames(v3_expression_mono_de_all_hm) %in% genes_pathway, ]
   heatmap.3(t(v3_expression_mono_de_all_hm_pathway[, 2:7]), col=colorRampPalette(c('#000066', 'white', '#800000'))(100), to_na = 0, dendrogram = 'none', labCol = NA, main = paste('Differentially Expressed Genes in\n', pathway, sep = ''), xlab = 'genes', ylab = 'conditions', cexRow = 1.5, side.height.fraction = 0.6, KeyValueName = 'average expression LFC', margins = c(5,7), extreme = 6)
+  # if they want to see the table as well
+  if(table_also){
+    # what we used for input
+    this_table <- v3_expression_mono_de_all_hm[rownames(v3_expression_mono_de_all_hm) %in% genes_pathway, ]
+    # set the output path
+    output_path <- paste('/data/scRNA/pathways/figure2e_', pathway, '.tsv', sep = '')
+    # write the table
+    write.table(this_table, output_path, sep = '\t', row.names = T, col.names = T)
+  }
 }
 
