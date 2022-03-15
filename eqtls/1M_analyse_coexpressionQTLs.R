@@ -640,7 +640,7 @@ plot_interaction <- function(seurat_object, gene1, gene2, genotype, snp.name, ve
   }
 }
 
-plot_boxplot_and_gt_interactions <- function(genotype_data, mapping_folder, dataset, seurat_object, gene_a, gene_b, snp, monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=NULL, plot_points=F, violin=F){
+plot_boxplot_and_gt_interactions <- function(genotype_data, mapping_folder, dataset, seurat_object, gene_a, gene_b, snp, monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=NULL, plot_points=F, violin=F, return_table=F){
   # subset to condition and cell type
   seurat_object_condition <- seurat_object[, (seurat_object@meta.data[['timepoint']] == condition & seurat_object@meta.data[['cell_type_lowerres']] == cell_type)]
   # create plot matrix
@@ -738,7 +738,7 @@ plot_boxplot_and_gt_interactions <- function(genotype_data, mapping_folder, data
   common_data <- intersect(colnames(cor_data), colnames(genotype_data))
   # grab the data for the gene
   cor_gene <- as.vector(unlist(cor_data[gene_b, common_data]))
-  print(cor_gene)
+
   # set to zero if set so
   if(na_to_zero){
     cor_gene[is.na(cor_gene)] <- 0
@@ -755,47 +755,53 @@ plot_boxplot_and_gt_interactions <- function(genotype_data, mapping_folder, data
     plot_data$snp <- unlist(snp_rename[plot_data$snp])
     plot_data$snp <- as.factor(plot_data$snp)
   }
-  # do plotting
-  p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp), pch=21, size=0.75, alpha=1)
-  if(violin){
-    p <- p + geom_violin(outlier.shape = NA)
+  if(return_table){
+    # we need to supply the table data, so we can also just return the plot data
+    return(list(correlation=plot_data, interaction=plot.matrix))
   }
   else{
-    p <- p + geom_boxplot(outlier.shape = NA)
-  }
-  p <- p + theme_bw() +
-    ggtitle(paste(snp, gene_a, gene_b, condition, sep = ' ')) +
-    scale_fill_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
-    ylab(paste(gene_a, '-', gene_b, ' Spearman correlation', sep='')) +
-    xlab('genotype') + ylim(c(-0.3, 0.7))
-  if(length(unique(plot_data$correlation)) > 1){
-    p <- p + geom_jitter(width = 0.1, alpha = 0.2)
-  }
-  if(!is.null(p.value)){
-    p <- p + annotation_custom(
-      grobTree(textGrob(
-        label = paste('P = ',p.value[[i]]), x=0.5, y=0.95, gp=gpar(col="gray", fontsize=13, just=0))
+    # do plotting
+    p <- ggplot(data=plot_data, aes(x=snp,y=correlation, fill = snp), pch=21, size=0.75, alpha=1)
+    if(violin){
+      p <- p + geom_violin(outlier.shape = NA)
+    }
+    else{
+      p <- p + geom_boxplot(outlier.shape = NA)
+    }
+    p <- p + theme_bw() +
+      ggtitle(paste(snp, gene_a, gene_b, condition, sep = ' ')) +
+      scale_fill_manual(values=c("#57a350", "#fd7600", "#383bfe"), guide = F) +
+      ylab(paste(gene_a, '-', gene_b, ' Spearman correlation', sep='')) +
+      xlab('genotype') + ylim(c(-0.3, 0.7))
+    if(length(unique(plot_data$correlation)) > 1){
+      p <- p + geom_jitter(width = 0.1, alpha = 0.2)
+    }
+    if(!is.null(p.value)){
+      p <- p + annotation_custom(
+        grobTree(textGrob(
+          label = paste('P = ',p.value[[i]]), x=0.5, y=0.95, gp=gpar(col="gray", fontsize=13, just=0))
+        )
       )
-    )
-  }
-  if(!is.null(r.value)){
-    p <- p + annotation_custom(
-      grobTree(textGrob(
-        label = paste('r = ',r.value[[i]]), x=0.5, y=0.92, gp=gpar(col="gray", fontsize=13, just=0))
+    }
+    if(!is.null(r.value)){
+      p <- p + annotation_custom(
+        grobTree(textGrob(
+          label = paste('r = ',r.value[[i]]), x=0.5, y=0.92, gp=gpar(col="gray", fontsize=13, just=0))
+        )
       )
-    )
-  }
-  if(!is.null(ylims)){
-    p <- p + ylim(ylims)
-  }
-  if (length(plots) == 3){
-    txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[3], 'correlation'])
-    top.row <- plot_grid(plots[[1]], plots[[2]], plots[[3]], nrow=1, ncol=3)
-    print(plot_grid(top.row, p, rel_heights  = c(1,2), nrow=2, ncol=1))
-  } else {
-    txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'])
-    top.row <- plot_grid(plots[[1]], plots[[2]], nrow=1, ncol=2)
-    print(plot_grid(top.row, p, rel_heights = c(1,2), nrow=2, ncol=1))
+    }
+    if(!is.null(ylims)){
+      p <- p + ylim(ylims)
+    }
+    if (length(plots) == 3){
+      #txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[3], 'correlation'])
+      top.row <- plot_grid(plots[[1]], plots[[2]], plots[[3]], nrow=1, ncol=3)
+      print(plot_grid(top.row, p, rel_heights  = c(1,2), nrow=2, ncol=1))
+    } else {
+      #txtboxplot(plot_data[plot_data$snp == unique(plot_data$snp)[1], 'correlation'], plot_data[plot_data$snp == unique(plot_data$snp)[2], 'correlation'])
+      top.row <- plot_grid(plots[[1]], plots[[2]], nrow=1, ncol=2)
+      print(plot_grid(top.row, p, rel_heights = c(1,2), nrow=2, ncol=1))
+    }
   }
 }
 
@@ -1824,6 +1830,23 @@ plot_pathway_unique <- function(output_path_prepend, output_path_append, gene, c
   heatmap.3(pathways, to_na = max(pathways), dendrogram = 'none', margins=c(10,20))
 }
 
+
+write_pathway_plot_tables <- function(output_path_prepend, output_path_append, output_loc, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL, reactome = T, toppfun = F){
+  # each cell type
+  for(cell_type in cell_types){
+    # check each gene
+    for(gene in genes){
+      # grab the pathways for that co-eQTL gene
+      pathway_df <- plot_pathway_all(output_path_prepend, output_path_append, gene, cell_types=c(cell_type), conditions=conditions, use_ranking=use_ranking, top_so_many=top_so_many, reactome = reactome, toppfun = toppfun, return_table=T)
+      # paste together the full path
+      output_loc_full <- paste(output_loc, 'pathwas_table_', cell_type, '_', gene, '.tsv', sep = '')
+      # write the table
+      write.table(pathway_df, output_loc_full, sep = '\t', row.names = T, col.names = T)
+    }
+  }
+}
+
+
 plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL, stringwrap=F, reactome = T, toppfun = F, margins = c(6,25.1), return_table=F){
   # get the pathways
   pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking, reactome = reactome, toppfun = toppfun)
@@ -2811,6 +2834,49 @@ plot_ng2018_rps26 <- function(ng2018_loc, coeqtl_output_loc, gene, cell_type, se
   return(p)
 }
 
+
+write_coeqtl_boxplot_interaction_tables <- function(output_loc, tables_per_condition, make_anonymous=T){
+  # we will write two tables
+  correlation_table <- NULL
+  interaction_table <- NULL
+  # get the tables
+  for(table_name in names(tables_per_condition)){
+    # get the tables
+    if('correlation' %in% names(tables_per_condition[[table_name]])){
+      correlations <- tables_per_condition[[table_name]][['correlation']]
+      correlations[['condition']] <- table_name
+      # add to complete table
+      if(is.null(correlation_table)){
+        correlation_table <- correlations
+      }
+      else{
+        correlation_table <- rbind(correlation_table, correlations)
+      }
+    }
+    if('interaction' %in% names(tables_per_condition[[table_name]])){
+      interactions <- tables_per_condition[[table_name]][['interaction']]
+      interactions[['condition']] <- table_name
+      # add to complete table
+      if(is.null(interaction_table)){
+        interaction_table <- interactions
+      }
+      else{
+        interaction_table <- rbind(interaction_table, interactions)
+      }
+    }
+  }
+  if(make_anonymous){
+    correlation_table[['participant']] <- NULL
+    interaction_table[['sample.name']] <- NULL
+  }
+  # write results
+  output_loc_correlations <- paste(output_loc, 'correlations.tsv', sep = '')
+  write.table(correlation_table, output_loc_correlations, sep = '\t', col.names = T, row.names = F)
+  output_loc_interactions <- paste(output_loc, 'interactions.tsv', sep = '')
+  write.table(interaction_table, output_loc_interactions, sep = '\t', col.names = T, row.names = F)
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -2992,20 +3058,23 @@ coeqtl_numbers_numbers <- plot_coeqtl_numbers(sigs_per_geneA, paper_style = T, t
 
 # a look at the pathways as well
 plot_pathway_all(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', gene = 'CLEC12A', toppfun = T, top_so_many = 5)
+plot_pathway_all(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', gene = 'CLEC12A', toppfun = T, top_so_many = 5)
+
+
 
 
 # get the genotype data
-vcf <- fread('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
+vcf <- fread('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/genotypes/LL_trityper_plink_converted.vcf.gz')
 genotypes_all <- as.data.frame(vcf[, 10:ncol(vcf)])
 rownames(genotypes_all) <- vcf$ID
 
 # mapping for the probes that belong to the genes
-snp_probe_mapping_location <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
+snp_probe_mapping_location <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/GRN_reconstruction/snp_gene_mapping_20201113.tsv'
 # get the mapping of the probe to the cis SNP
 snp_probe_mapping <- read.table(snp_probe_mapping_location, sep = '\t', header=T, stringsAsFactors = F)
 
 # location of coeqtls output and correlation matrices
-coeqtl_out_loc <- '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
+coeqtl_out_loc <- '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/'
 # prep and append we will use for now
 prepend <- 'output_'
 append <- '_meta_mono_missingness05replacena100permzerogenebnumeric_1/'
@@ -3014,6 +3083,54 @@ coeqtl_plot_loc <- paste(coeqtl_out_loc, 'plots/', sep = '')
 # geneAs to plot
 coeqtl_genes <- c('SSU72','NDUFA12','NMB','PLGRKT','SEPHS2','BTN3A2','PGD','TNFAIP6','HLA-B','ZFAND2A','HEBP1','CTSC','TMEM109','NUCB2','HIP1','AP2S1','CD52','PPID','RPS26','TMEM176B','ERAP2','HLA-DQA2','TMEM176A','CLEC12A','MAP3K7CL','BATF3','MRPL54','LILRA3','NAAA','PRKCB','SMDT1','LGALS9','KIAA1598','UBE2D1','SCO2','DNAJC15','NDUFA10','NAA38','HLA-DQA1','ROGDI','RBP7','SDCCAG8','CFD','GPX1','PRDX2','C6orf48','RBBP8','IQGAP2','PTK2B','SMAP1')
 
+# make a plot of CLEC12A interactions
+plot_interaction(seurat_object=v3,
+                 gene1='CLEC12A',
+                 gene2='PML', 
+                 genotype=genotypes_all['rs12230244', ], 
+                 snp.name='rs12230244', 
+                 version_chem='v3', 
+                 output_loc='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/plots/', p.value = NULL, r.value = NULL, sign.cutoff = NULL, use_SCT=T, sct_data=F, conditions=c('UT', 'X3hCA', 'X24hCA'), set_axis_by_max=T, height=5, width=5, extention='.png', remove_prepend=NULL, snp_rename=NULL, xlim=NULL, ylim=NULL)
+
+
+# load a correlation matrix
+cor_data_X24hCA <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/X24hCA_monocyte_correlation_matrix_CLEC12A.1.txt')
+cor_data_X3hCA <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/X3hCA_monocyte_correlation_matrix_CLEC12A.1.txt')
+cor_data_UT <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/UT_monocyte_correlation_matrix_CLEC12A.2.txt')
+# print the boxplot
+X24hCA_CLEC12A_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs12230244', ],
+                                 mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/', 
+                                 dataset='1', 
+                                 seurat_object=v2, 
+                                 gene_a='CLEC12A', 
+                                 gene_b='PML', 
+                                 snp='rs12230244', 
+                                 monniker='_meta_', 
+                                 cell_type='monocyte', 
+                                 condition='X24hCA', 
+                                 na_to_zero=T, 
+                                 to_numeric=T, 
+                                 snp_rename=NULL, 
+                                 p.value=NULL, 
+                                 r.value=NULL, 
+                                 ylim=NULL, 
+                                 xlim=NULL, 
+                                 ylims=NULL, 
+                                 use_SCT=T, 
+                                 sct_data=F, 
+                                 cor_table=cor_data_X24hCA, 
+                                 plot_points=F, 
+                                 violin=F,
+                                 return_table=T)
+X3hCA_CLEC12A_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs12230244', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='1', seurat_object=v2, gene_a='CLEC12A', gene_b='PML', snp='rs12230244', monniker='_meta_', cell_type='monocyte', condition='X3hCA', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_X3hCA, plot_points=F, violin=F, return_table=T) 
+UT_CLEC12A_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs12230244', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='2', seurat_object=v3, gene_a='CLEC12A', gene_b='PML', snp='rs12230244', monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_UT, plot_points=F, violin=F, return_table=T) 
+write_coeqtl_boxplot_interaction_tables(output_loc = '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/figure_tables/figure_4b_', list(UT = UT_CLEC12A_tables, X3hCA = X3hCA_CLEC12A_tables, X24hCA = X24hCA_CLEC12A_tables))
+
+# plot CLEC12A
+plot_pathway_all(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', gene = 'CLEC12A', toppfun = T, top_so_many = 5)
+# print the tables used for the pathway heatmaps
+write_pathway_plot_tables(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', output_loc='~/Desktop/figureS6/', c('NDUFA12','CTSC','RPS26' ,'TMEM176B','CLEC12A','DNAJC15','HLA-DQA1'), cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), top_so_many=5, reactome = F, toppfun = T)
+  
 
 # do the top hit plotting
 plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
