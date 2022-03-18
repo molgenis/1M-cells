@@ -988,6 +988,33 @@ write_dataframe_per_condition_and_celltypes <- function(pathway_p_or_ranking_tab
   }
 }
 
+get_dataframe_all_condition_and_celltypes <- function(pathway_p_or_ranking_table, pathway_fraction_table, output_loc, stims=c('X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), normal='UT', cell_type_sets=list('CD4T' = c('Naive CD4+ T', 'Memory CD4+ T'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('Naive CD8+ T', 'Memory CD8+ T'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), use_most_varied=F, top_so_many=10, minimal_difference=NULL, order_by_diff=F){
+  # we'll store per stimulation
+  plot_frames_per_stim <- get_plot_frames_per_condition_and_celltypes(pathway_p_or_ranking_table, pathway_fraction_table, stims=stims, normal=normal, cell_type_sets=cell_type_sets, use_most_varied=use_most_varied, top_so_many=top_so_many, minimal_difference = minimal_difference, order_by_diff = order_by_diff)
+  # create a new table
+  full_table <- NULL
+  # check each stim
+  for(stim in names(plot_frames_per_stim)){
+    # check each cell type
+    for(celltype in names(plot_frames_per_stim[[stim]])){
+      # get those variables
+      df_stim_ct <- plot_frames_per_stim[[stim]][[celltype]]
+      # add the stimulation and cell type
+      df_stim_ct$cell_type <- celltype
+      df_stim_ct$condition <- stim
+      # add to table
+      if(is.null(full_table)){
+        full_table <- df_stim_ct
+      }
+      else{
+        full_table <- rbind(full_table, df_stim_ct)
+      }
+    }
+  }
+  return(full_table)
+}
+
+
 get_color_coding_dict <- function(){
   # set the condition colors
   color_coding <- list()
@@ -1206,4 +1233,5 @@ print_listed_ggplot_objects(plots_per_cond_fdr, '/data/scRNA/pathways/plots/de_p
 
 
 write_dataframe_per_condition_and_celltypes(pathway_up_df_all_p_fdr, pathway_up_df_all_fractions_list, '/Users/royoelen/Desktop/figureS3/', use_most_varied = T, cell_type_sets=list('CD4T' = c('CD4.Naive', 'CD4.Memory'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('CD8.Naive', 'CD8.Memory'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), minimal_difference = 1)
+pathway_up_df_all_p_fdr_table <- get_dataframe_all_condition_and_celltypes(pathway_up_df_all_p_fdr, pathway_up_df_all_fractions_list, '/Users/royoelen/Desktop/figureS3/', use_most_varied = T, cell_type_sets=list('CD4T' = c('CD4.Naive', 'CD4.Memory'), 'DC' = c('pDC', 'mDC'), 'CD8T' = c('CD8.Naive', 'CD8.Memory'), 'NK' = c('NKbright', 'NKdim'), 'monocyte' = c('cMono', 'ncMono')), minimal_difference = 1)
 

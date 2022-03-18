@@ -1847,6 +1847,45 @@ write_pathway_plot_tables <- function(output_path_prepend, output_path_append, o
 }
 
 
+get_pathway_plot_table <- function(output_path_prepend, output_path_append, genes, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL, reactome = T, toppfun = F){
+  # create one
+  full_pathway_df <- NULL
+  # each cell type
+  for(cell_type in cell_types){
+    # check each gene
+    for(gene in genes){
+      # some pathways are not present, so we'll try
+        # grab the pathways for that co-eQTL gene
+        pathway_df <- plot_pathway_all(output_path_prepend, output_path_append, gene, cell_types=c(cell_type), conditions=conditions, use_ranking=use_ranking, top_so_many=top_so_many, reactome = reactome, toppfun = toppfun, return_table=T)
+        # set the pathways and cell types
+        annotated_pathway_df <- data.frame(cell_type=rep(cell_type, times = nrow(pathway_df)), gene=rep(gene, times = nrow(pathway_df)), pathway=rownames(pathway_df))
+        # remove the current rownames, because these will no longer be unique
+        rownames(pathway_df) <- NULL
+        # add all the possible columns to the dataframe
+        for(condition in conditions){
+          # remove the prepended X
+          condition_nox <- sub('^X', '', condition)
+          # add the actual data
+          if(condition_nox %in% colnames(pathway_df)){
+            annotated_pathway_df[[condition_nox]] <- pathway_df[[condition_nox]]
+          }
+          # or an empty column
+          else{
+            annotated_pathway_df[[condition_nox]] <- NA
+          }
+        }
+        # and finally put everything together
+        if(is.null(full_pathway_df)){
+          full_pathway_df <- annotated_pathway_df
+        }
+        else{
+          full_pathway_df <- rbind(full_pathway_df, annotated_pathway_df)
+        }
+    }
+  }
+  return(full_pathway_df)
+}
+
 plot_pathway_all <- function(output_path_prepend, output_path_append, gene, cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), use_ranking=T, top_so_many=NULL, stringwrap=F, reactome = T, toppfun = F, margins = c(6,25.1), return_table=F){
   # get the pathways
   pathways <- coeqt_gene_pathways_to_df(output_path_prepend=output_path_prepend, output_path_append=output_path_append, genes=c(gene), cell_types=cell_types, conditions=conditions, use_ranking = use_ranking, reactome = reactome, toppfun = toppfun)
@@ -2775,7 +2814,7 @@ get_genes_per_pathway_per_condition <- function(output_path_prepend, output_path
   return(all_lists)
 }
 
-plot_ng2018_rps26 <- function(ng2018_loc, coeqtl_output_loc, gene, cell_type, set, condition='UT', allele_dif=F, paper_style=F, verbose=T){
+plot_ng2018_rps26 <- function(ng2018_loc, coeqtl_output_loc, gene, cell_type, set, chem='v2', condition='UT', allele_dif=F, paper_style=F, verbose=T, return_table=F){
   # paste together the coeqtl output loc for p
   coeqtl_1m_p_loc <- paste(coeqtl_output_loc, gene, '_meta_', cell_type, '_p.tsv', sep = '')
   coeqtl_1m_r_loc <- paste(coeqtl_output_loc, gene, '_', cell_type, '_', condition, '_rs.tsv', sep = '')
@@ -2810,28 +2849,44 @@ plot_ng2018_rps26 <- function(ng2018_loc, coeqtl_output_loc, gene, cell_type, se
           )
     )
   }
-  # plot
-  p <- ggplot(data=coeqtl_r_both, aes(x=ng2018, y=m1)) +
-    xlim(c(-1, 1)) + ylim(c(-1, 1)) +
-    xlab('r Nature 2018 CD4+ T') + ylab(paste('r 1M', cell_type, condition)) +
-    ggtitle(paste('concordance of ', gene, ' co-eQTLs', sep = '')) +
-    annotate("rect", xmin=-Inf, xmax=0, ymin=-Inf, ymax=0, fill="green", alpha=0.1) +
-    annotate("rect", xmin=0, xmax=Inf, ymin=0, ymax=Inf, fill="green", alpha=0.1) +
-    annotate("rect", xmin=-Inf, xmax=0, ymin=0, ymax=Inf, fill="red", alpha=0.1) +
-    annotate("rect", xmin=0, xmax=Inf, ymin=-Inf, ymax=0, fill="red", alpha=0.1) +
-    geom_hline(yintercept=0, linetype="dashed", color = "black") +
-    geom_vline(xintercept=0, linetype="dashed", color = "black") +
-    geom_point() +
-    annotate("rect", xmin=0.5, xmax=1.0, ymin=-1, ymax=-0.75, fill="white", alpha=1) +
-    annotate("segment", x = 0.5, xend = 1, y = -0.75, yend = -0.75, colour = "black") +
-    annotate("segment", x = 0.5, xend = 1, y = -1, yend = -1, colour = "black") +
-    annotate("segment", x = 0.5, xend = 0.5, y = -0.75, yend = -1, colour = "black") +
-    annotate("segment", x = 1, xend = 1, y = -0.75, yend = -1, colour = "black") +
-    annotate("text", x = 0.75, y = -0.875, label = paste('', round(concordance*100, digits = 1), "% concordance", sep=''), fontface='bold')
-  if(paper_style){
-    p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+  
+  if(return_table){
+    return(coeqtl_r_both)
   }
-  return(p)
+  else{
+    # plot
+    p <- NULL
+    if(chem=='v2'){
+      p <- ggplot(data=coeqtl_r_both, aes(x=ng2018, y=m1.X1))
+    }
+    else if(chem=='v3'){
+      p <- ggplot(data=coeqtl_r_both, aes(x=ng2018, y=m1.X2))
+    }
+    else{
+      p <- ggplot(data=coeqtl_r_both, aes(x=ng2018, y=m1))
+    }
+    p <- p +
+      xlim(c(-1, 1)) + ylim(c(-1, 1)) +
+      xlab('r Nature 2018 CD4+ T') + ylab(paste('r 1M', cell_type, condition)) +
+      ggtitle(paste('concordance of ', gene, ' co-eQTLs', sep = '')) +
+      annotate("rect", xmin=-Inf, xmax=0, ymin=-Inf, ymax=0, fill="green", alpha=0.1) +
+      annotate("rect", xmin=0, xmax=Inf, ymin=0, ymax=Inf, fill="green", alpha=0.1) +
+      annotate("rect", xmin=-Inf, xmax=0, ymin=0, ymax=Inf, fill="red", alpha=0.1) +
+      annotate("rect", xmin=0, xmax=Inf, ymin=-Inf, ymax=0, fill="red", alpha=0.1) +
+      geom_hline(yintercept=0, linetype="dashed", color = "black") +
+      geom_vline(xintercept=0, linetype="dashed", color = "black") +
+      geom_point() +
+      annotate("rect", xmin=0.5, xmax=1.0, ymin=-1, ymax=-0.75, fill="white", alpha=1) +
+      annotate("segment", x = 0.5, xend = 1, y = -0.75, yend = -0.75, colour = "black") +
+      annotate("segment", x = 0.5, xend = 1, y = -1, yend = -1, colour = "black") +
+      annotate("segment", x = 0.5, xend = 0.5, y = -0.75, yend = -1, colour = "black") +
+      annotate("segment", x = 1, xend = 1, y = -0.75, yend = -1, colour = "black") +
+      annotate("text", x = 0.75, y = -0.875, label = paste('', round(concordance*100, digits = 1), "% concordance", sep=''), fontface='bold')
+    if(paper_style){
+      p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+    }
+    return(p)
+  }
 }
 
 
@@ -3126,11 +3181,29 @@ X3hCA_CLEC12A_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes
 UT_CLEC12A_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs12230244', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_CLEC12A_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='2', seurat_object=v3, gene_a='CLEC12A', gene_b='PML', snp='rs12230244', monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_UT, plot_points=F, violin=F, return_table=T) 
 write_coeqtl_boxplot_interaction_tables(output_loc = '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/figure_tables/figure_4b_', list(UT = UT_CLEC12A_tables, X3hCA = X3hCA_CLEC12A_tables, X24hCA = X24hCA_CLEC12A_tables))
 
+
+# the same for RPS26
+cor_data_RPS26_X24hCA <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/X24hCA_monocyte_correlation_matrix_RPS26.2.txt')
+cor_data_RPS26_X3hCA <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/X3hCA_monocyte_correlation_matrix_RPS26.2.txt')
+cor_data_RPS26_UT <- read.table('/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/correlationMatrices/UT_monocyte_correlation_matrix_RPS26.2.txt')
+UT_RPS26_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs1131017', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/output_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='2', seurat_object=v3, gene_a='RPS26', gene_b='RPL21', snp='rs1131017', monniker='_meta_', cell_type='monocyte', condition='UT', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_RPS26_UT, plot_points=F, violin=F, return_table=T) 
+X3hCA_RPS26_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs1131017', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/oX3hCApX3hCA_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='2', seurat_object=v3, gene_a='RPS26', gene_b='RPL21', snp='rs1131017', monniker='_meta_', cell_type='monocyte', condition='X3hCA', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_RPS26_X3hCA, plot_points=F, violin=F, return_table=T) 
+X24hCA_RPS26_tables <- plot_boxplot_and_gt_interactions(genotype_data=genotypes_all['rs1131017', ], mapping_folder='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/coexpressionQTLs/oX24hCApX24hCA_RPS26_meta_mono_missingness05replacena100permzerogenebnumeric_1/', dataset='2', seurat_object=v3, gene_a='RPS26', gene_b='RPL21', snp='rs1131017', monniker='_meta_', cell_type='monocyte', condition='X24hCA', na_to_zero=T, to_numeric=T, snp_rename=NULL, p.value=NULL, r.value=NULL, ylim=NULL, xlim=NULL, ylims=NULL, use_SCT=T, sct_data=F, cor_table=cor_data_RPS26_X24hCA, plot_points=F, violin=F, return_table=T) 
+write_coeqtl_boxplot_interaction_tables(output_loc = '/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/figure_tables/figure_S5b_', list(UT = UT_RPS26_tables, X3hCA = X3hCA_RPS26_tables, X24hCA = X24hCA_RPS26_tables))
+
+
+# plot the concordance with NG2018
+ng2018_rps26_output_loc <- '/data/scRNA/eQTL_mapping/sig_coeqtl_rs_RPS26_ng2018.tsv'
+plot_ng2018_rps26(ng2018_rps26_output_loc, coeqtl_out_loc,gene = 'RPS26', cell_type = 'monocyte', condition = 'UT', paper_style = T, allele_dif = T)
+# and a table
+ng2018_vs_1m_coeqtl_table <- plot_ng2018_rps26(ng2018_rps26_output_loc, coeqtl_out_loc,gene = 'RPS26', cell_type = 'monocyte', condition = 'UT', paper_style = T, allele_dif = T, return_table = T)
+
 # plot CLEC12A
 plot_pathway_all(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', gene = 'CLEC12A', toppfun = T, top_so_many = 5)
 # print the tables used for the pathway heatmaps
 write_pathway_plot_tables(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', output_loc='~/Desktop/figureS6/', c('NDUFA12','CTSC','RPS26' ,'TMEM176B','CLEC12A','DNAJC15','HLA-DQA1'), cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), top_so_many=5, reactome = F, toppfun = T)
-  
+pathway_table_all <- get_pathway_plot_table(output_path_prepend = '/data/scRNA/eQTL_mapping/coexpressionQTLs/pathways/pathway_out_20210208_numeric_snps/coeqtls_', output_path_append = '_pathways.txt', genes = c('NDUFA12','CTSC','RPS26' ,'TMEM176B','CLEC12A','DNAJC15','HLA-DQA1'), cell_types=c('monocyte'), conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), top_so_many=5, reactome = F, toppfun = T)
+
 
 # do the top hit plotting
 plot_top_hit_per_condition(genotype_data=genotypes_all, mappings_folder=coeqtl_out_loc, mapping_folder_prepend=prepend, mapping_folder_append='_mono_missingness05replacena100permzerogeneb_1/', plot_output_loc=coeqtl_plot_loc, genes=coeqtl_genes, snp_probe_mapping=snp_probe_mapping, monniker='_meta_', cell_type='monocyte', conditions=c('UT', 'X3hCA', 'X24hCA', 'X3hMTB', 'X24hMTB', 'X3hPA', 'X24hPA'), na_to_zero=T)
