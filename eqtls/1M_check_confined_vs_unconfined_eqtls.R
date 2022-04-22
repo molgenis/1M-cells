@@ -493,3 +493,8 @@ label_dict <- function(){
   label_dict[["dnT"]] <- "double negative T"
   return(label_dict)
 }
+
+
+nrs_table <- egenes_shared_and_unique_to_numbers_table('/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_no_confine/results/', '/groups/umcg-bios/tmp04/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead/results/', 'unconfined', 'eqtlgenlead')
+
+

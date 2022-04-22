@@ -16,13 +16,13 @@ library(VennDiagram)
 # Functions        #
 ####################
 
-compare_overlap_low_to_high_res_egenes <- function(upset_plot, low_res_output_loc, high_res_output_loc, cell_type_matches, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_column='FDR', sig_cutoff=0.05, output_loc=NULL){
+compare_overlap_low_to_high_res_egenes <- function(upset_plot, low_res_output_loc, high_res_output_loc, cell_type_matches, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_column='FDR', sig_cutoff=0.05, output_loc=NULL, return_table=F){
   result <- NULL
   if(upset_plot){
     result <- compare_overlap_low_to_high_res_egenes_upset(low_res_output_loc=low_res_output_loc, high_res_output_loc=high_res_output_loc, cell_type_matches=cell_type_matches, conditions=conditions, sig_column=sig_column, sig_cutoff=sig_cutoff)
   }
   else{
-    result <- compare_overlap_low_to_high_res_egenes_venn(low_res_output_loc=low_res_output_loc, high_res_output_loc=high_res_output_loc, cell_type_matches=cell_type_matches, conditions=conditions, sig_column=sig_column, sig_cutoff=sig_cutoff, output_loc=output_loc)
+    result <- compare_overlap_low_to_high_res_egenes_venn(low_res_output_loc=low_res_output_loc, high_res_output_loc=high_res_output_loc, cell_type_matches=cell_type_matches, conditions=conditions, sig_column=sig_column, sig_cutoff=sig_cutoff, output_loc=output_loc, return_table)
   }
   return(result)
 }
@@ -75,7 +75,7 @@ compare_overlap_low_to_high_res_egenes_upset <- function(low_res_output_loc, hig
 }
 
 
-compare_overlap_low_to_high_res_egenes_venn <- function(low_res_output_loc, high_res_output_loc, cell_type_matches, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_column='FDR', sig_cutoff=0.05, output_loc=NULL){
+compare_overlap_low_to_high_res_egenes_venn <- function(low_res_output_loc, high_res_output_loc, cell_type_matches, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_column='FDR', sig_cutoff=0.05, output_loc=NULL, return_table=F){
   # we will have the genes per cell types
   genes_per_major_cell_type <- list()
   # and we will have plot for each condition as well
@@ -132,14 +132,33 @@ compare_overlap_low_to_high_res_egenes_venn <- function(low_res_output_loc, high
                    fill = c(alpha("#440154ff",0.3), alpha('#21908dff',0.3), alpha('#fde725ff',0.3)), imagetype='svg')
     }
   }
-  return(plot_per_major_cell_type)
-}
-
-
-
-
-plot_venns <- function(venn_data_per_condition){
-  
+  if(return_table){
+    # we have to show tables for each plot, this is how we do it for this figure
+    ct_genes_table <- NULL
+    # check each major cell type
+    for(cell_type_major in names(genes_per_major_cell_type)){
+      # then check each minor cell type for that major one
+      for(cell_type_minor in names(genes_per_major_cell_type[[cell_type_major]])){
+        # get the genes for this cell type
+        genes_cell_type <- genes_per_major_cell_type[[cell_type_major]][[cell_type_minor]]
+        # turn the genes into something that fits a table
+        genes_pasted <- paste(genes_cell_type, sep = ',', collapse = ',')
+        # make into a row
+        row <- data.frame(major = c(cell_type_major), minor = c(cell_type_minor), genes = genes_pasted)
+        # add tot table
+        if(is.null(ct_genes_table)){
+          ct_genes_table <- row
+        }
+        else{
+          ct_genes_table <- rbind(ct_genes_table, row)
+        }
+      }
+    }
+    return(ct_genes_table)
+  }
+  else{
+    return(plot_per_major_cell_type)
+  }
 }
 
 
@@ -195,3 +214,9 @@ venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL
 
 venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_eQTL_output, list('DC' = c('mDC', 'pDC'), 'monocyte' = c('ncMono', 'cMono'), 'NK' = c('NKdim', 'NKbright')), output_loc='/groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/major_vs_minor_overlap/')
 venn_data_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_T_eQTL_output, list('CD4T' = c('CD4_Naive', 'CD4_Memory'), 'CD8T' = c('CD8_Naive', 'CD8_Memory')), output_loc='//groups/umcg-bios/tmp01/projects/1M_cells_scRNAseq/ongoing/eQTL_mapping/major_vs_minor_overlap/')
+
+# now to tables
+venn_table_per_condition <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_eQTL_output, list('DC' = c('mDC', 'pDC'), 'monocyte' = c('ncMono', 'cMono'), 'NK' = c('NKdim', 'NKbright')), return_table = T)
+venn_table_per_condition_T <- compare_overlap_low_to_high_res_egenes(F, lowres_eQTL_output, highres_T_eQTL_output, list('CD4T' = c('CD4_Naive', 'CD4_Memory'), 'CD8T' = c('CD8_Naive', 'CD8_Memory')), return_table = T)
+venn_table_all <- rbind(venn_table_per_condition, venn_table_per_condition_T)
+

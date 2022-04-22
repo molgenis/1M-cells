@@ -1,5 +1,5 @@
 
-plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), pval_column='metap_bonferroni', outer_join_method=F, use_loss_and_gain_method=F, divide_by_stim=F, paper_style=F){
+plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types_to_use=c("CD4T", "CD8T", "monocyte", "NK", "B", "DC"), conditions=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), pval_column='metap_bonferroni', outer_join_method=F, use_loss_and_gain_method=F, divide_by_stim=F, paper_style=F, return_table=F){
   # create table to store results
   numbers_table <- NULL
   # check each cell type
@@ -101,20 +101,25 @@ plot_de_vs_eqtl_numbers <- function(mast_output_loc, eqtl_output_loc, cell_types
       numbers_table <- rbind(numbers_table, ct_row)
     }
   }
-  print(numbers_table)
-  # the label is different depending on whether we show the proportion or not
-  xlab <- 'Number of DE genes'
-  cc <- get_color_coding_dict()
-  colScale <- scale_colour_manual(name = "cell type",values = unlist(cc[cell_types_to_use]))
-  p <- ggplot(numbers_table, aes(x=de_number, y=eqtl_diff, color=cell_type)) +
-    geom_point(size=5) +
-    labs(x = xlab, y = 'Average difference in number of eQTL genes\n upon pathogen stimulation', title = 'Average difference in number of eQTL genes\n upon pathogen stimulation') +
-    colScale +
-    theme(plot.title = element_blank())
-  if(paper_style){
-    p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+  if(return_table){
+    # they want the tables for the figures, alright then
+    return(numbers_table)
   }
-  return(p)
+  else{
+    # the label is different depending on whether we show the proportion or not
+    xlab <- 'Number of DE genes'
+    cc <- get_color_coding_dict()
+    colScale <- scale_colour_manual(name = "cell type",values = unlist(cc[cell_types_to_use]))
+    p <- ggplot(numbers_table, aes(x=de_number, y=eqtl_diff, color=cell_type)) +
+      geom_point(size=5) +
+      labs(x = xlab, y = 'Average difference in number of eQTL genes\n upon pathogen stimulation', title = 'Average difference in number of eQTL genes\n upon pathogen stimulation') +
+      colScale +
+      theme(plot.title = element_blank())
+    if(paper_style){
+      p <- p + theme(panel.border = element_rect(color="black", fill=NA, size=1.1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), strip.background = element_rect(colour="white", fill="white"))
+    }
+    return(p)
+  }
 }
 
 plot_eqtl_stronger_vs_weaker <- function(eqtl_output_loc , cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), stims=c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), sig_in_ut=F, sig_in_stim=F, sig_in_either=T, de_up=F, de_down=F, de_output_loc=NULL, pval_column='metap_bonferroni', sig_pval=0.05, lfc_column='metafc', symbols.to.ensg.mapping='genes.tsv', only_ribo=F, mark_reqtls=F){
@@ -455,6 +460,30 @@ get_eqtls_per_ct_and_condition <- function(eqtl_output_loc, conditions=c('UT', '
   return(condition_list)
 }
 
+
+get_eqtls_per_ct_and_condition_to_table <- function(eqtls_per_ct_and_condition){
+  # init df
+  eqtls_per_ct_and_condition_flattened <- NULL
+  # check each condition
+  for(condition in names(eqtls_per_ct_and_condition)){
+    # check each cell type
+    for(celltype in names(eqtls_per_ct_and_condition[[condition]])){
+      # paste all the SNP-probe combinations together
+      eqtls <- paste(eqtls_per_ct_and_condition[[condition]][[celltype]], sep = ';', collapse = ';')
+      # turn into a row
+      row <- data.frame(condition=c(condition), celltype=c(celltype), eqtls=c(eqtls))
+      # paste together
+      if(is.null(eqtls_per_ct_and_condition_flattened)){
+        eqtls_per_ct_and_condition_flattened <- row
+      }
+      else{
+        eqtls_per_ct_and_condition_flattened <- rbind(eqtls_per_ct_and_condition_flattened, row)
+      }
+    }
+  }
+  return(eqtls_per_ct_and_condition_flattened)
+}
+
 plot_eqtl_sharing_cell_type <- function(eqtls_per_condition_and_cell_type, conditions=c('UT', '3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), cell_types=c('B', 'CD4T', 'CD8T', 'DC', 'monocyte', 'NK'), use_label_dict=T, use_color_dict=T){
   plot_per_condition <- list()
   for(condition in intersect(conditions, names(eqtls_per_condition_and_cell_type))){
@@ -753,4 +782,18 @@ label_dict <- function(){
   return(label_dict)
 }
 
+# plot linking of DE to eQTL
+plot_de_vs_eqtl_numbers('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+plot_de_vs_eqtl_numbers_table <- plot_de_vs_eqtl_numbers('/data/scRNA/differential_expression/seurat_MAST/output/paired_lores_lfc01minpct01_20201106/meta_paired_lores_lfc01minpct01_20201106/rna/', '/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/', return_table = T)
+
+
+# plot stronger versus weaker eQTLs
+eqtl_summary <- get_reqtls_weaker_vs_strong('/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+plot_per_condition(eqtl_summary, paper_style = T, to_pct = T, use_label_dict = T, plot_order = c('3hCA', '24hCA', '3hMTB', '24hMTB', '3hPA', '24hPA'), add_n = F, plot_classifications = c('stronger in UT'))
+write.table(eqtl_summary[eqtl_summary$classification %in% c('stronger in UT', 'stronger in stim'), ], '~/Desktop/figure3f.tsv', sep = '\t', col.names = T, row.names = F)
+
+eqtls_per_ct_and_condition <- get_eqtls_per_ct_and_condition('/data/scRNA/eQTL_mapping/meta/sct_mqc_demux_lores_20201106_eqtlgenlead_anycondsig_merged/results/')
+plot_eqtl_sharing_cell_type(eqtls_per_ct_and_condition)
+# get the input of the upset plots
+eqtls_per_ct_and_condition_table <- get_eqtls_per_ct_and_condition_to_table(eqtls_per_ct_and_condition)
 
