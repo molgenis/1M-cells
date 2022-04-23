@@ -6,11 +6,25 @@ ll_to_pseudo_ext <- function(ll_to_pseudo, pseudo_int_to_ext){
   return(ll_to_pseudo)
 }
 
+ll_to_pseudo_int <- function(ll_to_pseudo, pseudo_int_to_ext){
+  # match one onto the other
+  ll_to_pseudo$V3 <- pseudo_int_to_ext[match(ll_to_pseudo$PSEUDOIDEXT, pseudo_int_to_ext$PSEUDOIDEXT), 'PROJECT_PSEUDO_ID']
+  # set column names
+  colnames(ll_to_pseudo) <- c('ll', 'psint', 'psext')
+  return(ll_to_pseudo)
+}
 
 pseudo_int_to_ugli <- function(ll_to_pseudo, pseudo_int_to_ugli){
   ll_to_pseudo$ugli <- pseudo_int_to_ugli[match(ll_to_pseudo$psint, pseudo_int_to_ugli$PSEUDOIDEXT), 'UGLI_ID']
   return(ll_to_pseudo)
 }
+
+
+pseudo_ext_to_cytoid <- function(table_w_pseudoint, pseudo_int_to_cyto){
+  table_w_pseudoint$cyto <- pseudo_int_to_cyto[match(table_w_pseudoint$psint, pseudo_int_to_cyto$PSEUDOIDEXT), 'cytosnp_ID']
+  return(table_w_pseudoint)
+}
+
 
 calculate_stats <- function(pseudo_ext_ids, table_loc, table_column, stats=c('mean', 'median'), id_column='PSEUDOIDEXT'){
   # read the table
@@ -273,11 +287,14 @@ check_missingnes_wmatching <- function(stim_mapping_loc, ids_available, mapping_
 ll_to_pseudo_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_pseudo_ids.txt'
 pseudo_int_to_ext_loc <- '/groups/umcg-lifelines/tmp01/releases/pheno_lifelines_restructured/v1/phenotype_linkage_file_project_pseudo_id.txt'
 pseudo_int_to_ugli_map_loc <- '/groups/umcg-lifelines/tmp01/releases/gsa_linkage_files/v1/gsa_linkage_file.dat'
+pseudo_ext_to_cytoid_map_loc <- '/groups/umcg-lifelines/tmp01/releases/cytosnp_linkage_files/v4/cytosnp_linkage_file.dat'
+
 
 # read the tables
 ll_to_pseudo <- read.table(ll_to_pseudo_loc, sep = '\t', header = F, stringsAsFactors = F)
 pseudo_int_to_ext <- read.table(pseudo_int_to_ext_loc, sep = '\t', header = T, stringsAsFactors = F)
 pseudo_int_to_ugli_map <- read.table(pseudo_int_to_ugli_map_loc, sep = '\t', header = T, stringsAsFactors = F)
+pseudo_ext_to_cytoid_map <- read.table(pseudo_ext_to_cytoid_map_loc, sep = '\t', header = T, stringsAsFactors = F)
 
 # combine them
 full_id_table <- ll_to_pseudo_ext(ll_to_pseudo, pseudo_int_to_ext)
@@ -288,6 +305,9 @@ full_id_table_X1$ll <- paste('X1_', full_id_table_X1$ll, sep = '')
 
 # add the UGLI identifiers as well
 full_id_table_X1 <- pseudo_int_to_ugli(full_id_table_X1, pseudo_int_to_ugli_map)
+
+# add the cyto ID identifiers as well
+full_id_table_X1 <- pseudo_ext_to_cytoid(full_id_table_X1, pseudo_ext_to_cytoid_map)
 
 # we want to add the exp and age as well
 exp_to_ll_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_exp_age_gender.tsv'
@@ -302,15 +322,58 @@ age_metadata <- read.table(age_metadata_loc, sep = '\t', header = T, stringsAsFa
 full_id_table_X1$exp <- exp_to_ll[match(full_id_table_X1$ll, exp_to_ll$ll), 'ExpNr']
 # link the age and gender to this
 full_id_table_X1 <- cbind(full_id_table_X1, age_metadata[match(full_id_table_X1$exp, age_metadata$ExpNr), c('Gender', 'age_range')])
+full_id_table_X1[['age']] <- exp_to_ll[match(full_id_table_X1[['exp']], exp_to_ll[['ExpNr']]), 'Age']
 
 # check where we have lanes that are complete
 stim_mapping_loc <- "/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_lane_to_tp.tsv"
 check_missingnes(stim_mapping_loc, full_id_table_X1[!is.na(full_id_table_X1$ugli), ]$exp)
-
+# we don't have the UGLI genotypes completely, we will just have to use the cyto data
+write.table(full_id_table_X1[['cyto']], '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2020/genotype/unimputed/1M_participants_cyto.txt', row.names = F, col.names = F, quote = F)
+# now create the psam file we need
+original_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2020/genotype/unimputed/all/cytosnp_all_1m/cytosnp_all_1m.psam.original'
+new_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2020/genotype/unimputed/all/cytosnp_all_1m/cytosnp_all_1m.psam'
+psam <- read.table(original_psam_loc, header = T, sep = '\t')
+colnames(psam) <- c('#FID', 'IID', 'PAT', 'MAT', 'SEX')
+# needs to be numeric?
+psam[['PAT']] <- 0
+psam[['MAT']] <- 0
+# we don't know most of these
+psam[['Provided_Ancestry']] <- 'EUR'
+psam[['genotyping_platform']] <- 'cytoSNP'
+psam[['array_available']] <- 'N'
+psam[['wgs_available']] <- 'N'
+psam[['wes_available']] <- 'Y'
+psam[['age']] <- full_id_table_X1[match(psam[['IID']], full_id_table_X1[['cyto']]), 'age']
+#psam[['age_range']] <- full_id_table_X1[match(psam[['IID']], full_id_table_X1[['cyto']]), 'age_range']
+psam[['age_range']] <- apply(psam, 1, function(x){
+  ceiling(as.numeric(x['age'])/10)*10
+})
+psam[['Study']] <- '1M'
+psam[['smoking_status']] <- NA
+psam[['hormonal_contraception_use_currently']] <- NA
+psam[['menopause']] <- NA
+psam[['pregnancy_status']] <- NA
+write.table(psam, new_psam_loc, sep = '\t', row.names = F, col.names = T, quote = F)
 
 # let's do the same for the NG 2018 paper
-ng2018_ll_participant_list <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/meta-data/participants.txt'
-ng2018_ll_to_pseudo_loc <- '/groups/umcg-lifelines/prm03/releases/deep_linkage_files/v1/:(' # cannot access data
+ng2018_ll_participant_list_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/meta-data/participants.txt'
+ng2018_ll_to_pseudo_loc <- '/groups/umcg-lifelines/prm03/releases/deep_linkage_files/v1/DEEP_linkage_file_cluster.dat'
 # we can use the same int_to_ext file as with the 1M dataset
 ng2018_pseudo_int_to_ugli_map_loc <- '/groups/umcg-lifelines/tmp01/releases/gsa_linkage_files/v1/gsa_linkage_file.dat'
+
+ng2018_ll_participant_list <- read.table(ng2018_ll_participant_list_loc, sep = '\t', header = F, stringsAsFactors = F)
+ng2018_ll_to_pseudo <- read.table(ng2018_ll_to_pseudo_loc, sep = '\t', header = T, stringsAsFactors = F)
+ng2018_pseudo_int_to_ugli_map <- read.table(ng2018_pseudo_int_to_ugli_map_loc, sep = '\t', header = T, stringsAsFactors = F)
+# strip of the '1_' prepend
+ng2018_ll_participant_list$V1 <- gsub('1_', '', ng2018_ll_participant_list$V1)
+# filter ll to pseudo
+ng2018_ll_to_pseudo <- ng2018_ll_to_pseudo[ng2018_ll_to_pseudo[['LLDEEP_ID']] %in% ng2018_ll_participant_list$V1, ]
+# add the project ID
+ng2018_full_id_table <- ll_to_pseudo_int(ng2018_ll_to_pseudo, pseudo_int_to_ext)
+# add the UGLI identifiers as well
+ng2018_full_id_table <- pseudo_int_to_ugli(ng2018_full_id_table, pseudo_int_to_ugli_map)
+# and the cyto identifiers
+ng2018_full_id_table <- pseudo_ext_to_cytoid(ng2018_full_id_table, pseudo_ext_to_cytoid_map)
+# write the participant list
+write.table(ng2018_full_id_table[['cyto']], '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/ng2018_participants_cyto.txt', row.names = F, col.names = F, quote = F)
 
