@@ -357,23 +357,60 @@ write.table(psam, new_psam_loc, sep = '\t', row.names = F, col.names = T, quote 
 
 # let's do the same for the NG 2018 paper
 ng2018_ll_participant_list_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/meta-data/participants.txt'
-ng2018_ll_to_pseudo_loc <- '/groups/umcg-lifelines/prm03/releases/deep_linkage_files/v1/DEEP_linkage_file_cluster.dat'
+ng2018_ll_to_pseudo_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/lld_to_ll_ids.txt'
 # we can use the same int_to_ext file as with the 1M dataset
 ng2018_pseudo_int_to_ugli_map_loc <- '/groups/umcg-lifelines/tmp01/releases/gsa_linkage_files/v1/gsa_linkage_file.dat'
-
+# location of the age/gender file
+ng2018_age_gender_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/meta-data/Age-gender-lane.txt'
+# location of the S number to LLD mapping
+ng2018_ll_to_snumber_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2018-hg19/v1/meta-data/pilot3_sample_to_snumber.tsv'
+# read everything
 ng2018_ll_participant_list <- read.table(ng2018_ll_participant_list_loc, sep = '\t', header = F, stringsAsFactors = F)
 ng2018_ll_to_pseudo <- read.table(ng2018_ll_to_pseudo_loc, sep = '\t', header = T, stringsAsFactors = F)
 ng2018_pseudo_int_to_ugli_map <- read.table(ng2018_pseudo_int_to_ugli_map_loc, sep = '\t', header = T, stringsAsFactors = F)
-# strip of the '1_' prepend
-ng2018_ll_participant_list$V1 <- gsub('1_', '', ng2018_ll_participant_list$V1)
-# filter ll to pseudo
-ng2018_ll_to_pseudo <- ng2018_ll_to_pseudo[ng2018_ll_to_pseudo[['LLDEEP_ID']] %in% ng2018_ll_participant_list$V1, ]
+ng2018_age_gender <- read.table(ng2018_age_gender_loc, sep = '\t', header = T)
+ng2018_ll_to_snumber <- read.table(ng2018_ll_to_snumber_loc, sep = '\t', header = T)
 # add the project ID
 ng2018_full_id_table <- ll_to_pseudo_int(ng2018_ll_to_pseudo, pseudo_int_to_ext)
 # add the UGLI identifiers as well
 ng2018_full_id_table <- pseudo_int_to_ugli(ng2018_full_id_table, pseudo_int_to_ugli_map)
 # and the cyto identifiers
 ng2018_full_id_table <- pseudo_ext_to_cytoid(ng2018_full_id_table, pseudo_ext_to_cytoid_map)
+# remove the '1_' prepend
+ng2018_ll_participant_list$V1 <- gsub('^1_', '', ng2018_ll_participant_list$V1)
+# subset to the ng2018 participants
+ng2018_full_id_table<- ng2018_full_id_table[ng2018_full_id_table[['ll']] %in% ng2018_ll_participant_list$V1, ]
 # write the participant list
 write.table(ng2018_full_id_table[['cyto']], '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/ng2018_participants_cyto.txt', row.names = F, col.names = F, quote = F)
+write.table(ng2018_full_id_table[, c('cyto', 'cyto')], '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/ng2018_participants_cyto_doubleid.txt', sep = '\t', row.names = F, col.names = F, quote = F)
+# remove the 1_ prepend
+ng2018_ll_to_snumber$sample <- gsub('1_', '', ng2018_ll_to_snumber$sample)
+# add the snumber to theffull ID table
+ng2018_full_id_table[['snumber']] <- ng2018_ll_to_snumber[match(ng2018_ll_to_snumber[['sample']], ng2018_full_id_table[['ll']]), 'snumber']
+# add age and gender
+ng2018_full_id_table <- cbind(ng2018_full_id_table, ng2018_age_gender[match(ng2018_full_id_table[['snumber']], ng2018_age_gender[['Sample']]), c('Age', 'Sex')])
+# create the required psam file
+ng2018_original_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam.original'
+ng2018_new_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam'
+ng2018_psam <- read.table(ng2018_original_psam_loc, header = T, sep = '\t')
+colnames(ng2018_psam) <- c('#FID', 'IID', 'PAT', 'MAT', 'SEX')
+# needs to be numeric?
+psam[['PAT']] <- 0
+psam[['MAT']] <- 0
+# we don't know most of these
+ng2018_psam[['Provided_Ancestry']] <- 'EUR'
+ng2018_psam[['genotyping_platform']] <- 'cytoSNP'
+ng2018_psam[['array_available']] <- 'N'
+ng2018_psam[['wgs_available']] <- 'N'
+ng2018_psam[['wes_available']] <- 'Y'
+ng2018_psam[['age']] <- ng2018_full_id_table[match(ng2018_psam[['IID']], ng2018_full_id_table[['cyto']]), 'Age']
+ng2018_psam[['age_range']] <- apply(ng2018_psam, 1, function(x){
+  ceiling(as.numeric(x['age'])/10)*10
+})
+ng2018_psam[['Study']] <- 'NG2018'
+ng2018_psam[['smoking_status']] <- NA
+ng2018_psam[['hormonal_contraception_use_currently']] <- NA
+ng2018_psam[['menopause']] <- NA
+ng2018_psam[['pregnancy_status']] <- NA
+write.table(ng2018_psam, ng2018_new_psam_loc, sep = '\t', row.names = F, col.names = T, quote = F)
 
