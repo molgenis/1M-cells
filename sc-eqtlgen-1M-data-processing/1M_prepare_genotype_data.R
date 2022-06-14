@@ -392,11 +392,11 @@ ng2018_full_id_table <- cbind(ng2018_full_id_table, ng2018_age_gender[match(ng20
 # create the required psam file
 ng2018_original_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam.original'
 ng2018_new_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam'
-ng2018_psam <- read.table(ng2018_original_psam_loc, header = T, sep = '\t')
+ng2018_psam <- read.table(ng2018_original_psam_loc, header = F, sep = '\t')
 colnames(ng2018_psam) <- c('#FID', 'IID', 'PAT', 'MAT', 'SEX')
 # needs to be numeric?
-psam[['PAT']] <- 0
-psam[['MAT']] <- 0
+ng2018_psam[['PAT']] <- 0
+ng2018_psam[['MAT']] <- 0
 # we don't know most of these
 ng2018_psam[['Provided_Ancestry']] <- 'EUR'
 ng2018_psam[['genotyping_platform']] <- 'cytoSNP'
