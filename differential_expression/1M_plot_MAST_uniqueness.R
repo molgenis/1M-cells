@@ -314,7 +314,6 @@ plot_de_gene_numbers <- function(base_mast_output_path, condition_combinations=c
     }
     #scale_color_manual(values=condition.colors) +
     p <- p + ylim(0, max(gene_number_table$nr_genes)) +
-    guides(size=FALSE, fill=FALSE, shape=FALSE) +
     labs(x="Time point", y="Number of significant DE genes", guide="Stimulation") +
     ggtitle("Number of DE genes per cell type and condition")
     
