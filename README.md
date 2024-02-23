@@ -68,7 +68,7 @@ A Seurat object to test with, is supplied here: https://molgenis26.gcc.rug.nl/do
 This contains the v3 samples in the UT condition, as well as the SNP affecting RPS26 co-expression.
 
 
-## processing Overview
+## Processing overview
 
 The code to generate the results is separated by the different steps taken to get from the raw data to the results. Languages and packages are listed below:
 
