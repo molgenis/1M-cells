@@ -42,7 +42,7 @@ library(optparse) # NOT IN CONTAINER
 #' @param verbose whether to print progress messages
 #' @returns 0 if successful
 #' dream_pairwise(pbmc, './bulk_test/', list('inflammation'=c('AI','NI')))
-dream_pairwise <- function(seurat_object, output_loc, condition_combinations, aggregates=c('sample_final', 'condition_final'), fixed_effects=c('condition_final'), random_effects=c('sample_final'), minimal_cells=0, min_numi=200, minimal_complexity=5000, verbose=T){
+dream_pairwise <- function(seurat_object, output_loc, condition_combinations, aggregates=c('assignment', 'timepoint'), fixed_effects=c('timepoint'), random_effects=c('assignment'), minimal_cells=0, min_numi=200, minimal_complexity=5000, verbose=T){
   # grab the countmatrix
   countMatrix <- NULL
   # subset the object based on the minimal number of umis if requested
@@ -244,7 +244,7 @@ dream_pairwise <- function(seurat_object, output_loc, condition_combinations, ag
 #' @param verbose whether to print progress messages
 #' @returns 0 if successful
 #' do_limma_dream_pairwise_per_celltype(pbmc, './ct_test/')
-do_limma_dream_pairwise_per_celltype <- function(seurat_object, output_loc, condition_combinations=list('condition_final' =  c('24hCA', 'UT')), celltype_column='cell_type_final', cell_types_to_use=NULL, aggregates=c('sample_final', 'condition_final'), fixed_effects=c('condition_final'), random_effects=c('sample_final'), minimal_cells=0, min_numi=200, minimal_complexity=5000, verbose=T){
+do_limma_dream_pairwise_per_celltype <- function(seurat_object, output_loc, condition_combinations=list('timepoint' =  c('X24hCA', 'UT')), celltype_column='cell_type_final', cell_types_to_use=NULL, aggregates=c('assignment', 'timepoint'), fixed_effects=c('timepoint'), random_effects=c('assignment'), minimal_cells=0, min_numi=200, minimal_complexity=5000, verbose=T){
   # use the cell types supplied, or all if none are supplied
   cell_types <- cell_types_to_use
   if(is.null(cell_types_to_use)){
@@ -418,7 +418,8 @@ do_debug <- function() {
                                        celltype_column = celltype_column, 
                                        aggregates = c('timepoint', 'lane', 'assignment'), 
                                        fixed_effects = c('timepoint', 'age', 'sex'), 
-                                       random_effects = c('assignment', 'lane'),
+                                       random_effects = c('assignment', 'lane'), 
+                                       condition_combinations=list('timepoint' =  c('X24hCA', 'UT')), 
                                        minimal_cells = min_cells,
                                        min_numi = min_cell_umis, 
                                        minimal_complexity = min_pseudo_umis)
