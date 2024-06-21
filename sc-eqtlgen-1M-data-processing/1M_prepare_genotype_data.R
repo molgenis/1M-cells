@@ -288,13 +288,14 @@ ll_to_pseudo_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1
 pseudo_int_to_ext_loc <- '/groups/umcg-lifelines/tmp01/releases/pheno_lifelines_restructured/v1/phenotype_linkage_file_project_pseudo_id.txt'
 pseudo_int_to_ugli_map_loc <- '/groups/umcg-lifelines/tmp01/releases/gsa_linkage_files/v1/gsa_linkage_file.dat'
 pseudo_ext_to_cytoid_map_loc <- '/groups/umcg-lifelines/tmp01/releases/cytosnp_linkage_files/v4/cytosnp_linkage_file.dat'
-
+lld_to_pseudo_id_loc <- '/groups/umcg-lld/tmp01/projects/1MCellRNAseq/ongoing/metadata/LLD_links.tsv'
 
 # read the tables
 ll_to_pseudo <- read.table(ll_to_pseudo_loc, sep = '\t', header = F, stringsAsFactors = F)
 pseudo_int_to_ext <- read.table(pseudo_int_to_ext_loc, sep = '\t', header = T, stringsAsFactors = F)
 pseudo_int_to_ugli_map <- read.table(pseudo_int_to_ugli_map_loc, sep = '\t', header = T, stringsAsFactors = F)
 pseudo_ext_to_cytoid_map <- read.table(pseudo_ext_to_cytoid_map_loc, sep = '\t', header = T, stringsAsFactors = F)
+lld_to_pseudo_id <- read.table(lld_to_pseudo_id_loc, sep = '\t', header = T, stringsAsFactors = F)
 
 # combine them
 full_id_table <- ll_to_pseudo_ext(ll_to_pseudo, pseudo_int_to_ext)
@@ -312,17 +313,31 @@ full_id_table_X1 <- pseudo_ext_to_cytoid(full_id_table_X1, pseudo_ext_to_cytoid_
 # we want to add the exp and age as well
 exp_to_ll_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_exp_age_gender.tsv'
 age_metadata_loc <- '/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_age_gender_expidonly.tsv'
+# lifelines table of phenotypes
+ll_global_vars_loc <- '/groups/umcg-lifelines/tmp01/releases/pheno_lifelines/v2/results/global_summary.csv'
+ll_1a_q_1_loc <- '/groups/umcg-lifelines/tmp01/releases/pheno_lifelines/v2/results/1a_q_1_results.csv'
+
 
 # read the files
 exp_to_ll <- read.table(exp_to_ll_loc, sep = '\t', header = T, stringsAsFactors = F)
 exp_to_ll$ll <- paste('X1_', exp_to_ll$LLD.ID, sep = '')
 age_metadata <- read.table(age_metadata_loc, sep = '\t', header = T, stringsAsFactors = F)
+ll_global_vars <- read.table(ll_global_vars_loc, sep = ',', header = T, stringsAsFactors = F)
+ll_1a_q_1 <- read.table(ll_1a_q_1_loc, sep = ',', header = T, stringsAsFactors = F)
+
 
 # link the exp id to the data
 full_id_table_X1$exp <- exp_to_ll[match(full_id_table_X1$ll, exp_to_ll$ll), 'ExpNr']
 # link the age and gender to this
 full_id_table_X1 <- cbind(full_id_table_X1, age_metadata[match(full_id_table_X1$exp, age_metadata$ExpNr), c('Gender', 'age_range')])
 full_id_table_X1[['age']] <- exp_to_ll[match(full_id_table_X1[['exp']], exp_to_ll[['ExpNr']]), 'Age']
+# link the date of birth
+full_id_table_X1[['birthdate']] <- ll_global_vars[match(full_id_table_X1[['psext']], ll_global_vars[['project_pseudo_id']]), 'date_of_birth']
+# subset to year
+full_id_table_X1[['birthyear']] <- substr(full_id_table_X1[['birthdate']], 1, 4)
+# add gender as defined in ll
+full_id_table_X1[['llgender']] <- ll_1a_q_1[match(full_id_table_X1[['psext']], ll_1a_q_1[['project_pseudo_id']]), 'gender']
+
 
 # check where we have lanes that are complete
 stim_mapping_loc <- "/groups/umcg-franke-scrna/tmp01/releases/wijst-2020-hg19/v1/metadata/1M_lane_to_tp.tsv"
@@ -389,6 +404,14 @@ ng2018_ll_to_snumber$sample <- gsub('1_', '', ng2018_ll_to_snumber$sample)
 ng2018_full_id_table[['snumber']] <- ng2018_ll_to_snumber[match(ng2018_ll_to_snumber[['sample']], ng2018_full_id_table[['ll']]), 'snumber']
 # add age and gender
 ng2018_full_id_table <- cbind(ng2018_full_id_table, ng2018_age_gender[match(ng2018_full_id_table[['snumber']], ng2018_age_gender[['Sample']]), c('Age', 'Sex')])
+# link the date of birth
+ng2018_full_id_table[['birthdate']] <- ll_global_vars[match(ng2018_full_id_table[['psext']], ll_global_vars[['project_pseudo_id']]), 'date_of_birth']
+# subset to year
+ng2018_full_id_table[['birthyear']] <- substr(ng2018_full_id_table[['birthdate']], 1, 4)
+# add gender as defined in ll
+ng2018_full_id_table[['llgender']] <- ll_1a_q_1[match(ng2018_full_id_table[['psext']], ll_1a_q_1[['project_pseudo_id']]), 'gender']
+ng2018_full_id_table[['llage']] <- 2017 - as.numeric(ng2018_full_id_table[['birthyear']])
+
 # create the required psam file
 ng2018_original_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam.original'
 ng2018_new_psam_loc <- '/groups/umcg-franke-scrna/tmp01/projects/sc-eqtlgen-consortium-pipeline/ongoing/wg1-preprocessing/wg1_wijst2018/genotype/unimputed/cytosnp_all_ng2018.psam'
@@ -403,7 +426,7 @@ ng2018_psam[['genotyping_platform']] <- 'cytoSNP'
 ng2018_psam[['array_available']] <- 'N'
 ng2018_psam[['wgs_available']] <- 'N'
 ng2018_psam[['wes_available']] <- 'Y'
-ng2018_psam[['age']] <- ng2018_full_id_table[match(ng2018_psam[['IID']], ng2018_full_id_table[['cyto']]), 'Age']
+ng2018_psam[['age']] <- ng2018_full_id_table[match(ng2018_psam[['IID']], ng2018_full_id_table[['cyto']]), 'llage']
 ng2018_psam[['age_range']] <- apply(ng2018_psam, 1, function(x){
   ceiling(as.numeric(x['age'])/10)*10
 })
@@ -413,4 +436,3 @@ ng2018_psam[['hormonal_contraception_use_currently']] <- NA
 ng2018_psam[['menopause']] <- NA
 ng2018_psam[['pregnancy_status']] <- NA
 write.table(ng2018_psam, ng2018_new_psam_loc, sep = '\t', row.names = F, col.names = T, quote = F)
-
